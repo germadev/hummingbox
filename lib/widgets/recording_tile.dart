@@ -7,8 +7,9 @@ import 'waveform_seek_bar.dart';
 
 enum RecordingAction { edit, rename, share, delete }
 
-/// Elemento de la lista de grabaciones, con la onda de toda la grabación. La
-/// onda hace de barra de progreso: muestra lo reproducido y permite saltar.
+/// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
+/// toda la grabación. La onda hace de barra de progreso: muestra lo
+/// reproducido y permite saltar. Tocar el nombre permite cambiarlo.
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
@@ -40,6 +41,10 @@ class RecordingTile extends StatelessWidget {
         final duration = recording.duration > Duration.zero
             ? formatDuration(recording.duration)
             : '--:--';
+        final audio = recording.audio;
+        final mutedStyle = theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        );
 
         return Card.filled(
           color: isCurrent
@@ -51,6 +56,7 @@ class RecordingTile extends StatelessWidget {
             children: [
               ListTile(
                 contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                isThreeLine: true,
                 onTap: onTogglePlay,
                 leading: IconButton.filled(
                   // ListTile tiñe los iconos de `leading`; se fija el color
@@ -60,13 +66,44 @@ class RecordingTile extends StatelessWidget {
                   icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
                   onPressed: onTogglePlay,
                 ),
-                title: Text(
-                  recording.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
+                title: Builder(
+                  builder: (titleContext) => Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Semantics(
+                      button: true,
+                      hint: 'Cambiar el nombre',
+                      child: InkWell(
+                        key: Key('name-${recording.id}'),
+                        borderRadius: BorderRadius.circular(4),
+                        onTap: () =>
+                            onAction(RecordingAction.rename, titleContext),
+                        child: Text(
+                          recording.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                subtitle: Text(
-                  '${formatRecordingDate(recording.createdAt)} · $duration',
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${formatRecordingDate(recording.createdAt)} · $duration',
+                    ),
+                    Text(
+                      audio == null
+                          ? formatName(recording.format)
+                          : formatAudioInfo(audio),
+                      key: Key('audio-info-${recording.id}'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: mutedStyle,
+                    ),
+                  ],
                 ),
                 trailing: Builder(
                   builder: (tileContext) => PopupMenuButton<RecordingAction>(

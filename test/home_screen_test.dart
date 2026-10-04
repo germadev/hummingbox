@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:voicerecorder/app.dart';
+import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 
@@ -42,8 +44,12 @@ void main() {
     folder: folder,
   );
 
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(
+    WidgetTester tester, [
+    void Function(FakeRecordingEditor editor)? setUpEditor,
+  ]) async {
     editor = FakeRecordingEditor(repository: repository);
+    setUpEditor?.call(editor);
     await tester.pumpWidget(
       VoiceRecorderApp(
         repository: repository,
@@ -183,6 +189,79 @@ void main() {
 
     expect(find.text('Clase de historia'), findsOneWidget);
     expect(repository.recordings.single.name, 'Clase de historia');
+  });
+
+  testWidgets('tocar el nombre lo edita sin reproducir', (tester) async {
+    repository = InMemoryRecordingsRepository([sample('a', 'Grabación 1')]);
+    await pumpApp(tester);
+
+    await tester.tap(find.byKey(const Key('name-a')));
+    await tester.pumpAndSettle();
+    expect(find.text('Renombrar grabación'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'Idea');
+    await tester.pump();
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recordings.single.name, 'Idea');
+    expect(player.calls, isEmpty);
+  });
+
+  testWidgets('muestra el formato y la calidad de cada grabación', (
+    tester,
+  ) async {
+    repository = InMemoryRecordingsRepository([
+      Recording(
+        id: 'a',
+        path: '/fake/a.m4a',
+        name: 'Con datos',
+        createdAt: DateTime(2026, 9, 28),
+        duration: const Duration(seconds: 5),
+        waveform: const [0.5],
+        audio: const AudioInfo(
+          format: RecordingFormat.aac,
+          sampleRate: 44100,
+          channels: 1,
+          bitRate: 128000,
+        ),
+      ),
+      Recording(
+        id: 'b',
+        path: '/fake/b.wav',
+        name: 'Antigua',
+        createdAt: DateTime(2026, 9, 27),
+        duration: const Duration(seconds: 5),
+        waveform: const [0.5],
+      ),
+    ]);
+    await pumpApp(tester);
+
+    expect(find.text('AAC · 128 kbps · 44,1 kHz'), findsOneWidget);
+    // Sin datos todavía (no se pudo leer), al menos el formato.
+    expect(find.text('WAV'), findsOneWidget);
+  });
+
+  testWidgets('lee el formato de las grabaciones que no lo tienen', (
+    tester,
+  ) async {
+    repository = InMemoryRecordingsRepository([
+      sample('a', 'Antigua', waveform: const [0.5]),
+    ]);
+    await pumpApp(tester, (editor) {
+      editor.probes['/fake/a.m4a'] = const AudioProbe(
+        AudioInfo(
+          format: RecordingFormat.aac,
+          sampleRate: 16000,
+          channels: 1,
+          bitRate: 32000,
+        ),
+        Duration(seconds: 83),
+      );
+    });
+
+    expect(find.text('AAC · 32 kbps · 16 kHz'), findsOneWidget);
+    expect(repository.recordings.single.audio?.bitRate, 32000);
   });
 
   testWidgets('no permite un nombre vacío', (tester) async {
