@@ -1,0 +1,144 @@
+name: Release
+
+# Sube la versión, compila con build.yml y publica una release de GitHub
+# con el APK y el IPA adjuntos.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Parte de la versión que se incrementa
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Calcular versión
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      build-number: ${{ steps.next.outputs.build-number }}
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - name: Comprobar que se lanza desde una rama
+        if: github.ref_type != 'branch'
+        run: |
+          echo "::error::Lanza la release desde una rama (normalmente main), no desde una etiqueta."
+          exit 1
+
+      - uses: actions/checkout@v5
+
+      - name: Calcular la nueva versión
+        id: next
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          current=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '[:space:]')
+          number='(0|[1-9][0-9]*)'
+          if [[ ! "$current" =~ ^$number\.$number\.$number(\+$number)?$ ]]; then
+            echo "::error file=pubspec.yaml::Versión no válida en pubspec.yaml: '$current'"
+            exit 1
+          fi
+          major=${BASH_REMATCH[1]}
+          minor=${BASH_REMATCH[2]}
+          patch=${BASH_REMATCH[3]}
+          build=${BASH_REMATCH[5]:-0}
+
+          case "$BUMP" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+            *) echo "::error::Incremento no válido: '$BUMP'"; exit 1 ;;
+          esac
+          version="$major.$minor.$patch"
+          build=$((build + 1))
+          tag="v$version"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::error::La etiqueta $tag ya existe."
+            exit 1
+          fi
+
+          {
+            echo "version=$version"
+            echo "build-number=$build"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Versión $current → $version+$build" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Compilar
+    needs: version
+    uses: ./.github/workflows/build.yml
+    with:
+      build-name: ${{ needs.version.outputs.version }}
+      build-number: ${{ needs.version.outputs.build-number }}
+    secrets: inherit
+
+  publish:
+    name: Publicar release
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      BUILD_NUMBER: ${{ needs.version.outputs.build-number }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      # Se sube la versión solo cuando la compilación ha ido bien, para no
+      # dejar etiquetas sin release si algo falla.
+      - uses: actions/checkout@v5
+
+      - name: Subir la versión y crear la etiqueta
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" > /dev/null; then
+            echo "La etiqueta $TAG ya existe (se está reintentando el job); no se vuelve a crear."
+            exit 0
+          fi
+
+          sed -i -E "s/^version:.*/version: $VERSION+$BUILD_NUMBER/" pubspec.yaml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "Versión $VERSION"
+          git tag -a "$TAG" -m "Versión $VERSION"
+
+          if ! git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$TAG"; then
+            echo "::error::No se pudo subir a $BRANCH: ha recibido commits nuevos durante la release o está protegida. Vuelve a lanzar la release."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Crear la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          ### Descargas
+
+          - **voicerecorder-$VERSION.apk**: Android 7.0 o superior.
+          - **voicerecorder-$VERSION.ipa**: iOS 15 o superior. Va sin firmar:
+            hay que firmarla (p. ej. con AltStore o Sideloadly) para instalarla.
+          EOF
+
+          gh release create "$TAG" dist/* \
+            --verify-tag \
+            --title "Grabadora $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --generate-notes

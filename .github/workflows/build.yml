@@ -1,0 +1,190 @@
+name: Build
+
+# Pasa los tests y genera el APK (Android) y el IPA (iOS).
+# Se ejecuta en cada push, a mano y desde release.yml.
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      build-name:
+        description: Versión (x.y.z) con la que compilar. Por defecto, la de pubspec.yaml.
+        type: string
+        default: ''
+      build-number:
+        description: Número de compilación. Por defecto, el de pubspec.yaml.
+        type: string
+        default: ''
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Desde release.yml, github.workflow es "Release": no se mezcla con los push.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  FLUTTER_VERSION: '3.47.6'
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get --enforce-lockfile
+
+      - name: Analizar
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
+
+  version:
+    name: Versión
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      number: ${{ steps.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Calcular versión
+        id: version
+        env:
+          INPUT_NAME: ${{ inputs.build-name }}
+          INPUT_NUMBER: ${{ inputs.build-number }}
+        run: |
+          pubspec_version=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | tr -d '[:space:]')
+          if [[ "$pubspec_version" == *+* ]]; then
+            pubspec_number="${pubspec_version#*+}"
+          else
+            pubspec_number=1
+          fi
+          name="${INPUT_NAME:-${pubspec_version%%+*}}"
+          number="${INPUT_NUMBER:-$pubspec_number}"
+
+          if [[ ! "$name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$number" =~ ^[0-9]+$ ]]; then
+            echo "::error file=pubspec.yaml::Versión no válida: '$name+$number'"
+            exit 1
+          fi
+
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "Versión $name ($number)" >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Android (APK)
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BUILD_NAME: ${{ needs.version.outputs.name }}
+      BUILD_NUMBER: ${{ needs.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Configurar la firma
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "::warning title=APK firmado con la clave de depuración::Configura los secretos ANDROID_* para firmar con tu clave (ver README)."
+            exit 0
+          fi
+          keystore="$RUNNER_TEMP/upload-keystore.jks"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          cat > android/key.properties <<EOF
+          storeFile=$keystore
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Compilar APK
+        run: |
+          flutter build apk --release \
+            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/voicerecorder-$BUILD_NAME.apk"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: android-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS (IPA)
+    needs: [test, version]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      BUILD_NAME: ${{ needs.version.outputs.name }}
+      BUILD_NUMBER: ${{ needs.version.outputs.number }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Compilar app
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+
+      # Sin certificados de Apple el IPA va sin firmar: hay que firmarlo
+      # (p. ej. con AltStore o Sideloadly) para instalarlo en un iPhone.
+      - name: Empaquetar IPA
+        run: |
+          mkdir -p dist build/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
+          (cd build/ipa && zip -qry "../../dist/voicerecorder-$BUILD_NAME.ipa" Payload)
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ios-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
