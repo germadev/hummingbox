@@ -7,7 +7,12 @@ import '../utils/formatters.dart';
 import 'waveform_view.dart';
 
 /// Panel inferior con los controles de grabación.
-class RecordPanel extends StatelessWidget {
+///
+/// Plegado solo muestra el botón de grabar. Al deslizarlo hacia arriba se
+/// despliega el cronómetro y la onda (en gris) sin empezar a grabar; al
+/// deslizarlo hacia abajo se vuelve a plegar. Mientras se graba está siempre
+/// desplegado.
+class RecordPanel extends StatefulWidget {
   const RecordPanel({
     super.key,
     required this.controller,
@@ -22,6 +27,90 @@ class RecordPanel extends StatelessWidget {
   final VoidCallback onCancelPressed;
 
   @override
+  State<RecordPanel> createState() => _RecordPanelState();
+}
+
+class _RecordPanelState extends State<RecordPanel>
+    with SingleTickerProviderStateMixin {
+  /// 0 = plegado, 1 = desplegado.
+  late final AnimationController _expansion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+    value: widget.controller.isActive ? 1 : 0,
+  );
+
+  final _infoKey = GlobalKey();
+
+  /// Estado del grabador la última vez que se comprobó. Se inicializa en
+  /// [initState] (y no con `late`, que lo evaluaría al leerlo por primera vez,
+  /// cuando ya ha cambiado).
+  late bool _wasActive;
+
+  /// Velocidad (px/s) a partir de la cual un gesto se trata como un lanzamiento.
+  static const _flingVelocity = 700.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _wasActive = widget.controller.isActive;
+    widget.controller.addListener(_onRecorderChanged);
+  }
+
+  @override
+  void didUpdateWidget(RecordPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_onRecorderChanged);
+      widget.controller.addListener(_onRecorderChanged);
+      _onRecorderChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onRecorderChanged);
+    _expansion.dispose();
+    super.dispose();
+  }
+
+  bool get _active => widget.controller.isActive;
+
+  bool get _expanded => _expansion.value > 0.5;
+
+  /// Despliega el panel al empezar a grabar y lo pliega al terminar.
+  void _onRecorderChanged() {
+    if (_active == _wasActive) return;
+    _wasActive = _active;
+    _animateTo(_active ? 1 : 0);
+  }
+
+  void _animateTo(double target) {
+    _expansion.animateTo(target, curve: Curves.easeOutCubic);
+  }
+
+  void _toggle() {
+    if (_active) return;
+    _animateTo(_expanded ? 0 : 1);
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_active) return;
+    final height = _infoKey.currentContext?.size?.height ?? 0;
+    if (height <= 0) return;
+    _expansion.value -= details.primaryDelta! / height;
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_active) return;
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() >= _flingVelocity) {
+      _animateTo(velocity < 0 ? 1 : 0);
+    } else {
+      _animateTo(_expanded ? 1 : 0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
 
@@ -33,25 +122,43 @@ class RecordPanel extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          child: ListenableBuilder(
-            listenable: controller,
-            builder: (context, _) => AnimatedSize(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.bottomCenter,
-              child: Column(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onVerticalDragUpdate: _onDragUpdate,
+          onVerticalDragEnd: _onDragEnd,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+            child: ListenableBuilder(
+              listenable: Listenable.merge([widget.controller, _expansion]),
+              builder: (context, _) => Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (controller.isActive) ...[
-                    _RecordingInfo(controller: controller),
-                    const SizedBox(height: 20),
-                  ],
+                  _DragHandle(
+                    visible: !_active,
+                    expanded: _expanded,
+                    onPressed: _toggle,
+                  ),
+                  SizeTransition(
+                    sizeFactor: _expansion,
+                    alignment: Alignment.bottomCenter,
+                    child: FadeTransition(
+                      opacity: _expansion,
+                      // Plegado del todo, el contenido no se pinta ni se
+                      // anuncia, pero se sigue midiendo para el arrastre.
+                      child: Offstage(
+                        offstage: _expansion.value == 0 && !_active,
+                        child: Padding(
+                          key: _infoKey,
+                          padding: const EdgeInsets.only(top: 4, bottom: 20),
+                          child: _RecordingInfo(controller: widget.controller),
+                        ),
+                      ),
+                    ),
+                  ),
                   _Controls(
-                    controller: controller,
-                    onRecordPressed: onRecordPressed,
-                    onCancelPressed: onCancelPressed,
+                    controller: widget.controller,
+                    onRecordPressed: widget.onRecordPressed,
+                    onCancelPressed: widget.onCancelPressed,
                   ),
                 ],
               ),
@@ -63,6 +170,59 @@ class RecordPanel extends StatelessWidget {
   }
 }
 
+/// Tirador que indica que el panel se puede deslizar. Al tocarlo se pliega o
+/// se despliega.
+class _DragHandle extends StatelessWidget {
+  const _DragHandle({
+    required this.visible,
+    required this.expanded,
+    required this.onPressed,
+  });
+
+  final bool visible;
+  final bool expanded;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    return AnimatedOpacity(
+      opacity: visible ? 1 : 0,
+      duration: const Duration(milliseconds: 200),
+      child: Semantics(
+        button: visible,
+        label: visible
+            ? (expanded
+                  ? 'Ocultar el panel de grabación'
+                  : 'Mostrar el panel de grabación')
+            : null,
+        excludeSemantics: true,
+        child: GestureDetector(
+          key: const Key('panel-handle'),
+          behavior: HitTestBehavior.opaque,
+          onTap: visible ? onPressed : null,
+          child: SizedBox(
+            width: 96,
+            height: 24,
+            child: Center(
+              child: Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Estado, cronómetro y onda. Antes de grabar se muestra en gris.
 class _RecordingInfo extends StatelessWidget {
   const _RecordingInfo({required this.controller});
 
@@ -71,24 +231,28 @@ class _RecordingInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final paused = controller.status == RecorderStatus.paused;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final (label, icon, iconColor) = switch (controller.status) {
+      RecorderStatus.idle => (
+        'Lista para grabar',
+        Icons.circle,
+        muted.withValues(alpha: 0.4),
+      ),
+      RecorderStatus.recording => ('Grabando', Icons.circle, recordRed),
+      RecorderStatus.paused => ('En pausa', Icons.pause_circle, muted),
+    };
+    final recording = controller.status == RecorderStatus.recording;
 
     return Column(
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              paused ? Icons.pause_circle : Icons.circle,
-              size: 12,
-              color: paused ? theme.colorScheme.onSurfaceVariant : recordRed,
-            ),
+            Icon(icon, size: 12, color: iconColor),
             const SizedBox(width: 8),
             Text(
-              paused ? 'En pausa' : 'Grabando',
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(color: muted),
             ),
           ],
         ),
@@ -97,15 +261,14 @@ class _RecordingInfo extends StatelessWidget {
           formatDuration(controller.elapsed, showTenths: true),
           key: const Key('elapsed-time'),
           style: theme.textTheme.displayMedium?.copyWith(
+            color: controller.isActive ? null : muted,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
         const SizedBox(height: 12),
         WaveformView(
           amplitudes: controller.amplitudes,
-          color: paused
-              ? theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.4)
-              : recordRed,
+          color: recording ? recordRed : muted.withValues(alpha: 0.4),
         ),
       ],
     );

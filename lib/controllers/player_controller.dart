@@ -64,6 +64,20 @@ class PlayerController extends ChangeNotifier {
     await _player.play(recording.path);
   }
 
+  /// Carga [recording] y la reproduce desde [position].
+  Future<void> playFrom(Recording recording, Duration position) async {
+    if (isCurrent(recording)) {
+      await seek(position);
+      if (_status != PlaybackStatus.playing) await toggle(recording);
+      return;
+    }
+    _currentId = recording.id;
+    _position = position;
+    _duration = recording.duration;
+    _notify();
+    await _player.play(recording.path, position: position);
+  }
+
   Future<void> seek(Duration position) async {
     if (_currentId == null) return;
     _position = position;

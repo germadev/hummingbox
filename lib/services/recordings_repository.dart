@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../audio/levels.dart';
 import '../models/recording.dart';
+import '../utils/files.dart';
 
 /// Almacén de las grabaciones del usuario.
 abstract interface class RecordingsRepository {
@@ -15,12 +17,38 @@ abstract interface class RecordingsRepository {
   /// Devuelve todas las grabaciones, de la más reciente a la más antigua.
   Future<List<Recording>> loadAll();
 
-  /// Registra el archivo de audio de [path] como una nueva grabación.
+  /// Registra el archivo de audio de [path] como una nueva grabación, con
+  /// [name] o, si no se indica, el siguiente nombre libre ("Grabación N").
   ///
   /// Devuelve `null` si el archivo no existe.
-  Future<Recording?> add({required String path, required Duration duration});
+  Future<Recording?> add({
+    required String path,
+    required Duration duration,
+    List<double>? waveform,
+    String? name,
+  });
 
   Future<Recording> rename(Recording recording, String name);
+
+  /// Sustituye el audio de [recording] por el archivo de [sourcePath], que se
+  /// mueve a su sitio, y aumenta su revisión.
+  Future<Recording> replaceAudio(
+    Recording recording, {
+    required String sourcePath,
+    required Duration duration,
+    List<double>? waveform,
+  });
+
+  /// Guarda la onda calculada para [recording].
+  Future<Recording> setWaveform(Recording recording, List<double> waveform);
+
+  /// Guarda (o borra, si [state] es `null`) el estado de la copia de
+  /// [recording] en el destino [target].
+  Future<Recording> setCopy(
+    Recording recording,
+    String target,
+    CopyState? state,
+  );
 
   Future<void> delete(Recording recording);
 
@@ -40,6 +68,10 @@ class FileRecordingsRepository implements RecordingsRepository {
 
   final Future<Directory> Function() _directoryProvider;
   Directory? _directory;
+
+  /// Serializa las escrituras del índice para que dos cambios simultáneos
+  /// (p. ej. renombrar mientras se sincroniza una copia) no se pisen.
+  Future<void> _lock = Future.value();
 
   static Future<Directory> _defaultDirectory() async {
     final documents = await getApplicationDocumentsDirectory();
@@ -102,41 +134,93 @@ class FileRecordingsRepository implements RecordingsRepository {
   Future<Recording?> add({
     required String path,
     required Duration duration,
+    List<double>? waveform,
+    String? name,
   }) async {
     if (!await File(path).exists()) return null;
 
-    final directory = await _getDirectory();
-    final index = await _readIndex(directory);
-    final recording = Recording(
-      id: p.basenameWithoutExtension(path),
-      path: path,
-      name: nextDefaultName(index.values.map((m) => m['name'] as String?)),
-      createdAt: DateTime.now(),
-      duration: duration,
-    );
-    index[recording.id] = recording.toMetadata();
-    await _writeIndex(directory, index);
-    return recording;
+    return _synchronized(() async {
+      final directory = await _getDirectory();
+      final index = await _readIndex(directory);
+      final recording = Recording(
+        id: p.basenameWithoutExtension(path),
+        path: path,
+        name:
+            name ??
+            nextDefaultName(index.values.map((m) => m['name'] as String?)),
+        createdAt: DateTime.now(),
+        duration: duration,
+        waveform: waveform,
+      );
+      index[recording.id] = recording.toMetadata();
+      await _writeIndex(directory, index);
+      return recording;
+    });
   }
 
   @override
-  Future<Recording> rename(Recording recording, String name) async {
-    final renamed = recording.copyWith(name: name.trim());
-    final directory = await _getDirectory();
-    final index = await _readIndex(directory);
-    index[recording.id] = renamed.toMetadata();
-    await _writeIndex(directory, index);
-    return renamed;
+  Future<Recording> rename(Recording recording, String name) {
+    return _update(recording, (metadata) => metadata['name'] = name.trim());
+  }
+
+  @override
+  Future<Recording> replaceAudio(
+    Recording recording, {
+    required String sourcePath,
+    required Duration duration,
+    List<double>? waveform,
+  }) async {
+    await moveFile(sourcePath, recording.path);
+    return _update(recording, (metadata) {
+      metadata['durationMs'] = duration.inMilliseconds;
+      metadata['revision'] = (metadata['revision'] as int? ?? 0) + 1;
+      if (waveform != null) {
+        metadata['waveform'] = encodeWaveform(waveform);
+      } else {
+        metadata.remove('waveform');
+      }
+    });
+  }
+
+  @override
+  Future<Recording> setWaveform(Recording recording, List<double> waveform) {
+    return _update(
+      recording,
+      (metadata) => metadata['waveform'] = encodeWaveform(waveform),
+    );
+  }
+
+  @override
+  Future<Recording> setCopy(
+    Recording recording,
+    String target,
+    CopyState? state,
+  ) {
+    return _update(recording, (metadata) {
+      final copies = {...?(metadata['copies'] as Map<String, dynamic>?)};
+      if (state == null) {
+        copies.remove(target);
+      } else {
+        copies[target] = state.toJson();
+      }
+      if (copies.isEmpty) {
+        metadata.remove('copies');
+      } else {
+        metadata['copies'] = copies;
+      }
+    });
   }
 
   @override
   Future<void> delete(Recording recording) async {
     await discard(recording.path);
-    final directory = await _getDirectory();
-    final index = await _readIndex(directory);
-    if (index.remove(recording.id) != null) {
-      await _writeIndex(directory, index);
-    }
+    await _synchronized(() async {
+      final directory = await _getDirectory();
+      final index = await _readIndex(directory);
+      if (index.remove(recording.id) != null) {
+        await _writeIndex(directory, index);
+      }
+    });
   }
 
   @override
@@ -157,6 +241,37 @@ class FileRecordingsRepository implements RecordingsRepository {
       }
     }
     return '$defaultNamePrefix ${highest + 1}';
+  }
+
+  /// Modifica los metadatos de [recording] partiendo de los guardados (y no
+  /// de [recording], que puede estar desactualizada) y devuelve el resultado.
+  ///
+  /// Si el audio se ha borrado entretanto (p. ej. mientras se copiaba o se
+  /// calculaba su onda), no hace nada para no dejar una entrada huérfana.
+  Future<Recording> _update(
+    Recording recording,
+    void Function(Map<String, dynamic> metadata) change,
+  ) {
+    return _synchronized(() async {
+      if (!await File(recording.path).exists()) return recording;
+      final directory = await _getDirectory();
+      final index = await _readIndex(directory);
+      final metadata = {...(index[recording.id] ?? recording.toMetadata())};
+      change(metadata);
+      index[recording.id] = metadata;
+      await _writeIndex(directory, index);
+      return Recording.fromMetadata(
+        id: recording.id,
+        path: recording.path,
+        json: metadata,
+      );
+    });
+  }
+
+  Future<T> _synchronized<T>(Future<T> Function() action) {
+    final result = _lock.then((_) => action());
+    _lock = result.then((_) {}, onError: (_) {});
+    return result;
   }
 
   String _pathFor(Directory directory, String id) =>

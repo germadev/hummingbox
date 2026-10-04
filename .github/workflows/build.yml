@@ -138,9 +138,15 @@ jobs:
           EOF
 
       - name: Compilar APK
+        env:
+          GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
         run: |
+          if [[ -z "$GOOGLE_SERVER_CLIENT_ID" ]]; then
+            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_SERVER_CLIENT_ID para activarlo (ver README)."
+          fi
           flutter build apk --release \
-            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk "dist/voicerecorder-$BUILD_NAME.apk"
 
@@ -167,10 +173,25 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Configurar Google Sign-In
+        env:
+          GOOGLE_IOS_CLIENT_ID: ${{ vars.GOOGLE_IOS_CLIENT_ID }}
+        run: |
+          if [[ -z "$GOOGLE_IOS_CLIENT_ID" ]]; then
+            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_IOS_CLIENT_ID para activarlo (ver README)."
+            exit 0
+          fi
+          # 1234-abc.apps.googleusercontent.com → com.googleusercontent.apps.1234-abc
+          reversed="com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID%.apps.googleusercontent.com}"
+          echo "GOOGLE_REVERSED_CLIENT_ID = $reversed" > ios/Flutter/GoogleSignIn.xcconfig
+
       - name: Compilar app
+        env:
+          GOOGLE_IOS_CLIENT_ID: ${{ vars.GOOGLE_IOS_CLIENT_ID }}
         run: |
           flutter build ios --release --no-codesign \
-            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER"
+            --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" \
+            --dart-define=GOOGLE_IOS_CLIENT_ID="$GOOGLE_IOS_CLIENT_ID"
 
       # Sin certificados de Apple el IPA va sin firmar: hay que firmarlo
       # (p. ej. con AltStore o Sideloadly) para instalarlo en un iPhone.

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../controllers/player_controller.dart';
@@ -5,11 +7,15 @@ import '../controllers/recorder_controller.dart';
 import '../models/recording.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
+import '../services/copy_sync.dart';
+import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
 import '../services/share_service.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
+import 'editor_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -17,11 +23,17 @@ class HomeScreen extends StatefulWidget {
     required this.repository,
     required this.recorderFactory,
     required this.playerFactory,
+    required this.editor,
+    required this.sync,
   });
 
   final RecordingsRepository repository;
   final AudioRecorderService Function() recorderFactory;
   final AudioPlayerService Function() playerFactory;
+  final RecordingEditor editor;
+
+  /// Copias de las grabaciones en una carpeta y en Google Drive.
+  final CopySync sync;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -36,17 +48,22 @@ class _HomeScreenState extends State<HomeScreen> {
     player: widget.playerFactory(),
   );
 
+  late final AppLifecycleListener _lifecycle;
+
   List<Recording> _recordings = const [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    // Al volver a la app se reintentan las copias pendientes.
+    _lifecycle = AppLifecycleListener(onResume: _syncCopies);
     _loadRecordings();
   }
 
   @override
   void dispose() {
+    _lifecycle.dispose();
     _recorder.dispose();
     _player.dispose();
     super.dispose();
@@ -64,8 +81,47 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() => _loading = false);
       _showMessage('No se pudieron cargar las grabaciones');
+      return;
+    }
+    _syncCopies();
+    await _addMissingWaveforms();
+  }
+
+  /// Calcula la onda de las grabaciones que no la tienen (las hechas con
+  /// versiones anteriores de la app). Si falla, se reintenta al volver a
+  /// abrirla.
+  Future<void> _addMissingWaveforms() async {
+    final pending = [
+      for (final recording in _recordings)
+        if (recording.waveform == null) recording,
+    ];
+    for (final recording in pending) {
+      if (!mounted) return;
+      try {
+        final levels = await widget.editor.extractWaveform(recording);
+        if (!mounted) return;
+        // Si entretanto se ha editado o borrado, ya no hace falta.
+        final current = _recordings.where((r) => r.id == recording.id);
+        if (current.isEmpty ||
+            current.single.waveform != null ||
+            current.single.revision != recording.revision) {
+          continue;
+        }
+        await widget.repository.setWaveform(recording, levels);
+        if (!mounted) return;
+        setState(() {
+          _recordings = [
+            for (final r in _recordings)
+              r.id == recording.id ? r.copyWith(waveform: levels) : r,
+          ];
+        });
+      } catch (_) {
+        // Se sigue mostrando sin onda.
+      }
     }
   }
+
+  void _syncCopies() => unawaited(widget.sync.sync());
 
   // --- Grabación ---
 
@@ -106,6 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final saved = recording;
     setState(() => _recordings = [saved, ..._recordings]);
     _showMessage('Guardada como «${saved.name}»');
+    _syncCopies();
   }
 
   Future<void> _confirmCancel() async {
@@ -128,12 +185,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _player.toggle(recording);
   }
 
+  void _seek(Recording recording, Duration position) {
+    if (_recorder.isActive) {
+      _showMessage('Detén la grabación para poder reproducir');
+      return;
+    }
+    if (_player.isCurrent(recording)) {
+      _player.seek(position);
+    } else {
+      _player.playFrom(recording, position);
+    }
+  }
+
   Future<void> _onAction(
     Recording recording,
     RecordingAction action,
     BuildContext tileContext,
   ) async {
     switch (action) {
+      case RecordingAction.edit:
+        await _edit(recording);
       case RecordingAction.rename:
         await _rename(recording);
       case RecordingAction.share:
@@ -141,6 +212,36 @@ class _HomeScreenState extends State<HomeScreen> {
       case RecordingAction.delete:
         await _delete(recording);
     }
+  }
+
+  Future<void> _edit(Recording recording) async {
+    if (_recorder.isActive) {
+      _showMessage('Detén la grabación para poder editar');
+      return;
+    }
+    await _player.stop();
+    if (!mounted) return;
+    final result = await Navigator.push<EditResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditorScreen(
+          recording: recording,
+          editor: widget.editor,
+          playerFactory: widget.playerFactory,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    final edited = result.recording;
+    setState(() {
+      _recordings = result.isCopy
+          ? [edited, ..._recordings]
+          : [for (final r in _recordings) r.id == edited.id ? edited : r];
+    });
+    _showMessage(
+      result.isCopy ? 'Guardada como «${edited.name}»' : 'Cambios guardados',
+    );
+    _syncCopies();
   }
 
   Future<void> _rename(Recording recording) async {
@@ -154,6 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
           for (final r in _recordings) r.id == renamed.id ? renamed : r,
         ];
       });
+      _syncCopies();
     } catch (_) {
       _showMessage('No se pudo renombrar la grabación');
     }
@@ -204,12 +306,33 @@ class _HomeScreenState extends State<HomeScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _openSettings() {
+    return Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SettingsScreen(sync: widget.sync),
+      ),
+    );
+  }
+
   // --- Interfaz ---
 
   @override
   Widget build(BuildContext context) {
     final scaffold = Scaffold(
-      appBar: AppBar(title: const Text('Grabadora')),
+      appBar: AppBar(
+        title: const Text('Grabadora'),
+        actions: [
+          _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
+          IconButton(
+            key: const Key('settings-button'),
+            tooltip: 'Opciones',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _openSettings,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: _buildBody(),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
@@ -249,9 +372,46 @@ class _HomeScreenState extends State<HomeScreen> {
           recording: recording,
           player: _player,
           onTogglePlay: () => _togglePlayback(recording),
+          onSeek: (position) => _seek(recording, position),
           onAction: (action, tileContext) =>
               _onAction(recording, action, tileContext),
         );
+      },
+    );
+  }
+}
+
+/// Indica en la barra superior si se están guardando copias o si ha habido
+/// errores al hacerlo.
+class _SyncIndicator extends StatelessWidget {
+  const _SyncIndicator({required this.sync, required this.onPressed});
+
+  final CopySync sync;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) {
+        if (sync.syncing) {
+          return IconButton(
+            tooltip: 'Guardando copias…',
+            icon: const Icon(Icons.sync),
+            onPressed: onPressed,
+          );
+        }
+        if (sync.errors.isNotEmpty) {
+          return IconButton(
+            tooltip: 'No se pudieron guardar algunas copias',
+            icon: Icon(
+              Icons.sync_problem,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: onPressed,
+          );
+        }
+        return const SizedBox.shrink();
       },
     );
   }

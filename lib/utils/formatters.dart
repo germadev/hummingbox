@@ -42,3 +42,14 @@ String formatRecordingDate(DateTime date, {DateTime? now}) {
   if (day == yesterday) return 'Ayer, $time';
   return '${DateFormat('d MMM yyyy', 'es').format(date)}, $time';
 }
+
+/// Formatea una ganancia en decibelios: `+3,5 dB`, `−2,0 dB` o `0 dB`.
+String formatGain(double db) {
+  if (db == 0) return '0 dB';
+  final value = NumberFormat('0.0', 'es').format(db.abs());
+  return '${db > 0 ? '+' : '−'}$value dB';
+}
+
+/// Formatea una duración corta en segundos con una décima: `1,5 s`.
+String formatSeconds(Duration duration) =>
+    '${NumberFormat('0.0', 'es').format(duration.inMilliseconds / 1000)} s';

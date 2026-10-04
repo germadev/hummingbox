@@ -1,11 +1,19 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/services/audio_codec.dart';
 import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
+import 'package:voicerecorder/services/copy_sync.dart';
+import 'package:voicerecorder/services/folder_access.dart';
+import 'package:voicerecorder/services/google_drive.dart';
+import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
+import 'package:voicerecorder/services/settings_store.dart';
 
 class FakeAudioRecorderService implements AudioRecorderService {
   FakeAudioRecorderService({
@@ -119,6 +127,8 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   final discarded = <String>[];
   var _counter = 0;
 
+  Recording byId(String id) => recordings.firstWhere((r) => r.id == id);
+
   @override
   Future<String> createRecordingPath() async => '/fake/rec_${_counter++}.m4a';
 
@@ -130,26 +140,71 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   Future<Recording?> add({
     required String path,
     required Duration duration,
+    List<double>? waveform,
+    String? name,
   }) async {
     final recording = Recording(
       id: p.basenameWithoutExtension(path),
       path: path,
-      name: FileRecordingsRepository.nextDefaultName(
-        recordings.map((r) => r.name),
-      ),
+      name:
+          name ??
+          FileRecordingsRepository.nextDefaultName(
+            recordings.map((r) => r.name),
+          ),
       createdAt: DateTime.now(),
       duration: duration,
+      waveform: waveform,
     );
     recordings.add(recording);
     return recording;
   }
 
   @override
-  Future<Recording> rename(Recording recording, String name) async {
-    final renamed = recording.copyWith(name: name);
-    final index = recordings.indexWhere((r) => r.id == recording.id);
-    recordings[index] = renamed;
-    return renamed;
+  Future<Recording> rename(Recording recording, String name) async =>
+      _replace(byId(recording.id).copyWith(name: name));
+
+  @override
+  Future<Recording> replaceAudio(
+    Recording recording, {
+    required String sourcePath,
+    required Duration duration,
+    List<double>? waveform,
+  }) async {
+    final current = byId(recording.id);
+    return _replace(
+      Recording(
+        id: current.id,
+        path: current.path,
+        name: current.name,
+        createdAt: current.createdAt,
+        duration: duration,
+        waveform: waveform,
+        revision: current.revision + 1,
+        copies: current.copies,
+      ),
+    );
+  }
+
+  @override
+  Future<Recording> setWaveform(
+    Recording recording,
+    List<double> waveform,
+  ) async => _replace(byId(recording.id).copyWith(waveform: waveform));
+
+  @override
+  Future<Recording> setCopy(
+    Recording recording,
+    String target,
+    CopyState? state,
+  ) async {
+    final current = byId(recording.id);
+    final copies = {...current.copies};
+    if (state == null) {
+      copies.remove(target);
+    } else {
+      copies[target] = state;
+    }
+    return _replace(current.copyWith(copies: copies));
   }
 
   @override
@@ -158,4 +213,225 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
 
   @override
   Future<void> discard(String path) async => discarded.add(path);
+
+  Recording _replace(Recording recording) {
+    final index = recordings.indexWhere((r) => r.id == recording.id);
+    recordings[index] = recording;
+    return recording;
+  }
+}
+
+/// Códec que no convierte nada: copia los bytes tal cual. Sirve para probar
+/// el editor con WAV de verdad, ya que el "m4a" resultante es un WAV.
+class CopyingAudioCodec implements AudioCodec {
+  final calls = <String>[];
+
+  /// Si se indica, `decodeToWav` copia este archivo en vez de la entrada.
+  String? decodedSource;
+
+  @override
+  Future<void> decodeToWav(String input, String output) async {
+    calls.add('decode ${p.basename(input)}');
+    await File(decodedSource ?? input).copy(output);
+  }
+
+  @override
+  Future<void> encodeToM4a(String input, String output) async {
+    calls.add('encode ${p.basename(input)}');
+    await File(input).copy(output);
+  }
+}
+
+/// Editor que no toca archivos, para los tests de widgets.
+class FakeRecordingEditor extends RecordingEditor {
+  FakeRecordingEditor({required super.repository})
+    : super(codec: CopyingAudioCodec());
+
+  /// Onda que devuelve [extractWaveform]; si es `null`, falla.
+  List<double>? waveform = const [0.2, 0.6, 1.0];
+  final extracted = <String>[];
+
+  Duration duration = const Duration(seconds: 10);
+  double peak = 0.25;
+
+  /// Picos de la onda del editor; por defecto, todos iguales a [peak].
+  List<double>? peaks;
+  AudioEdit? savedEdit;
+  bool? savedAsCopy;
+  int closedSessions = 0;
+
+  @override
+  Future<List<double>> extractWaveform(Recording recording) async {
+    extracted.add(recording.id);
+    return waveform ?? (throw Exception('sin onda'));
+  }
+
+  /// Si se indica, [open] falla con este error.
+  Object? openError;
+
+  @override
+  Future<EditSession> open(Recording recording) async {
+    if (openError case final error?) throw error;
+    return _session(recording);
+  }
+
+  EditSession _session(Recording recording) => EditSession(
+    recording: recording,
+    directory: Directory('/fake/editor'),
+    sourcePath: '/fake/editor/source.wav',
+    analysis: WavAnalysis(
+      duration: duration,
+      peaks: peaks ?? List.filled(RecordingEditor.editorResolution, peak),
+    ),
+  );
+
+  @override
+  Future<Recording> save(
+    EditSession session,
+    AudioEdit edit, {
+    required bool asCopy,
+  }) async {
+    savedEdit = edit;
+    savedAsCopy = asCopy;
+    if (asCopy) {
+      return (await repository.add(
+        path: await repository.createRecordingPath(),
+        duration: edit.length,
+        name: '${session.recording.name}${RecordingEditor.copySuffix}',
+      ))!;
+    }
+    return repository.replaceAudio(
+      session.recording,
+      sourcePath: '/fake/editor/edited.m4a',
+      duration: edit.length,
+    );
+  }
+
+  @override
+  Future<void> close(EditSession session) async => closedSessions++;
+}
+
+class InMemorySettingsStore implements SettingsStore {
+  InMemorySettingsStore([this.settings = const AppSettings()]);
+
+  AppSettings settings;
+
+  @override
+  Future<AppSettings> load() async => settings;
+
+  @override
+  Future<void> save(AppSettings settings) async => this.settings = settings;
+}
+
+class FakeFolderAccess implements FolderAccess {
+  /// Carpeta que devuelve el selector; `null` simula que se cancela.
+  FolderSettings? picked = const FolderSettings(
+    id: 'tree://music',
+    name: 'Music',
+  );
+
+  /// Archivos de la carpeta: referencia → nombre.
+  final files = <String, String>{};
+  final calls = <String>[];
+
+  /// Si se indica, las escrituras fallan con este error.
+  PlatformException? writeError;
+  var _counter = 0;
+
+  @override
+  Future<FolderSettings?> pickFolder() async => picked;
+
+  @override
+  Future<String> writeFile({
+    required String folder,
+    required String source,
+    required String name,
+    String? ref,
+  }) async {
+    calls.add('write $name${ref == null ? '' : ' ($ref)'}');
+    if (writeError case final error?) throw error;
+    final target = ref != null && files.containsKey(ref)
+        ? ref
+        : 'doc${_counter++}';
+    files.putIfAbsent(target, () => name);
+    return target;
+  }
+
+  @override
+  Future<String> renameFile({
+    required String folder,
+    required String ref,
+    required String name,
+  }) async {
+    calls.add('rename $ref → $name');
+    if (!files.containsKey(ref)) {
+      throw PlatformException(code: 'failed', message: 'No existe');
+    }
+    files[ref] = name;
+    return ref;
+  }
+}
+
+class FakeDriveService implements DriveService {
+  FakeDriveService({this.isAvailable = true});
+
+  @override
+  bool isAvailable;
+
+  /// Lo que devuelve [connect]; `null` simula que el usuario cancela.
+  DriveSettings? account = const DriveSettings(
+    email: 'ana@example.com',
+    folderId: 'folder1',
+  );
+
+  final files = <String, String>{};
+  final calls = <String>[];
+  Object? uploadError;
+  bool disconnected = false;
+  var _counter = 0;
+
+  @override
+  Future<DriveSettings?> connect() async => account;
+
+  @override
+  Future<void> disconnect() async => disconnected = true;
+
+  @override
+  Future<String> upload({
+    required String folderId,
+    required String path,
+    required String name,
+    String? fileId,
+  }) async {
+    calls.add('upload $name${fileId == null ? '' : ' ($fileId)'}');
+    if (uploadError case final error?) throw error;
+    final id = fileId != null && files.containsKey(fileId)
+        ? fileId
+        : 'file${_counter++}';
+    files[id] = name;
+    return id;
+  }
+
+  @override
+  Future<void> rename({required String fileId, required String name}) async {
+    calls.add('rename $fileId → $name');
+    if (!files.containsKey(fileId)) {
+      throw const DriveException(404, 'File not found');
+    }
+    files[fileId] = name;
+  }
+}
+
+CopySync fakeCopySync(
+  RecordingsRepository repository, {
+  SettingsStore? store,
+  FolderAccess? folders,
+  DriveService? drive,
+}) {
+  return CopySync(
+    repository: repository,
+    store: store ?? InMemorySettingsStore(),
+    folders: folders ?? FakeFolderAccess(),
+    drive: drive ?? FakeDriveService(),
+  );
 }
