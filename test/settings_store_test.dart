@@ -50,6 +50,23 @@ void main() {
     );
   });
 
+  test('guarda las carpetas, la abierta y la cuenta atrás', () async {
+    const settings = AppSettings(
+      folder: FolderSettings(
+        id: 'tree://music',
+        name: 'Music',
+        importFiles: false,
+        ignored: {'doc1'},
+      ),
+      folders: ['Clases', 'Ideas'],
+      openFolder: 'Clases',
+      countdownSeconds: 10,
+    );
+    await store.save(settings);
+
+    expect(await store.load(), settings);
+  });
+
   test('tolera un archivo corrupto', () async {
     final file = File(p.join(directory.path, 'sub', 'settings.json'));
     await file.create(recursive: true);

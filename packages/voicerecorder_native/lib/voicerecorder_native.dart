@@ -29,6 +29,16 @@ class NativeAudioCodec {
       'bitRate': bitRate,
     });
   }
+
+  /// Copia el `.m4a` de [input] en [output] sin lo que hay antes de [start],
+  /// sin volver a codificar el audio.
+  Future<void> trimStart(String input, String output, Duration start) {
+    return _channel.invokeMethod<void>('trimStart', {
+      'input': input,
+      'output': output,
+      'startUs': start.inMicroseconds,
+    });
+  }
 }
 
 /// Carpeta elegida por el usuario con el selector del sistema.

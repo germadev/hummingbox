@@ -116,7 +116,12 @@ class AppSettings {
     this.recording = const RecordingOptions(),
     this.folders = const [],
     this.openFolder = '',
+    this.countdownSeconds = defaultCountdown,
   });
+
+  /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
+  static const countdownChoices = [3, 5, 10];
+  static const defaultCountdown = 3;
 
   /// Carpeta del dispositivo donde se guarda una copia de cada grabación, o
   /// `null` si solo se guardan dentro de la app.
@@ -135,6 +140,9 @@ class AppSettings {
   /// para la principal.
   final String openFolder;
 
+  /// Segundos de la cuenta atrás antes de empezar a grabar.
+  final int countdownSeconds;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -147,18 +155,22 @@ class AppSettings {
   AppSettings withOpenFolder(String openFolder) =>
       _copy(openFolder: openFolder);
 
+  AppSettings withCountdown(int seconds) => _copy(countdownSeconds: seconds);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
     RecordingOptions? recording,
     List<String>? folders,
     String? openFolder,
+    int? countdownSeconds,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
     recording: recording ?? this.recording,
     folders: folders ?? this.folders,
     openFolder: openFolder ?? this.openFolder,
+    countdownSeconds: countdownSeconds ?? this.countdownSeconds,
   );
 
   Map<String, dynamic> toJson() => {
@@ -167,11 +179,13 @@ class AppSettings {
     'recording': recording.toJson(),
     if (folders.isNotEmpty) 'folders': folders,
     if (openFolder.isNotEmpty) 'openFolder': openFolder,
+    if (countdownSeconds != defaultCountdown) 'countdown': countdownSeconds,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
     final folders = json['folders'];
     final openFolder = json['openFolder'];
+    final countdown = json['countdown'];
     return AppSettings(
       folder: FolderSettings.fromJson(json['folder']),
       drive: DriveSettings.fromJson(json['drive']),
@@ -182,6 +196,9 @@ class AppSettings {
             if (name is String) name,
       ],
       openFolder: openFolder is String ? openFolder : '',
+      countdownSeconds: countdownChoices.contains(countdown)
+          ? countdown as int
+          : defaultCountdown,
     );
   }
 
@@ -192,7 +209,8 @@ class AppSettings {
       other.drive == drive &&
       other.recording == recording &&
       listEquals(other.folders, folders) &&
-      other.openFolder == openFolder;
+      other.openFolder == openFolder &&
+      other.countdownSeconds == countdownSeconds;
 
   @override
   int get hashCode => Object.hash(
@@ -201,6 +219,7 @@ class AppSettings {
     recording,
     Object.hashAll(folders),
     openFolder,
+    countdownSeconds,
   );
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app.dart';
 import '../controllers/recorder_controller.dart';
@@ -9,22 +10,34 @@ import 'waveform_view.dart';
 /// Panel inferior con los controles de grabación.
 ///
 /// Plegado solo muestra el botón de grabar. Al deslizarlo hacia arriba se
-/// despliega el cronómetro y la onda (en gris) sin empezar a grabar; al
-/// deslizarlo hacia abajo se vuelve a plegar. Mientras se graba está siempre
-/// desplegado.
+/// despliega el cronómetro y la onda (en gris) sin empezar a grabar, con un
+/// botón a cada lado: a la izquierda, grabar tras una cuenta atrás; a la
+/// derecha, grabar al detectar la voz. Al deslizarlo hacia abajo se vuelve a
+/// plegar. Mientras se graba o se espera para grabar está siempre desplegado.
 class RecordPanel extends StatefulWidget {
   const RecordPanel({
     super.key,
     required this.controller,
     required this.onRecordPressed,
     required this.onCancelPressed,
+    required this.onCountdownPressed,
+    required this.onVoicePressed,
+    this.countdownSeconds = 3,
   });
 
   final RecorderController controller;
 
-  /// Empieza o detiene la grabación según el estado actual.
+  /// Empieza o detiene la grabación según el estado actual (o, si se está
+  /// esperando para empezar, empieza ya).
   final VoidCallback onRecordPressed;
+
+  /// Descarta la grabación o cancela la espera.
   final VoidCallback onCancelPressed;
+  final VoidCallback onCountdownPressed;
+  final VoidCallback onVoicePressed;
+
+  /// Duración de la cuenta atrás, para el texto del botón.
+  final int countdownSeconds;
 
   @override
   State<RecordPanel> createState() => _RecordPanelState();
@@ -36,7 +49,7 @@ class _RecordPanelState extends State<RecordPanel>
   late final AnimationController _expansion = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 250),
-    value: widget.controller.isActive ? 1 : 0,
+    value: widget.controller.isBusy ? 1 : 0,
   );
 
   final _infoKey = GlobalKey();
@@ -44,7 +57,10 @@ class _RecordPanelState extends State<RecordPanel>
   /// Estado del grabador la última vez que se comprobó. Se inicializa en
   /// [initState] (y no con `late`, que lo evaluaría al leerlo por primera vez,
   /// cuando ya ha cambiado).
+  late bool _wasBusy;
   late bool _wasActive;
+  PendingStart? _lastPending;
+  int _lastCountdown = 0;
 
   /// Velocidad (px/s) a partir de la cual un gesto se trata como un lanzamiento.
   static const _flingVelocity = 700.0;
@@ -52,6 +68,7 @@ class _RecordPanelState extends State<RecordPanel>
   @override
   void initState() {
     super.initState();
+    _wasBusy = widget.controller.isBusy;
     _wasActive = widget.controller.isActive;
     widget.controller.addListener(_onRecorderChanged);
   }
@@ -73,15 +90,36 @@ class _RecordPanelState extends State<RecordPanel>
     super.dispose();
   }
 
-  bool get _active => widget.controller.isActive;
+  /// Grabando o esperando para empezar: el panel no se puede plegar.
+  bool get _active => widget.controller.isBusy;
 
   bool get _expanded => _expansion.value > 0.5;
 
-  /// Despliega el panel al empezar a grabar y lo pliega al terminar.
+  /// Despliega el panel al empezar a grabar (o a esperar para grabar) y lo
+  /// pliega al terminar una grabación; si se cancela una espera, sigue
+  /// desplegado. Durante la cuenta atrás vibra cada segundo y al empezar tras
+  /// una espera.
   void _onRecorderChanged() {
-    if (_active == _wasActive) return;
-    _wasActive = _active;
-    _animateTo(_active ? 1 : 0);
+    final controller = widget.controller;
+    final pending = controller.pending;
+    if (pending == PendingStart.countdown &&
+        controller.countdown != _lastCountdown) {
+      HapticFeedback.selectionClick();
+    }
+    if (_lastPending != null && pending == null && controller.isActive) {
+      HapticFeedback.mediumImpact();
+    }
+    _lastPending = pending;
+    _lastCountdown = controller.countdown;
+
+    final busy = controller.isBusy;
+    if (busy && !_wasBusy) {
+      _animateTo(1);
+    } else if (!busy && _wasBusy && _wasActive) {
+      _animateTo(0);
+    }
+    _wasBusy = busy;
+    _wasActive = controller.isActive;
   }
 
   void _animateTo(double target) {
@@ -157,8 +195,12 @@ class _RecordPanelState extends State<RecordPanel>
                   ),
                   _Controls(
                     controller: widget.controller,
+                    expanded: _expanded,
+                    countdownSeconds: widget.countdownSeconds,
                     onRecordPressed: widget.onRecordPressed,
                     onCancelPressed: widget.onCancelPressed,
+                    onCountdownPressed: widget.onCountdownPressed,
+                    onVoicePressed: widget.onVoicePressed,
                   ),
                 ],
               ),
@@ -233,14 +275,25 @@ class _RecordingInfo extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final (label, icon, iconColor) = switch (controller.status) {
-      RecorderStatus.idle => (
+    final pending = controller.pending;
+    final (label, icon, iconColor) = switch ((pending, controller.status)) {
+      (PendingStart.countdown, _) => (
+        'Empieza a grabar en…',
+        Icons.timer_outlined,
+        recordRed,
+      ),
+      (PendingStart.voice, _) => (
+        'Esperando a que hables…',
+        Icons.hearing,
+        recordRed,
+      ),
+      (null, RecorderStatus.idle) => (
         'Lista para grabar',
         Icons.circle,
         muted.withValues(alpha: 0.4),
       ),
-      RecorderStatus.recording => ('Grabando', Icons.circle, recordRed),
-      RecorderStatus.paused => ('En pausa', Icons.pause_circle, muted),
+      (null, RecorderStatus.recording) => ('Grabando', Icons.circle, recordRed),
+      (null, RecorderStatus.paused) => ('En pausa', Icons.pause_circle, muted),
     };
     // Solo cambia de color lo grabado; el hueco anterior sigue en gris.
     final idleColor = muted.withValues(alpha: 0.4);
@@ -264,14 +317,24 @@ class _RecordingInfo extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          formatDuration(controller.elapsed, showTenths: true),
-          key: const Key('elapsed-time'),
-          style: theme.textTheme.displayMedium?.copyWith(
-            color: controller.isActive ? null : muted,
-            fontFeatures: const [FontFeature.tabularFigures()],
+        if (pending == PendingStart.countdown)
+          Text(
+            '${controller.countdown}',
+            key: const Key('countdown-value'),
+            style: theme.textTheme.displayMedium?.copyWith(
+              color: recordRed,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          )
+        else
+          Text(
+            formatDuration(controller.elapsed, showTenths: true),
+            key: const Key('elapsed-time'),
+            style: theme.textTheme.displayMedium?.copyWith(
+              color: controller.isActive ? null : muted,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
-        ),
         const SizedBox(height: 12),
         WaveformView(
           key: const Key('recording-waveform'),
@@ -284,48 +347,77 @@ class _RecordingInfo extends StatelessWidget {
   }
 }
 
+/// Botón de grabar y, a los lados: descartar y pausar mientras se graba;
+/// cuenta atrás y grabar por voz con el panel desplegado antes de grabar; y
+/// cancelar mientras se espera para empezar.
 class _Controls extends StatelessWidget {
   const _Controls({
     required this.controller,
+    required this.expanded,
+    required this.countdownSeconds,
     required this.onRecordPressed,
     required this.onCancelPressed,
+    required this.onCountdownPressed,
+    required this.onVoicePressed,
   });
 
   final RecorderController controller;
+  final bool expanded;
+  final int countdownSeconds;
   final VoidCallback onRecordPressed;
   final VoidCallback onCancelPressed;
+  final VoidCallback onCountdownPressed;
+  final VoidCallback onVoicePressed;
 
   @override
   Widget build(BuildContext context) {
     final active = controller.isActive;
+    final waiting = controller.pending != null;
     final paused = controller.status == RecorderStatus.paused;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _SideButton(
-          visible: active,
-          child: IconButton.filledTonal(
+    final Widget left = active || waiting
+        ? IconButton.filledTonal(
             key: const Key('cancel-button'),
-            tooltip: 'Descartar',
+            tooltip: active ? 'Descartar' : 'Cancelar',
             iconSize: 28,
             icon: const Icon(Icons.close),
             onPressed: onCancelPressed,
-          ),
-        ),
-        const SizedBox(width: 32),
-        RecordButton(recording: active, onPressed: onRecordPressed),
-        const SizedBox(width: 32),
-        _SideButton(
-          visible: active,
-          child: IconButton.filledTonal(
+          )
+        : IconButton.filledTonal(
+            key: const Key('countdown-button'),
+            tooltip: 'Grabar tras una cuenta atrás de $countdownSeconds s',
+            iconSize: 28,
+            icon: const Icon(Icons.timer_outlined),
+            onPressed: onCountdownPressed,
+          );
+    final Widget right = active
+        ? IconButton.filledTonal(
             key: const Key('pause-button'),
             tooltip: paused ? 'Reanudar' : 'Pausar',
             iconSize: 28,
             icon: Icon(paused ? Icons.mic : Icons.pause),
             onPressed: paused ? controller.resume : controller.pause,
-          ),
+          )
+        : IconButton.filledTonal(
+            key: const Key('voice-button'),
+            tooltip: 'Grabar al detectar la voz',
+            iconSize: 28,
+            icon: const Icon(Icons.record_voice_over_outlined),
+            onPressed: onVoicePressed,
+          );
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _SideButton(visible: active || waiting || expanded, child: left),
+        const SizedBox(width: 32),
+        RecordButton(
+          recording: active,
+          startsNow: waiting,
+          onPressed: onRecordPressed,
         ),
+        const SizedBox(width: 32),
+        _SideButton(visible: active || (!waiting && expanded), child: right),
       ],
     );
   }
@@ -358,9 +450,13 @@ class RecordButton extends StatelessWidget {
     super.key,
     required this.recording,
     required this.onPressed,
+    this.startsNow = false,
   });
 
   final bool recording;
+
+  /// Si se está esperando para empezar: al pulsarlo se empieza ya.
+  final bool startsNow;
   final VoidCallback onPressed;
 
   static const _size = 80.0;
@@ -369,13 +465,16 @@ class RecordButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final ringColor = Theme.of(context).colorScheme.outlineVariant;
     final innerSize = recording ? 32.0 : 64.0;
+    final label = recording
+        ? 'Detener y guardar'
+        : (startsNow ? 'Empezar ya' : 'Grabar');
 
     return Semantics(
       button: true,
-      label: recording ? 'Detener y guardar' : 'Grabar',
+      label: label,
       excludeSemantics: true,
       child: Tooltip(
-        message: recording ? 'Detener y guardar' : 'Grabar',
+        message: label,
         child: InkResponse(
           key: const Key('record-button'),
           onTap: onPressed,

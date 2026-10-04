@@ -371,6 +371,86 @@ void main() {
       expect(recorder.calls, isEmpty);
     });
 
+    testWidgets('los botones de cuenta atrás y voz solo con el panel abierto', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      expect(find.byKey(const Key('countdown-button')), findsNothing);
+      expect(find.byKey(const Key('voice-button')), findsNothing);
+
+      await tester.drag(handle(), const Offset(0, -300));
+      await tester.pumpAndSettle();
+
+      // En el lugar de «Descartar» y de «Pausar».
+      expect(find.byKey(const Key('countdown-button')), findsOneWidget);
+      expect(find.byKey(const Key('voice-button')), findsOneWidget);
+      expect(recorder.calls, isEmpty);
+    });
+
+    testWidgets('graba al terminar la cuenta atrás', (tester) async {
+      store.settings = const AppSettings(countdownSeconds: 5);
+      await pumpApp(tester);
+      await tester.drag(handle(), const Offset(0, -300));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('countdown-button')));
+      await tester.pump();
+      expect(find.text('Empieza a grabar en…'), findsOneWidget);
+      expect(find.text('5'), findsOneWidget);
+      expect(recorder.calls, ['hasPermission']);
+
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('4'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+      await pumpAnimations(tester);
+
+      expect(find.text('Grabando'), findsOneWidget);
+      expect(recorder.calls, ['hasPermission', 'hasPermission', 'start']);
+
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+      expect(find.text('Grabación 1'), findsOneWidget);
+    });
+
+    testWidgets('cancela la cuenta atrás con la X', (tester) async {
+      await pumpApp(tester);
+      await tester.drag(handle(), const Offset(0, -300));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('countdown-button')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('cancel-button')));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Lista para grabar'), findsOneWidget);
+      expect(recorder.calls, ['hasPermission']);
+    });
+
+    testWidgets('graba al detectar la voz y recorta la espera', (tester) async {
+      await pumpApp(tester);
+      await tester.drag(handle(), const Offset(0, -300));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('voice-button')));
+      await tester.pump();
+      expect(find.text('Esperando a que hables…'), findsOneWidget);
+
+      for (final db in [...List.filled(30, -55.0), -25.0, -25.0]) {
+        recorder.amplitudeController.add(db);
+      }
+      await pumpAnimations(tester);
+      expect(find.text('Grabando'), findsOneWidget);
+
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Grabación 1'), findsOneWidget);
+      expect(editor.trims, {
+        recorder.path!: const Duration(milliseconds: 2200),
+      });
+    });
+
     testWidgets('un arrastre corto vuelve a su sitio', (tester) async {
       await pumpApp(tester);
 
@@ -604,7 +684,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Opciones'), findsOneWidget);
+    expect(find.text('Formato'), findsOneWidget);
     expect(find.text('Carpeta del dispositivo'), findsOneWidget);
-    expect(find.text('Google Drive'), findsOneWidget);
   });
 }

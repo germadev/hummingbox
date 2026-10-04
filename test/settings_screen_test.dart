@@ -25,6 +25,10 @@ void main() {
   });
 
   Future<void> pumpSettings(WidgetTester tester) async {
+    // Pantalla alta, para que quepan todas las opciones.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(home: SettingsScreen(sync: sync)));
     await sync.load();
     await tester.pumpAndSettle();
@@ -63,6 +67,19 @@ void main() {
         quality: RecordingQuality.low,
       ),
     );
+  });
+
+  testWidgets('elige la duración de la cuenta atrás', (tester) async {
+    await pumpSettings(tester);
+    expect(find.textContaining('3 segundos antes'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('countdown-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 segundos'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.countdownSeconds, 10);
+    expect(find.textContaining('10 segundos antes'), findsOneWidget);
   });
 
   testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {
@@ -111,7 +128,6 @@ void main() {
 
     expect(store.settings.folder!.importFiles, isFalse);
     final option = find.byKey(const Key('import-option'));
-    await tester.scrollUntilVisible(option, 100);
     expect(tester.widget<SwitchListTile>(option).value, isFalse);
 
     await tester.tap(option);

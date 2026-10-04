@@ -260,6 +260,12 @@ class CopyingAudioCodec implements AudioCodec {
   int? bitRate;
 
   @override
+  Future<void> trimStart(String input, String output, Duration start) async {
+    calls.add('trim ${p.basename(input)} @${start.inMilliseconds}');
+    await File(input).copy(output);
+  }
+
+  @override
   Future<void> encodeToM4a(
     String input,
     String output, {
@@ -344,6 +350,13 @@ class FakeRecordingEditor extends RecordingEditor {
 
   @override
   Future<void> close(EditSession session) async => closedSessions++;
+
+  /// Recortes del principio pedidos: ruta → inicio.
+  final trims = <String, Duration>{};
+
+  @override
+  Future<void> trimStart(String path, Duration start) async =>
+      trims[path] = start;
 
   /// Ediciones con las que se ha generado la escucha previa.
   final previews = <AudioEdit>[];

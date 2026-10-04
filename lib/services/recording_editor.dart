@@ -132,6 +132,30 @@ class RecordingEditor {
 
   Future<void> close(EditSession session) => deleteQuietly(session.directory);
 
+  /// Quita de la grabación de [path] lo anterior a [start] (p. ej. la espera
+  /// hasta que se empezó a hablar). Un `.m4a` se recorta sin volver a
+  /// codificarlo; un WAV, en Dart.
+  Future<void> trimStart(String path, Duration start) async {
+    final directory = await _createSessionDirectory();
+    try {
+      final trimmed = p.join(directory.path, 'trimmed${p.extension(path)}');
+      switch (RecordingFormat.fromPath(path)) {
+        case RecordingFormat.wav:
+          final info = await readWavInfo(path);
+          await _process(
+            path,
+            trimmed,
+            AudioEdit(start: start, end: info.duration),
+          );
+        case RecordingFormat.aac || null:
+          await codec.trimStart(path, trimmed, start);
+      }
+      await moveFile(trimmed, path);
+    } finally {
+      await deleteQuietly(directory);
+    }
+  }
+
   int _previews = 0;
 
   /// Genera un WAV con la selección de [edit] y su volumen y fundidos

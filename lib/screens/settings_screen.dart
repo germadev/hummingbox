@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/recording_options.dart';
 import '../services/copy_sync.dart';
+import '../services/settings_store.dart';
 import '../utils/formatters.dart';
 import '../widgets/dialogs.dart';
 
@@ -139,6 +140,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _sync.setRecordingOptions(options.copyWith(quality: quality));
   }
 
+  Future<void> _chooseCountdown() async {
+    final seconds = await showChoiceDialog(
+      context,
+      title: 'Cuenta atrás',
+      selected: _sync.settings.countdownSeconds,
+      choices: [
+        for (final seconds in AppSettings.countdownChoices)
+          Choice(seconds, '$seconds segundos'),
+      ],
+    );
+    if (seconds == null) return;
+    await _sync.setCountdown(seconds);
+  }
+
   static String _formatTitle(RecordingFormat format) =>
       '${formatName(format)} (${format.extension})';
 
@@ -200,6 +215,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   '${_qualityDetails(recording)}',
                 ),
                 onTap: _chooseQuality,
+              ),
+              ListTile(
+                key: const Key('countdown-option'),
+                leading: const Icon(Icons.timer_outlined),
+                title: const Text('Cuenta atrás'),
+                subtitle: Text(
+                  '${settings.countdownSeconds} segundos antes de empezar a '
+                  'grabar con el botón ⏱',
+                ),
+                onTap: _chooseCountdown,
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),

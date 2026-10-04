@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/copy_sync.dart';
@@ -45,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
     recorder: widget.recorderFactory(),
     repository: widget.repository,
     probe: widget.editor.probe,
+    trimStart: widget.editor.trimStart,
   );
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
@@ -244,21 +246,40 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- Grabación ---
 
   Future<void> _onRecordPressed() async {
-    if (_recorder.isActive) {
+    if (_recorder.pending != null) {
+      // Empieza ya, sin esperar a la cuenta atrás o a la voz.
+      await _recorder.startNow();
+    } else if (_recorder.isActive) {
       await _stopRecording();
     } else {
-      await _startRecording();
+      await _startRecording(
+        (options, folder) => _recorder.start(options: options, folder: folder),
+      );
     }
   }
 
-  Future<void> _startRecording() async {
+  Future<void> _startAfterCountdown() => _startRecording(
+    (options, folder) => _recorder.startAfterCountdown(
+      seconds: widget.sync.settings.countdownSeconds,
+      options: options,
+      folder: folder,
+    ),
+  );
+
+  Future<void> _startWhenVoice() => _startRecording(
+    (options, folder) =>
+        _recorder.startWhenVoice(options: options, folder: folder),
+  );
+
+  /// Empieza a grabar (al momento, tras la cuenta atrás o al detectar la voz)
+  /// con el formato elegido y en la carpeta abierta.
+  Future<void> _startRecording(
+    Future<bool> Function(RecordingOptions options, String folder) start,
+  ) async {
     await _player.stop();
     try {
       await widget.sync.load();
-      final started = await _recorder.start(
-        options: widget.sync.settings.recording,
-        folder: _folder,
-      );
+      final started = await start(widget.sync.settings.recording, _folder);
       if (!started) {
         _showMessage(
           'Permite el acceso al micrófono en los ajustes para poder grabar',
@@ -288,6 +309,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _confirmCancel() async {
+    // Mientras se espera para empezar no hay nada grabado que perder.
+    if (_recorder.pending != null) {
+      await _recorder.cancel();
+      return;
+    }
     final discard = await showConfirmDialog(
       context,
       title: '¿Descartar la grabación?',
@@ -300,7 +326,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- Lista de grabaciones ---
 
   void _togglePlayback(Recording recording) {
-    if (_recorder.isActive) {
+    if (_recorder.isBusy) {
       _showMessage('Detén la grabación para poder reproducir');
       return;
     }
@@ -308,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _seek(Recording recording, Duration position) {
-    if (_recorder.isActive) {
+    if (_recorder.isBusy) {
       _showMessage('Detén la grabación para poder reproducir');
       return;
     }
@@ -337,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _edit(Recording recording) async {
-    if (_recorder.isActive) {
+    if (_recorder.isBusy) {
       _showMessage('Detén la grabación para poder editar');
       return;
     }
@@ -483,22 +509,27 @@ class _HomeScreenState extends State<HomeScreen> {
         if (opened) _syncCopies();
       },
       // Mientras se graba no se cambia de carpeta.
-      drawerEnableOpenDragGesture: !_recorder.isActive,
+      drawerEnableOpenDragGesture: !_recorder.isBusy,
       body: _buildBody(folder),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
+        countdownSeconds: widget.sync.settings.countdownSeconds,
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
+        onCountdownPressed: _startAfterCountdown,
+        onVoicePressed: _startWhenVoice,
       ),
     );
 
     // Evita salir de la app por accidente en mitad de una grabación. En una
     // subcarpeta, «atrás» vuelve a la principal.
     return PopScope(
-      canPop: !_recorder.isActive && folder.isEmpty,
+      canPop: !_recorder.isBusy && folder.isEmpty,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_recorder.isActive) {
+        if (_recorder.pending != null) {
+          _recorder.cancel();
+        } else if (_recorder.isActive) {
           _showMessage('Detén la grabación antes de salir');
         } else {
           _openFolder('');

@@ -320,6 +320,10 @@ class CopySync extends ChangeNotifier {
   Future<void> setRecordingOptions(RecordingOptions options) =>
       _change((settings) => settings.withRecording(options));
 
+  /// Cambia la duración de la cuenta atrás antes de grabar.
+  Future<void> setCountdown(int seconds) =>
+      _change((settings) => settings.withCountdown(seconds));
+
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>
       _change((settings) => settings.withOpenFolder(name));
