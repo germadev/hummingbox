@@ -344,6 +344,15 @@ class FakeRecordingEditor extends RecordingEditor {
 
   @override
   Future<void> close(EditSession session) async => closedSessions++;
+
+  /// Ediciones con las que se ha generado la escucha previa.
+  final previews = <AudioEdit>[];
+
+  @override
+  Future<String> renderPreview(EditSession session, AudioEdit edit) async {
+    previews.add(edit);
+    return '/fake/editor/preview_${previews.length - 1}.wav';
+  }
 }
 
 class InMemorySettingsStore implements SettingsStore {

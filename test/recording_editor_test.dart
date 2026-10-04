@@ -188,6 +188,33 @@ void main() {
     expect(copy.audio?.sampleRate, 1000);
   });
 
+  test('genera la escucha previa con el volumen aplicado', () async {
+    final editor = newEditor();
+    final session = await editor.open(recording);
+
+    final first = await editor.renderPreview(
+      session,
+      const AudioEdit(
+        start: Duration(seconds: 1),
+        end: Duration(seconds: 2),
+        gainDb: 6.0206,
+      ),
+    );
+    final second = await editor.renderPreview(
+      session,
+      const AudioEdit(start: Duration.zero, end: Duration(seconds: 4)),
+    );
+
+    expect(second, isNot(first));
+    final samples = await readSamples(first);
+    expect(samples, hasLength(1000));
+    expect(samples.toSet(), {2000});
+    // El original no cambia y los archivos se borran al cerrar.
+    expect(await readSamples(recording.path), hasLength(4000));
+    await editor.close(session);
+    expect(File(first).existsSync(), isFalse);
+  });
+
   test('borra los temporales si no se puede abrir', () async {
     codec.decodedSource = p.join(root.path, 'no_existe.wav');
 

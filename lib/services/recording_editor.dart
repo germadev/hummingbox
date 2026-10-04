@@ -132,6 +132,17 @@ class RecordingEditor {
 
   Future<void> close(EditSession session) => deleteQuietly(session.directory);
 
+  int _previews = 0;
+
+  /// Genera un WAV con la selección de [edit] y su volumen y fundidos
+  /// aplicados, para escucharlo antes de guardar. Cada llamada usa un archivo
+  /// nuevo (el anterior puede seguir sonando); se borran al cerrar la sesión.
+  Future<String> renderPreview(EditSession session, AudioEdit edit) async {
+    final path = p.join(session.directory.path, 'preview_${_previews++}.wav');
+    await _process(session.sourcePath, path, edit);
+    return path;
+  }
+
   /// Lee el formato y la duración del archivo de [path] en su cabecera.
   Future<AudioProbe?> probe(String path) => probeAudio(path);
 
