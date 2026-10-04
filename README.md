@@ -95,8 +95,8 @@ reproducir, renombrar y eliminar).
 
 ### `build.yml`: tests y compilación
 
-Se ejecuta en cada push a cualquier rama (salvo si solo cambian archivos
-Markdown o `docs/`), a mano desde la pestaña *Actions* y desde `release.yml`:
+Se ejecuta en cada push a cualquier rama, a mano desde la pestaña *Actions* y
+desde `release.yml`:
 
 1. **Tests**: `flutter analyze` y `flutter test`.
 2. **Android (APK)** en Ubuntu y **iOS (IPA)** en macOS, en paralelo, solo si
