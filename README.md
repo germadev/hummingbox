@@ -1,4 +1,4 @@
-# Grabadora de voz
+# <img src="docs/icono.svg" width="48" height="48" alt="" align="top"> Grabadora de voz
 
 Aplicación móvil (Android e iOS) hecha con Flutter para grabar, escuchar y
 gestionar notas de voz.
@@ -6,7 +6,7 @@ gestionar notas de voz.
 <p>
   <img src="docs/lista.png" width="200" alt="Lista de grabaciones con la onda de cada una y una en reproducción">
   <img src="docs/preparado.png" width="200" alt="Panel de grabación desplegado, listo para grabar">
-  <img src="docs/grabando.png" width="200" alt="Pantalla durante una grabación">
+  <img src="docs/grabando.png" width="200" alt="Pantalla durante una grabación: la onda se colorea desde el punto en que empezó">
 </p>
 <p>
   <img src="docs/editor.png" width="200" alt="Modo de edición con la selección recortada, el volumen y los fundidos">
@@ -19,7 +19,9 @@ gestionar notas de voz.
 - **Panel deslizable**: al deslizar hacia arriba el panel del botón de grabar
   se ve el cronómetro y la onda (en gris) **sin empezar a grabar**; se graba al
   pulsar el botón. Al deslizarlo hacia abajo se vuelve a plegar.
-- **Onda en tiempo real** con el nivel del micrófono.
+- **Onda en tiempo real** con el nivel del micrófono. Al grabar solo se
+  colorea desde el punto en que empieza la grabación; lo anterior sigue en
+  gris. En pausa, lo grabado se atenúa.
 - **Descartar** una grabación en curso (con confirmación).
 - **Lista de grabaciones** ordenada de la más reciente a la más antigua, con
   fecha («Hoy», «Ayer»…), duración y la **onda completa de cada una**.
@@ -32,7 +34,8 @@ gestionar notas de voz.
     pico de la selección a −1 dBFS). Avisa si el volumen elegido satura.
   - **Fundido de entrada y de salida** (hasta 5 s).
   - Escuchar la selección antes de guardar.
-  - Guardar **reemplazando** la original o **como copia** («… (editada)»).
+  - **Guardar** (sustituye la original) o **Guardar copia** (crea una
+    grabación nueva, «… (editada)», y deja la original como estaba).
 - **Renombrar**, **compartir** (con el nombre que le hayas dado) y
   **eliminar** grabaciones.
 - **Opciones** (botón ⚙ arriba a la derecha):
@@ -41,7 +44,8 @@ gestionar notas de voz.
   - **Google Drive**: guarda una copia de cada grabación en la carpeta
     «Grabadora» de tu Drive. Necesita configuración previa (ver
     [Google Drive](#google-drive)).
-- Tema claro y oscuro según el sistema; interfaz en español.
+- Tema claro y oscuro según el sistema, con los colores del icono (morado
+  `#5B3FD9` y, para grabar, el rojo `#FF4D4D`); interfaz en español.
 
 Las grabaciones se guardan en AAC (`.m4a`, mono, 44,1 kHz, 128 kbps) en la
 carpeta privada de la app, junto con un índice `recordings.json` que guarda el
@@ -147,6 +151,24 @@ edita, el audio ocupa unos 5 MB por minuto en la carpeta temporal.
 Los servicios de audio, el almacenamiento, la carpeta y Drive están detrás de
 interfaces, de modo que los tests usan versiones falsas y no necesitan un
 dispositivo.
+
+### Icono
+
+El original es `docs/icono.svg`. A partir de él:
+
+- **Android 8+**: icono adaptable (`mipmap-anydpi-v26/ic_launcher.xml`) con
+  el fondo morado (`values/colors.xml`) y el dibujo como vector
+  (`drawable/ic_launcher_foreground.xml`), así se adapta a la forma de cada
+  launcher. El punto rojo está algo más cerca del centro que en el SVG para
+  que no lo recorte la máscara redonda. `ic_launcher_monochrome.xml` es la
+  silueta para los iconos temáticos de Android 13+.
+- **Android 7**: los PNG de `mipmap-*/ic_launcher.png`, con las esquinas
+  redondeadas del SVG.
+- **iOS**: los PNG de `AppIcon.appiconset`, cuadrados y sin transparencia
+  (iOS redondea las esquinas).
+
+Si cambia el icono, hay que volver a generar los PNG en todos los tamaños y
+copiar los cambios de dibujo a los dos vectores de Android.
 
 ## Tests
 

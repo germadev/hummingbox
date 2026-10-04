@@ -53,8 +53,12 @@ class _EditorScreenState extends State<EditorScreen> {
 
   EditSession? _session;
   bool _failed = false;
-  bool _saving = false;
   AudioEdit _edit = const AudioEdit(start: Duration.zero, end: Duration.zero);
+
+  /// Mientras se guarda, si se guarda como copia; `null` si no se está
+  /// guardando.
+  bool? _savingAsCopy;
+  bool get _saving => _savingAsCopy != null;
 
   bool _previewPlaying = false;
   Duration? _playhead;
@@ -211,14 +215,14 @@ class _EditorScreenState extends State<EditorScreen> {
 
   // --- Guardar ---
 
-  Future<void> _save() async {
+  /// Guarda la edición sustituyendo la original o, si [asCopy], como una
+  /// grabación nueva.
+  Future<void> _save({required bool asCopy}) async {
     final session = _session;
-    if (session == null) return;
-    final asCopy = await showSaveEditDialog(context);
-    if (asCopy == null || !mounted) return;
+    if (session == null || _saving) return;
 
+    setState(() => _savingAsCopy = asCopy);
     await _player.stop();
-    setState(() => _saving = true);
     try {
       final recording = await widget.editor.save(
         session,
@@ -229,7 +233,7 @@ class _EditorScreenState extends State<EditorScreen> {
       Navigator.pop(context, EditResult(recording, isCopy: asCopy));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _saving = false);
+      setState(() => _savingAsCopy = null);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo guardar la edición')),
       );
@@ -272,19 +276,43 @@ class _EditorScreenState extends State<EditorScreen> {
               : null,
         ),
         body: _buildBody(),
-        bottomNavigationBar: _session == null
-            ? null
-            : SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: FilledButton.icon(
-                    key: const Key('save-edit-button'),
-                    icon: const Icon(Icons.save_outlined),
-                    label: Text(_saving ? 'Guardando…' : 'Guardar'),
-                    onPressed: _changed && !_saving ? _save : null,
-                  ),
+        bottomNavigationBar: _session == null ? null : _buildSaveButtons(),
+      ),
+    );
+  }
+
+  /// «Guardar copia» crea una grabación nueva; «Guardar» sustituye la
+  /// original.
+  Widget _buildSaveButtons() {
+    final canSave = _changed && !_saving;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                key: const Key('save-copy-button'),
+                icon: const Icon(Icons.file_copy_outlined),
+                label: _ButtonLabel(
+                  _savingAsCopy == true ? 'Guardando…' : 'Guardar copia',
                 ),
+                onPressed: canSave ? () => _save(asCopy: true) : null,
               ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                key: const Key('save-edit-button'),
+                icon: const Icon(Icons.save_outlined),
+                label: _ButtonLabel(
+                  _savingAsCopy == false ? 'Guardando…' : 'Guardar',
+                ),
+                onPressed: canSave ? () => _save(asCopy: false) : null,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -428,33 +456,17 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 }
 
-/// Pregunta cómo guardar la edición. Devuelve `true` para guardar una copia,
-/// `false` para sustituir la original y `null` si se cancela.
-Future<bool?> showSaveEditDialog(BuildContext context) {
-  return showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Guardar la edición'),
-      content: const Text(
-        'Puedes sustituir la grabación original o guardar el resultado como '
-        'una grabación nueva.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, true),
-          child: const Text('Guardar copia'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Reemplazar'),
-        ),
-      ],
-    ),
-  );
+/// Texto de un botón en una sola línea, que se reduce si no cabe (pantallas
+/// estrechas o texto grande).
+class _ButtonLabel extends StatelessWidget {
+  const _ButtonLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(fit: BoxFit.scaleDown, child: Text(text, maxLines: 1));
+  }
 }
 
 class _Message extends StatelessWidget {

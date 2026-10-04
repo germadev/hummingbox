@@ -8,8 +8,11 @@ import 'services/copy_sync.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 
-/// Rojo de los controles de grabación.
-const recordRed = Color(0xFFE53935);
+/// Morado del icono (`docs/icono.svg`), del que sale el tema de la app.
+const brandPurple = Color(0xFF5B3FD9);
+
+/// Rojo del punto del icono, para los controles de grabación.
+const recordRed = Color(0xFFFF4D4D);
 
 class VoiceRecorderApp extends StatelessWidget {
   const VoiceRecorderApp({
@@ -48,12 +51,17 @@ class VoiceRecorderApp extends StatelessWidget {
   }
 
   ThemeData _theme(Brightness brightness) {
-    return ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: recordRed,
-        brightness: brightness,
-      ),
-      useMaterial3: true,
+    // Con `fidelity` los tonos conservan la saturación del morado (los de
+    // por defecto lo apagan). En el tema claro se usa tal cual como color
+    // principal; en el oscuro, el principal es un lila como el del icono.
+    var colorScheme = ColorScheme.fromSeed(
+      seedColor: brandPurple,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
     );
+    if (brightness == Brightness.light) {
+      colorScheme = colorScheme.copyWith(primary: brandPurple);
+    }
+    return ThemeData(colorScheme: colorScheme, useMaterial3: true);
   }
 }

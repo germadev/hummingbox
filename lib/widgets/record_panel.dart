@@ -222,7 +222,8 @@ class _DragHandle extends StatelessWidget {
   }
 }
 
-/// Estado, cronómetro y onda. Antes de grabar se muestra en gris.
+/// Estado, cronómetro y onda. Antes de grabar se muestra en gris; al grabar
+/// solo se colorea la onda desde el punto en que empieza la grabación.
 class _RecordingInfo extends StatelessWidget {
   const _RecordingInfo({required this.controller});
 
@@ -241,7 +242,13 @@ class _RecordingInfo extends StatelessWidget {
       RecorderStatus.recording => ('Grabando', Icons.circle, recordRed),
       RecorderStatus.paused => ('En pausa', Icons.pause_circle, muted),
     };
-    final recording = controller.status == RecorderStatus.recording;
+    // Solo cambia de color lo grabado; el hueco anterior sigue en gris.
+    final idleColor = muted.withValues(alpha: 0.4);
+    final waveformColor = switch (controller.status) {
+      RecorderStatus.idle => idleColor,
+      RecorderStatus.recording => recordRed,
+      RecorderStatus.paused => recordRed.withValues(alpha: 0.4),
+    };
 
     return Column(
       children: [
@@ -267,8 +274,10 @@ class _RecordingInfo extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         WaveformView(
+          key: const Key('recording-waveform'),
           amplitudes: controller.amplitudes,
-          color: recording ? recordRed : muted.withValues(alpha: 0.4),
+          color: waveformColor,
+          emptyColor: idleColor,
         ),
       ],
     );

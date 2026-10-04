@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Silueta del icono para los iconos temáticos de Android 13+: el sistema
+     solo usa la opacidad. Misma geometría que ic_launcher_foreground, con las
+     rayas del micrófono caladas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.3"
+        android:scaleY="0.3"
+        android:translateX="18"
+        android:translateY="18">
+        <path
+            android:fillColor="#FFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M91,71 A29,29 0 0,1 149,71 L149,115 A29,29 0 0,1 91,115 Z M105,66 L135,66 A2,2 0 0,1 135,70 L105,70 A2,2 0 0,1 105,66 Z M105,82 L135,82 A2,2 0 0,1 135,86 L105,86 A2,2 0 0,1 105,82 Z M105,98 L135,98 A2,2 0 0,1 135,102 L105,102 A2,2 0 0,1 105,98 Z" />
+        <path
+            android:pathData="M67,120 C67,160 84,174 120,174 C156,174 173,160 173,120 M120,174 L120,202 M90,204 L150,204"
+            android:strokeWidth="9"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M32,100 L32,136 M208,100 L208,136 M48,84 L48,152 M192,84 L192,152"
+            android:strokeWidth="8"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M172,54 A14,14 0 1,1 200,54 A14,14 0 1,1 172,54 Z" />
+    </group>
+</vector>
