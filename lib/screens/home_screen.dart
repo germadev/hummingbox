@@ -48,10 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
     player: widget.playerFactory(),
   );
 
-  // Al volver a la app se reintentan las copias pendientes.
-  late final AppLifecycleListener _lifecycle = AppLifecycleListener(
-    onResume: _syncCopies,
-  );
+  late final AppLifecycleListener _lifecycle;
 
   List<Recording> _recordings = const [];
   bool _loading = true;
@@ -59,7 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _lifecycle;
+    // Al volver a la app se reintentan las copias pendientes.
+    _lifecycle = AppLifecycleListener(onResume: _syncCopies);
     _loadRecordings();
   }
 
