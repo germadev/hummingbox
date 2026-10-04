@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
 void main() {
@@ -120,6 +121,103 @@ void main() {
         .writeAsString('{no es json');
 
     expect(await newRepository().loadAll(), hasLength(1));
+  });
+
+  test('guarda la onda, la revisión y las copias', () async {
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: const Duration(seconds: 3),
+      waveform: [0, 0.5, 1],
+      name: 'Entrevista',
+    );
+    expect(recording!.name, 'Entrevista');
+
+    const copy = CopyState(
+      destination: 'tree://music',
+      ref: 'doc1',
+      revision: 0,
+      name: 'Entrevista',
+    );
+    await repository.setCopy(recording, 'folder', copy);
+
+    final reloaded = (await newRepository().loadAll()).single;
+    expect(reloaded.waveform, [0, 0.5, 1]);
+    expect(reloaded.revision, 0);
+    expect(reloaded.copies, {'folder': copy});
+
+    await repository.setCopy(reloaded, 'folder', null);
+    expect((await newRepository().loadAll()).single.copies, isEmpty);
+  });
+
+  test('sustituye el audio y aumenta la revisión', () async {
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: const Duration(seconds: 5),
+      waveform: [1],
+    );
+    final edited = p.join(directory.parent.path, 'edited.m4a');
+    await File(edited).writeAsBytes([9, 9]);
+
+    final replaced = await repository.replaceAudio(
+      recording!,
+      sourcePath: edited,
+      duration: const Duration(seconds: 2),
+      waveform: [0.5, 0.5],
+    );
+
+    expect(replaced.revision, 1);
+    expect(replaced.duration, const Duration(seconds: 2));
+    expect(replaced.waveform, [0.5, 0.5]);
+    expect(File(recording.path).readAsBytesSync(), [9, 9]);
+    expect(File(edited).existsSync(), isFalse);
+    expect((await newRepository().loadAll()).single.revision, 1);
+  });
+
+  test('los cambios simultáneos no se pisan', () async {
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: Duration.zero,
+    );
+
+    // Se parte de la misma copia (desactualizada) de la grabación.
+    await Future.wait([
+      repository.rename(recording!, 'Nuevo nombre'),
+      repository.setWaveform(recording, [0.3]),
+      repository.setCopy(
+        recording,
+        'drive',
+        const CopyState(
+          destination: 'f',
+          ref: 'id',
+          revision: 0,
+          name: 'Grabación 1',
+        ),
+      ),
+    ]);
+
+    final reloaded = (await newRepository().loadAll()).single;
+    expect(reloaded.name, 'Nuevo nombre');
+    expect(reloaded.waveform, [0.3]);
+    expect(reloaded.copies.keys, ['drive']);
+  });
+
+  test('no vuelve a añadir al índice una grabación borrada', () async {
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: Duration.zero,
+    );
+    await repository.delete(recording!);
+
+    await repository.setCopy(
+      recording,
+      'drive',
+      const CopyState(destination: 'f', ref: 'id', revision: 0, name: 'x'),
+    );
+    await repository.setWaveform(recording, [0.5]);
+    await repository.rename(recording, 'Fantasma');
+
+    final index = File(p.join(directory.path, 'recordings.json'));
+    expect(index.readAsStringSync(), isNot(contains(recording.id)));
   });
 
   test('nextDefaultName continúa tras el número más alto', () {

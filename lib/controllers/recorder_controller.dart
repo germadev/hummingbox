@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../audio/levels.dart';
 import '../models/recording.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/recordings_repository.dart';
@@ -22,13 +23,13 @@ class RecorderController extends ChangeNotifier {
 
   static const _tick = Duration(milliseconds: 100);
 
-  /// Nivel (en dBFS) que se considera silencio al normalizar la amplitud.
-  static const _silenceDb = -50.0;
-
   final AudioRecorderService _recorder;
   final RecordingsRepository _repository;
   final Stopwatch _stopwatch = Stopwatch();
   final List<double> _amplitudes = [];
+
+  /// Todos los niveles de la grabación en curso, para guardar su onda.
+  final List<double> _history = [];
 
   late final StreamSubscription<RecorderStatus> _statusSubscription;
   StreamSubscription<double>? _amplitudeSubscription;
@@ -61,6 +62,7 @@ class RecorderController extends ChangeNotifier {
       await _recorder.start(path);
       _currentPath = path;
       _amplitudes.clear();
+      _history.clear();
       _amplitudeSubscription = _recorder
           .amplitudeChanges(_tick)
           .listen(_onAmplitude);
@@ -90,6 +92,9 @@ class RecorderController extends ChangeNotifier {
     _busy = true;
     try {
       final duration = _stopwatch.elapsed;
+      final waveform = _history.isEmpty
+          ? null
+          : resampleLevels(_history, waveformResolution);
       var path = _currentPath;
       try {
         path = await _recorder.stop() ?? path;
@@ -97,7 +102,11 @@ class RecorderController extends ChangeNotifier {
         _reset();
       }
       if (path == null) return null;
-      return await _repository.add(path: path, duration: duration);
+      return await _repository.add(
+        path: path,
+        duration: duration,
+        waveform: waveform,
+      );
     } finally {
       _busy = false;
     }
@@ -121,14 +130,13 @@ class RecorderController extends ChangeNotifier {
   }
 
   /// Convierte un nivel en dBFS a un valor entre 0 (silencio) y 1 (máximo).
-  static double normalizeAmplitude(double dbfs) {
-    if (dbfs.isNaN) return 0;
-    return ((dbfs - _silenceDb) / -_silenceDb).clamp(0.0, 1.0);
-  }
+  static double normalizeAmplitude(double dbfs) => levelFromDb(dbfs);
 
   void _onAmplitude(double dbfs) {
     if (_status != RecorderStatus.recording) return;
-    _amplitudes.add(normalizeAmplitude(dbfs));
+    final level = normalizeAmplitude(dbfs);
+    _amplitudes.add(level);
+    _history.add(level);
     if (_amplitudes.length > maxAmplitudeSamples) {
       _amplitudes.removeRange(0, _amplitudes.length - maxAmplitudeSamples);
     }
@@ -170,6 +178,7 @@ class RecorderController extends ChangeNotifier {
     _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
     _amplitudes.clear();
+    _history.clear();
     _currentPath = null;
     _status = RecorderStatus.idle;
     _notify();

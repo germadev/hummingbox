@@ -1,3 +1,5 @@
+import '../audio/levels.dart';
+
 /// Una grabación de audio guardada en el dispositivo.
 class Recording {
   const Recording({
@@ -6,6 +8,9 @@ class Recording {
     required this.name,
     required this.createdAt,
     required this.duration,
+    this.waveform,
+    this.revision = 0,
+    this.copies = const {},
   });
 
   /// Construye una grabación a partir de los metadatos guardados en el índice.
@@ -14,6 +19,7 @@ class Recording {
     required String path,
     required Map<String, dynamic> json,
   }) {
+    final copies = json['copies'];
     return Recording(
       id: id,
       path: path,
@@ -22,6 +28,13 @@ class Recording {
           DateTime.tryParse(json['createdAt'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
+      waveform: decodeWaveform(json['waveform']),
+      revision: json['revision'] as int? ?? 0,
+      copies: {
+        if (copies is Map<String, dynamic>)
+          for (final entry in copies.entries)
+            entry.key: ?CopyState.fromJson(entry.value),
+      },
     );
   }
 
@@ -39,19 +52,106 @@ class Recording {
   /// Duración de la grabación. Es [Duration.zero] si no se conoce.
   final Duration duration;
 
+  /// Niveles (0–1) de la onda de toda la grabación, o `null` si todavía no se
+  /// han calculado.
+  final List<double>? waveform;
+
+  /// Aumenta cada vez que se edita el audio, para saber qué copias están
+  /// desactualizadas.
+  final int revision;
+
+  /// Copias guardadas fuera de la app, por destino (carpeta, Google Drive…).
+  final Map<String, CopyState> copies;
+
   Map<String, dynamic> toMetadata() => {
     'name': name,
     'createdAt': createdAt.toIso8601String(),
     'durationMs': duration.inMilliseconds,
+    if (waveform != null) 'waveform': encodeWaveform(waveform!),
+    if (revision != 0) 'revision': revision,
+    if (copies.isNotEmpty)
+      'copies': {
+        for (final entry in copies.entries) entry.key: entry.value.toJson(),
+      },
   };
 
-  Recording copyWith({String? name, Duration? duration}) {
+  Recording copyWith({
+    String? name,
+    Duration? duration,
+    List<double>? waveform,
+    int? revision,
+    Map<String, CopyState>? copies,
+  }) {
     return Recording(
       id: id,
       path: path,
       name: name ?? this.name,
       createdAt: createdAt,
       duration: duration ?? this.duration,
+      waveform: waveform ?? this.waveform,
+      revision: revision ?? this.revision,
+      copies: copies ?? this.copies,
     );
   }
+}
+
+/// Estado de la copia de una grabación en un destino externo.
+class CopyState {
+  const CopyState({
+    required this.destination,
+    required this.ref,
+    required this.revision,
+    required this.name,
+  });
+
+  /// Carpeta de destino en la que se hizo la copia. Si el usuario elige otra,
+  /// la copia se vuelve a hacer.
+  final String destination;
+
+  /// Referencia del archivo copiado en el destino (URI, id de Drive…).
+  final String ref;
+
+  /// Revisión del audio que se copió.
+  final int revision;
+
+  /// Nombre de la grabación cuando se copió.
+  final String name;
+
+  static CopyState? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final destination = json['destination'];
+    final ref = json['ref'];
+    final revision = json['revision'];
+    final name = json['name'];
+    if (destination is! String ||
+        ref is! String ||
+        revision is! int ||
+        name is! String) {
+      return null;
+    }
+    return CopyState(
+      destination: destination,
+      ref: ref,
+      revision: revision,
+      name: name,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'destination': destination,
+    'ref': ref,
+    'revision': revision,
+    'name': name,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is CopyState &&
+      other.destination == destination &&
+      other.ref == ref &&
+      other.revision == revision &&
+      other.name == name;
+
+  @override
+  int get hashCode => Object.hash(destination, ref, revision, name);
 }

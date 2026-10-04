@@ -3,23 +3,28 @@ import 'package:flutter/material.dart';
 import '../controllers/player_controller.dart';
 import '../models/recording.dart';
 import '../utils/formatters.dart';
+import 'waveform_seek_bar.dart';
 
-enum RecordingAction { rename, share, delete }
+enum RecordingAction { edit, rename, share, delete }
 
-/// Elemento de la lista de grabaciones, con reproductor integrado cuando la
-/// grabación es la que está cargada.
+/// Elemento de la lista de grabaciones, con la onda de toda la grabación. La
+/// onda hace de barra de progreso: muestra lo reproducido y permite saltar.
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
     required this.recording,
     required this.player,
     required this.onTogglePlay,
+    required this.onSeek,
     required this.onAction,
   });
 
   final Recording recording;
   final PlayerController player;
   final VoidCallback onTogglePlay;
+
+  /// Salta a una posición, empezando a reproducir si hace falta.
+  final ValueChanged<Duration> onSeek;
   final void Function(RecordingAction action, BuildContext tileContext)
   onAction;
 
@@ -69,6 +74,13 @@ class RecordingTile extends StatelessWidget {
                     onSelected: (action) => onAction(action, tileContext),
                     itemBuilder: (context) => const [
                       PopupMenuItem(
+                        value: RecordingAction.edit,
+                        child: ListTile(
+                          leading: Icon(Icons.content_cut),
+                          title: Text('Editar'),
+                        ),
+                      ),
+                      PopupMenuItem(
                         value: RecordingAction.rename,
                         child: ListTile(
                           leading: Icon(Icons.edit_outlined),
@@ -93,68 +105,22 @@ class RecordingTile extends StatelessWidget {
                   ),
                 ),
               ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                child: isCurrent
-                    ? _PlaybackBar(player: player)
-                    : const SizedBox(width: double.infinity),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: WaveformSeekBar(
+                  key: Key('waveform-${recording.id}'),
+                  levels: recording.waveform,
+                  duration: isCurrent && player.duration > Duration.zero
+                      ? player.duration
+                      : recording.duration,
+                  position: isCurrent ? player.position : null,
+                  onSeek: onSeek,
+                ),
               ),
             ],
           ),
         );
       },
-    );
-  }
-}
-
-/// Barra de progreso con la posición y la duración de la reproducción.
-class _PlaybackBar extends StatefulWidget {
-  const _PlaybackBar({required this.player});
-
-  final PlayerController player;
-
-  @override
-  State<_PlaybackBar> createState() => _PlaybackBarState();
-}
-
-class _PlaybackBarState extends State<_PlaybackBar> {
-  /// Posición (en ms) mientras el usuario arrastra el control deslizante.
-  double? _dragValue;
-
-  @override
-  Widget build(BuildContext context) {
-    final player = widget.player;
-    final textStyle = Theme.of(context).textTheme.labelMedium
-        ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
-    final max = player.duration.inMilliseconds.toDouble();
-    final position = (_dragValue ?? player.position.inMilliseconds.toDouble())
-        .clamp(0.0, max > 0 ? max : 0.0);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 20, 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Slider(
-              value: position,
-              max: max > 0 ? max : 1,
-              onChanged: max > 0
-                  ? (value) => setState(() => _dragValue = value)
-                  : null,
-              onChangeEnd: (value) {
-                setState(() => _dragValue = null);
-                player.seek(Duration(milliseconds: value.round()));
-              },
-            ),
-          ),
-          Text(
-            '${formatDuration(Duration(milliseconds: position.round()))}'
-            ' / ${formatDuration(player.duration)}',
-            style: textStyle,
-          ),
-        ],
-      ),
     );
   }
 }

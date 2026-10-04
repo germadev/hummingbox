@@ -1,0 +1,578 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+
+import '../audio/audio_edit.dart';
+import '../audio/levels.dart';
+import '../models/recording.dart';
+import '../services/audio_player_service.dart';
+import '../services/recording_editor.dart';
+import '../utils/formatters.dart';
+import '../widgets/dialogs.dart';
+import '../widgets/trim_waveform.dart';
+
+/// Resultado de guardar una edición.
+class EditResult {
+  const EditResult(this.recording, {required this.isCopy});
+
+  /// La grabación editada o, si [isCopy], la copia nueva.
+  final Recording recording;
+  final bool isCopy;
+}
+
+/// Modo de edición: recortar, cambiar el volumen y añadir fundidos.
+///
+/// Devuelve un [EditResult] al guardar o `null` si se sale sin guardar.
+class EditorScreen extends StatefulWidget {
+  const EditorScreen({
+    super.key,
+    required this.recording,
+    required this.editor,
+    required this.playerFactory,
+  });
+
+  final Recording recording;
+  final RecordingEditor editor;
+  final AudioPlayerService Function() playerFactory;
+
+  @override
+  State<EditorScreen> createState() => _EditorScreenState();
+}
+
+class _EditorScreenState extends State<EditorScreen> {
+  static const _minGainDb = -20.0;
+  static const _maxGainDb = 20.0;
+  static const _maxFade = Duration(seconds: 5);
+
+  /// Pico al que se lleva el audio al normalizar (−1 dBFS).
+  static const _normalizedPeak = 0.891;
+
+  late final AudioPlayerService _player = widget.playerFactory();
+  late final List<StreamSubscription<Object?>> _subscriptions;
+
+  EditSession? _session;
+  bool _failed = false;
+  bool _saving = false;
+  AudioEdit _edit = const AudioEdit(start: Duration.zero, end: Duration.zero);
+
+  bool _previewPlaying = false;
+  Duration? _playhead;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscriptions = [
+      _player.statusChanges.listen(_onPreviewStatus),
+      _player.positionChanges.listen(_onPreviewPosition),
+    ];
+    _open();
+  }
+
+  @override
+  void dispose() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _player.dispose();
+    if (_session case final session?) widget.editor.close(session);
+    super.dispose();
+  }
+
+  Future<void> _open() async {
+    try {
+      final session = await widget.editor.open(widget.recording);
+      if (!mounted) {
+        await widget.editor.close(session);
+        return;
+      }
+      if (session.duration <= Duration.zero) {
+        await widget.editor.close(session);
+        setState(() => _failed = true);
+        return;
+      }
+      setState(() {
+        _session = session;
+        _edit = AudioEdit(start: Duration.zero, end: session.duration);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  bool get _changed {
+    final session = _session;
+    return session != null && _edit.changes(session.duration);
+  }
+
+  // --- Escucha previa ---
+
+  void _onPreviewStatus(PlaybackStatus status) {
+    if (!mounted) return;
+    setState(() {
+      _previewPlaying = status == PlaybackStatus.playing;
+      if (status == PlaybackStatus.completed) _playhead = _edit.start;
+    });
+  }
+
+  void _onPreviewPosition(Duration position) {
+    if (!mounted || !_previewPlaying) return;
+    if (position >= _edit.end) {
+      _player.pause();
+      setState(() => _playhead = _edit.start);
+      return;
+    }
+    setState(() => _playhead = position);
+  }
+
+  Future<void> _togglePreview() async {
+    if (_previewPlaying) {
+      await _player.pause();
+      return;
+    }
+    final playhead = _playhead;
+    final from =
+        playhead != null && playhead >= _edit.start && playhead < _edit.end
+        ? playhead
+        : _edit.start;
+    setState(() => _playhead = from);
+    await _player.play(widget.recording.path, position: from);
+  }
+
+  void _seekPreview(Duration position) {
+    setState(() => _playhead = position);
+    if (_previewPlaying) _player.seek(position);
+  }
+
+  // --- Cambios ---
+
+  void _setEdit(AudioEdit edit) {
+    // Los fundidos no pueden ocupar más de la mitad de la selección.
+    final maxFade = _maxFadeFor(edit);
+    edit = edit.copyWith(
+      fadeIn: edit.fadeIn > maxFade ? maxFade : edit.fadeIn,
+      fadeOut: edit.fadeOut > maxFade ? maxFade : edit.fadeOut,
+    );
+    setState(() {
+      _edit = edit;
+      final playhead = _playhead;
+      if (playhead != null && (playhead < edit.start || playhead > edit.end)) {
+        _playhead = edit.start;
+        if (_previewPlaying) _player.seek(edit.start);
+      }
+    });
+  }
+
+  Duration _maxFadeFor(AudioEdit edit) {
+    final half = edit.length ~/ 2;
+    return half < _maxFade ? half : _maxFade;
+  }
+
+  void _reset() {
+    final session = _session;
+    if (session == null) return;
+    _setEdit(AudioEdit(start: Duration.zero, end: session.duration));
+  }
+
+  double get _selectionPeak =>
+      _session?.analysis.peakBetween(_edit.start, _edit.end) ?? 0;
+
+  bool get _clips => _selectionPeak * _edit.gain > 1.0;
+
+  void _normalize() {
+    final peak = _selectionPeak;
+    if (peak <= 0) return;
+    // Se redondea hacia abajo a medio decibelio para no pasarse del pico.
+    final db = (dbFromGain(_normalizedPeak / peak) * 2).floorToDouble() / 2;
+    _setEdit(_edit.copyWith(gainDb: db.clamp(_minGainDb, _maxGainDb)));
+  }
+
+  /// Niveles de la onda con la ganancia y los fundidos aplicados a la
+  /// selección, para ver el efecto antes de guardar.
+  List<double> _displayLevels(WavAnalysis analysis) {
+    final peaks = analysis.peaks;
+    final total = analysis.duration;
+    final gain = _edit.gain;
+    final fadeIn = _edit.fadeIn.inMicroseconds;
+    final fadeOut = _edit.fadeOut.inMicroseconds;
+    return List.generate(peaks.length, (i) {
+      final time = total * ((i + 0.5) / peaks.length);
+      if (time < _edit.start || time > _edit.end) {
+        return levelFromPeak(peaks[i]);
+      }
+      var factor = gain;
+      final fromStart = (time - _edit.start).inMicroseconds;
+      final toEnd = (_edit.end - time).inMicroseconds;
+      if (fromStart < fadeIn) factor *= fromStart / fadeIn;
+      if (toEnd < fadeOut) factor *= toEnd / fadeOut;
+      return levelFromPeak(math.min(1, peaks[i] * factor));
+    });
+  }
+
+  // --- Guardar ---
+
+  Future<void> _save() async {
+    final session = _session;
+    if (session == null) return;
+    final asCopy = await showSaveEditDialog(context);
+    if (asCopy == null || !mounted) return;
+
+    await _player.stop();
+    setState(() => _saving = true);
+    try {
+      final recording = await widget.editor.save(
+        session,
+        _edit,
+        asCopy: asCopy,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, EditResult(recording, isCopy: asCopy));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo guardar la edición')),
+      );
+    }
+  }
+
+  Future<void> _confirmExit() async {
+    final discard = await showConfirmDialog(
+      context,
+      title: '¿Descartar los cambios?',
+      message: 'Los cambios que no has guardado se perderán.',
+      confirmLabel: 'Descartar',
+    );
+    if (discard && mounted) Navigator.pop(context);
+  }
+
+  // --- Interfaz ---
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_saving && !_changed,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_saving) _confirmExit();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Editar grabación'),
+          actions: [
+            TextButton(
+              onPressed: _changed && !_saving ? _reset : null,
+              child: const Text('Restablecer'),
+            ),
+          ],
+          bottom: _saving
+              ? const PreferredSize(
+                  preferredSize: Size.fromHeight(4),
+                  child: LinearProgressIndicator(),
+                )
+              : null,
+        ),
+        body: _buildBody(),
+        bottomNavigationBar: _session == null
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: FilledButton.icon(
+                    key: const Key('save-edit-button'),
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(_saving ? 'Guardando…' : 'Guardar'),
+                    onPressed: _changed && !_saving ? _save : null,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_failed) {
+      return const _Message(
+        icon: Icons.error_outline,
+        text: 'No se pudo abrir el audio para editarlo.',
+      );
+    }
+    final session = _session;
+    if (session == null) {
+      return const _Message(text: 'Preparando el audio…', loading: true);
+    }
+
+    final theme = Theme.of(context);
+    final maxFade = _maxFadeFor(_edit);
+    final gainLabel = formatGain(_edit.gainDb);
+
+    return AbsorbPointer(
+      absorbing: _saving,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        children: [
+          Text(
+            widget.recording.name,
+            style: theme.textTheme.titleMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 12),
+          TrimWaveform(
+            key: const Key('trim-waveform'),
+            levels: _displayLevels(session.analysis),
+            duration: session.duration,
+            start: _edit.start,
+            end: _edit.end,
+            playhead: _playhead,
+            onChanged: (start, end) =>
+                _setEdit(_edit.copyWith(start: start, end: end)),
+            onSeek: _seekPreview,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _TimeLabel(label: 'Inicio', time: _edit.start),
+              _TimeLabel(label: 'Duración', time: _edit.length),
+              _TimeLabel(label: 'Fin', time: _edit.end),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: IconButton.filledTonal(
+              key: const Key('preview-button'),
+              iconSize: 32,
+              tooltip: _previewPlaying ? 'Pausar' : 'Escuchar la selección',
+              icon: Icon(_previewPlaying ? Icons.pause : Icons.play_arrow),
+              onPressed: _togglePreview,
+            ),
+          ),
+          const Divider(height: 32),
+          _SectionHeader(
+            icon: Icons.volume_up_outlined,
+            title: 'Volumen',
+            value: gainLabel,
+          ),
+          Slider(
+            key: const Key('gain-slider'),
+            value: _edit.gainDb,
+            min: _minGainDb,
+            max: _maxGainDb,
+            divisions: ((_maxGainDb - _minGainDb) * 2).round(),
+            onChanged: (value) => _setEdit(_edit.copyWith(gainDb: value)),
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.auto_fix_high),
+                label: const Text('Normalizar'),
+                onPressed: _selectionPeak > 0 ? _normalize : null,
+              ),
+              if (_clips)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 20,
+                      color: theme.colorScheme.error,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Las partes más fuertes se saturarán',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const Divider(height: 32),
+          _SectionHeader(
+            icon: Icons.trending_up,
+            title: 'Fundido de entrada',
+            value: formatSeconds(_edit.fadeIn),
+          ),
+          _FadeSlider(
+            key: const Key('fade-in-slider'),
+            value: _edit.fadeIn,
+            max: maxFade,
+            onChanged: (value) => _setEdit(_edit.copyWith(fadeIn: value)),
+          ),
+          _SectionHeader(
+            icon: Icons.trending_down,
+            title: 'Fundido de salida',
+            value: formatSeconds(_edit.fadeOut),
+          ),
+          _FadeSlider(
+            key: const Key('fade-out-slider'),
+            value: _edit.fadeOut,
+            max: maxFade,
+            onChanged: (value) => _setEdit(_edit.copyWith(fadeOut: value)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'La escucha previa reproduce la selección con el volumen '
+            'original.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pregunta cómo guardar la edición. Devuelve `true` para guardar una copia,
+/// `false` para sustituir la original y `null` si se cancela.
+Future<bool?> showSaveEditDialog(BuildContext context) {
+  return showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Guardar la edición'),
+      content: const Text(
+        'Puedes sustituir la grabación original o guardar el resultado como '
+        'una grabación nueva.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Guardar copia'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Reemplazar'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _Message extends StatelessWidget {
+  const _Message({required this.text, this.icon, this.loading = false});
+
+  final String text;
+  final IconData? icon;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (loading) const CircularProgressIndicator(),
+            if (icon != null)
+              Icon(icon, size: 48, color: theme.colorScheme.outline),
+            const SizedBox(height: 16),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimeLabel extends StatelessWidget {
+  const _TimeLabel({required this.label, required this.time});
+
+  final String label;
+  final Duration time;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          formatDuration(time, showTenths: true),
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
+          Text(
+            value,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Control de la duración de un fundido, en décimas de segundo.
+class _FadeSlider extends StatelessWidget {
+  const _FadeSlider({
+    super.key,
+    required this.value,
+    required this.max,
+    required this.onChanged,
+  });
+
+  final Duration value;
+  final Duration max;
+  final ValueChanged<Duration> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tenths = max.inMilliseconds ~/ 100;
+    return Slider(
+      value: (value.inMilliseconds / 100).clamp(0, tenths).toDouble(),
+      max: math.max(tenths, 1).toDouble(),
+      divisions: math.max(tenths, 1),
+      onChanged: tenths > 0
+          ? (v) => onChanged(Duration(milliseconds: v.round() * 100))
+          : null,
+    );
+  }
+}

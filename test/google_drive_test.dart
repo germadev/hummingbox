@@ -1,0 +1,214 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:path/path.dart' as p;
+import 'package:voicerecorder/services/google_drive.dart';
+
+void main() {
+  late Directory directory;
+  late String audio;
+  late List<http.Request> requests;
+  late List<String?> invalidated;
+  var token = 'token1';
+
+  Future<Map<String, String>> authHeaders({String? invalidToken}) async {
+    invalidated.add(invalidToken);
+    if (invalidToken != null) token = 'token2';
+    return {'Authorization': 'Bearer $token'};
+  }
+
+  DriveApi api(Future<http.Response> Function(http.Request request) handler) {
+    return DriveApi(
+      MockClient((request) {
+        requests.add(request);
+        return handler(request);
+      }),
+      authHeaders,
+    );
+  }
+
+  http.Response json(Object body, {int status = 200}) => http.Response(
+    jsonEncode(body),
+    status,
+    headers: {'content-type': 'application/json'},
+  );
+
+  setUp(() async {
+    directory = await Directory.systemTemp.createTemp('drive_test');
+    audio = p.join(directory.path, 'a.m4a');
+    await File(audio).writeAsBytes([1, 2, 3, 4]);
+    requests = [];
+    invalidated = [];
+    token = 'token1';
+  });
+
+  tearDown(() => directory.delete(recursive: true));
+
+  test('reutiliza la carpeta de la app si ya existe', () async {
+    final drive = api(
+      (request) async => json({
+        'files': [
+          {'id': 'folder1'},
+        ],
+      }),
+    );
+
+    expect(await drive.ensureFolder('Grabadora'), 'folder1');
+    expect(requests.single.method, 'GET');
+    expect(
+      requests.single.url.queryParameters['q'],
+      "mimeType='application/vnd.google-apps.folder' and name='Grabadora' "
+      'and trashed=false',
+    );
+    expect(requests.single.headers['Authorization'], 'Bearer token1');
+  });
+
+  test('crea la carpeta si no existe', () async {
+    final drive = api((request) async {
+      if (request.method == 'GET') return json({'files': <Object>[]});
+      return json({'id': 'new'});
+    });
+
+    expect(await drive.ensureFolder('Grabadora'), 'new');
+    expect(requests.last.method, 'POST');
+    expect(jsonDecode(requests.last.body), {
+      'name': 'Grabadora',
+      'mimeType': 'application/vnd.google-apps.folder',
+    });
+  });
+
+  test('sube un archivo nuevo con una subida reanudable', () async {
+    final drive = api((request) async {
+      if (request.method == 'POST') {
+        return http.Response(
+          '',
+          200,
+          headers: {'location': 'https://upload.example/session1'},
+        );
+      }
+      return json({'id': 'file1'});
+    });
+
+    final id = await drive.upload(
+      folderId: 'folder1',
+      path: audio,
+      name: 'Notas.m4a',
+    );
+
+    expect(id, 'file1');
+    final start = requests.first;
+    expect(start.url.path, '/upload/drive/v3/files');
+    expect(start.url.queryParameters['uploadType'], 'resumable');
+    expect(start.headers['X-Upload-Content-Type'], 'audio/mp4');
+    expect(start.headers['X-Upload-Content-Length'], '4');
+    expect(jsonDecode(start.body), {
+      'name': 'Notas.m4a',
+      'parents': ['folder1'],
+      'mimeType': 'audio/mp4',
+    });
+    final put = requests.last;
+    expect(put.method, 'PUT');
+    expect(put.url.toString(), 'https://upload.example/session1');
+    expect(put.bodyBytes, [1, 2, 3, 4]);
+  });
+
+  test('sustituye el contenido de un archivo existente', () async {
+    final drive = api((request) async {
+      if (request.method == 'PATCH') {
+        return http.Response(
+          '',
+          200,
+          headers: {'location': 'https://upload.example/session2'},
+        );
+      }
+      return json({'id': 'file1'});
+    });
+
+    final id = await drive.upload(
+      folderId: 'folder1',
+      path: audio,
+      name: 'Notas.m4a',
+      fileId: 'file1',
+    );
+
+    expect(id, 'file1');
+    expect(requests.first.method, 'PATCH');
+    expect(requests.first.url.path, '/upload/drive/v3/files/file1');
+    expect(jsonDecode(requests.first.body), {'name': 'Notas.m4a'});
+  });
+
+  test('si el archivo ya no existe en Drive, lo crea de nuevo', () async {
+    final drive = api((request) async {
+      switch (request.method) {
+        case 'PATCH':
+          return json({
+            'error': {'message': 'File not found'},
+          }, status: 404);
+        case 'POST':
+          return http.Response(
+            '',
+            200,
+            headers: {'location': 'https://upload.example/s'},
+          );
+        default:
+          return json({'id': 'file2'});
+      }
+    });
+
+    final id = await drive.upload(
+      folderId: 'folder1',
+      path: audio,
+      name: 'Notas.m4a',
+      fileId: 'gone',
+    );
+
+    expect(id, 'file2');
+    expect(requests.map((r) => r.method), ['PATCH', 'POST', 'PUT']);
+  });
+
+  test('renueva el token caducado y repite la petición', () async {
+    final drive = api((request) async {
+      if (request.headers['Authorization'] == 'Bearer token1') {
+        return http.Response('', 401);
+      }
+      return json({'id': 'file1'});
+    });
+
+    await drive.rename(fileId: 'file1', name: 'Nuevo.m4a');
+
+    expect(invalidated, [null, 'token1']);
+    expect(requests, hasLength(2));
+    expect(requests.last.method, 'PATCH');
+    expect(requests.last.url.path, '/drive/v3/files/file1');
+    expect(jsonDecode(requests.last.body), {'name': 'Nuevo.m4a'});
+  });
+
+  test('traduce los errores de la API', () async {
+    final drive = api(
+      (request) async => json({
+        'error': {'message': 'Storage quota exceeded'},
+      }, status: 403),
+    );
+
+    await expectLater(
+      drive.rename(fileId: 'file1', name: 'x'),
+      throwsA(
+        isA<DriveException>()
+            .having((e) => e.statusCode, 'statusCode', 403)
+            .having((e) => e.message, 'message', 'Storage quota exceeded'),
+      ),
+    );
+  });
+
+  test('pide volver a conectar si el token sigue sin valer', () async {
+    final drive = api((request) async => http.Response('', 401));
+
+    await expectLater(
+      drive.ensureFolder('Grabadora'),
+      throwsA(isA<DriveAuthException>()),
+    );
+  });
+}
