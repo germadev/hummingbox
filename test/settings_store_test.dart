@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 
 void main() {
@@ -31,6 +32,22 @@ void main() {
     expect(await store.load(), settings);
     await store.save(settings.withDrive(null));
     expect(await store.load(), settings.withDrive(null));
+  });
+
+  test('guarda el formato y la calidad de grabación', () async {
+    const recording = RecordingOptions(
+      format: RecordingFormat.wav,
+      quality: RecordingQuality.medium,
+    );
+    await store.save(const AppSettings().withRecording(recording));
+
+    final loaded = await store.load();
+    expect(loaded.recording, recording);
+    // Cambiar otra opción no la pierde.
+    expect(
+      loaded.withFolder(const FolderSettings(id: 'x', name: 'X')).recording,
+      recording,
+    );
   });
 
   test('tolera un archivo corrupto', () async {

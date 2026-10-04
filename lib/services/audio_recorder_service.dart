@@ -1,5 +1,7 @@
 import 'package:record/record.dart';
 
+import '../models/recording_options.dart';
+
 /// Estado del grabador.
 enum RecorderStatus { idle, recording, paused }
 
@@ -8,8 +10,9 @@ abstract interface class AudioRecorderService {
   /// Comprueba el permiso del micrófono y lo solicita si hace falta.
   Future<bool> hasPermission();
 
-  /// Empieza a grabar en el archivo [path].
-  Future<void> start(String path);
+  /// Empieza a grabar en el archivo [path] con el formato y la calidad de
+  /// [options].
+  Future<void> start(String path, RecordingOptions options);
 
   Future<void> pause();
 
@@ -35,20 +38,26 @@ abstract interface class AudioRecorderService {
 class RecordAudioRecorderService implements AudioRecorderService {
   final AudioRecorder _recorder = AudioRecorder();
 
-  /// AAC-LC en contenedor .m4a, mono: buena calidad de voz y archivos ligeros
-  /// que se reproducen en cualquier dispositivo.
-  static const _config = RecordConfig(
-    encoder: AudioEncoder.aacLc,
-    bitRate: 128000,
-    sampleRate: 44100,
-    numChannels: 1,
-  );
-
   @override
   Future<bool> hasPermission() => _recorder.hasPermission();
 
+  /// Si el dispositivo no admite la frecuencia o la tasa de bits pedidas,
+  /// `record` usa las más cercanas que admita.
   @override
-  Future<void> start(String path) => _recorder.start(_config, path: path);
+  Future<void> start(String path, RecordingOptions options) {
+    return _recorder.start(
+      RecordConfig(
+        encoder: switch (options.format) {
+          RecordingFormat.aac => AudioEncoder.aacLc,
+          RecordingFormat.wav => AudioEncoder.wav,
+        },
+        bitRate: options.bitRate,
+        sampleRate: options.sampleRate,
+        numChannels: RecordingOptions.channels,
+      ),
+      path: path,
+    );
+  }
 
   @override
   Future<void> pause() => _recorder.pause();

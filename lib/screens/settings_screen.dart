@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../models/recording_options.dart';
 import '../services/copy_sync.dart';
+import '../utils/formatters.dart';
 import '../widgets/dialogs.dart';
 
-/// Opciones de la app: dónde se guardan las grabaciones.
+/// Opciones de la app: formato y calidad de las grabaciones y dónde se
+/// guardan.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.sync});
 
@@ -65,6 +68,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
+  Future<void> _chooseFormat() async {
+    final options = _sync.settings.recording;
+    final format = await showChoiceDialog(
+      context,
+      title: 'Formato',
+      selected: options.format,
+      choices: [
+        for (final format in RecordingFormat.values)
+          Choice(
+            format,
+            _formatTitle(format),
+            subtitle: switch (format) {
+              RecordingFormat.aac =>
+                'Comprimido: ocupa poco y se reproduce en cualquier '
+                    'dispositivo',
+              RecordingFormat.wav =>
+                'Sin comprimir: la máxima fidelidad, pero ocupa mucho más',
+            },
+          ),
+      ],
+    );
+    if (format == null) return;
+    await _sync.setRecordingOptions(options.copyWith(format: format));
+  }
+
+  Future<void> _chooseQuality() async {
+    final options = _sync.settings.recording;
+    final quality = await showChoiceDialog(
+      context,
+      title: 'Calidad',
+      selected: options.quality,
+      choices: [
+        for (final quality in RecordingQuality.values)
+          Choice(
+            quality,
+            _qualityTitle(quality),
+            subtitle: _qualityDetails(options.copyWith(quality: quality)),
+          ),
+      ],
+    );
+    if (quality == null) return;
+    await _sync.setRecordingOptions(options.copyWith(quality: quality));
+  }
+
+  static String _formatTitle(RecordingFormat format) =>
+      '${formatName(format)} (${format.extension})';
+
+  static String _qualityTitle(RecordingQuality quality) => switch (quality) {
+    RecordingQuality.low => 'Baja',
+    RecordingQuality.medium => 'Media',
+    RecordingQuality.high => 'Alta',
+  };
+
+  /// `44,1 kHz · 128 kbps · 1 MB por minuto`.
+  static String _qualityDetails(RecordingOptions options) => [
+    formatSampleRate(options.sampleRate),
+    switch (options.format) {
+      RecordingFormat.aac => formatBitRate(options.bitRate),
+      RecordingFormat.wav => '16 bits',
+    },
+    '${formatMegabytes(options.bytesPerMinute)} por minuto',
+  ].join(' · ');
+
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -82,6 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         listenable: _sync,
         builder: (context, _) {
           final settings = _sync.settings;
+          final recording = settings.recording;
           final folder = settings.folder;
           final drive = settings.drive;
           final driveAvailable = _sync.drive.isAvailable;
@@ -89,6 +156,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           return ListView(
             children: [
+              const _SectionTitle('Grabación'),
+              ListTile(
+                key: const Key('format-option'),
+                leading: const Icon(Icons.audio_file_outlined),
+                title: const Text('Formato'),
+                subtitle: Text(_formatTitle(recording.format)),
+                onTap: _chooseFormat,
+              ),
+              ListTile(
+                key: const Key('quality-option'),
+                leading: const Icon(Icons.high_quality_outlined),
+                title: const Text('Calidad'),
+                subtitle: Text(
+                  '${_qualityTitle(recording.quality)} · '
+                  '${_qualityDetails(recording)}',
+                ),
+                onTap: _chooseQuality,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+                child: Text(
+                  'Se aplica a las grabaciones nuevas. Al editar, cada '
+                  'grabación conserva su formato.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              const Divider(),
               const _SectionTitle('Dónde se guardan las grabaciones'),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),

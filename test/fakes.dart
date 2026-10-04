@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
+import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/audio_codec.dart';
 import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
@@ -30,6 +32,7 @@ class FakeAudioRecorderService implements AudioRecorderService {
   final statusController = StreamController<RecorderStatus>.broadcast();
   final amplitudeController = StreamController<double>.broadcast();
   String? path;
+  RecordingOptions? options;
   bool disposed = false;
 
   @override
@@ -39,9 +42,10 @@ class FakeAudioRecorderService implements AudioRecorderService {
   }
 
   @override
-  Future<void> start(String path) async {
+  Future<void> start(String path, RecordingOptions options) async {
     calls.add('start');
     this.path = path;
+    this.options = options;
     if (writeFiles) File(path).writeAsBytesSync([0, 1, 2, 3]);
   }
 
@@ -130,7 +134,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   Recording byId(String id) => recordings.firstWhere((r) => r.id == id);
 
   @override
-  Future<String> createRecordingPath() async => '/fake/rec_${_counter++}.m4a';
+  Future<String> createRecordingPath({
+    RecordingFormat format = RecordingFormat.aac,
+  }) async => '/fake/rec_${_counter++}${format.extension}';
 
   @override
   Future<List<Recording>> loadAll() async =>
@@ -142,6 +148,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
     required Duration duration,
     List<double>? waveform,
     String? name,
+    DateTime? createdAt,
+    AudioInfo? audio,
+    Map<String, CopyState> copies = const {},
   }) async {
     final recording = Recording(
       id: p.basenameWithoutExtension(path),
@@ -151,9 +160,11 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
           FileRecordingsRepository.nextDefaultName(
             recordings.map((r) => r.name),
           ),
-      createdAt: DateTime.now(),
+      createdAt: createdAt ?? DateTime.now(),
       duration: duration,
       waveform: waveform,
+      audio: audio,
+      copies: copies,
     );
     recordings.add(recording);
     return recording;
@@ -169,6 +180,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
     required String sourcePath,
     required Duration duration,
     List<double>? waveform,
+    AudioInfo? audio,
   }) async {
     final current = byId(recording.id);
     return _replace(
@@ -181,15 +193,21 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         waveform: waveform,
         revision: current.revision + 1,
         copies: current.copies,
+        audio: audio,
       ),
     );
   }
 
   @override
-  Future<Recording> setWaveform(
-    Recording recording,
-    List<double> waveform,
-  ) async => _replace(byId(recording.id).copyWith(waveform: waveform));
+  Future<Recording> setDetails(
+    Recording recording, {
+    List<double>? waveform,
+    Duration? duration,
+    AudioInfo? audio,
+  }) async => _replace(
+    byId(recording.id)
+        .copyWith(waveform: waveform, duration: duration, audio: audio),
+  );
 
   @override
   Future<Recording> setCopy(
@@ -235,9 +253,17 @@ class CopyingAudioCodec implements AudioCodec {
     await File(decodedSource ?? input).copy(output);
   }
 
+  /// Tasa de bits de la última codificación.
+  int? bitRate;
+
   @override
-  Future<void> encodeToM4a(String input, String output) async {
+  Future<void> encodeToM4a(
+    String input,
+    String output, {
+    int bitRate = 128000,
+  }) async {
     calls.add('encode ${p.basename(input)}');
+    this.bitRate = bitRate;
     await File(input).copy(output);
   }
 }
@@ -250,6 +276,12 @@ class FakeRecordingEditor extends RecordingEditor {
   /// Onda que devuelve [extractWaveform]; si es `null`, falla.
   List<double>? waveform = const [0.2, 0.6, 1.0];
   final extracted = <String>[];
+
+  /// Lo que devuelve [probe] para cada ruta; si no está, `null`.
+  final probes = <String, AudioProbe>{};
+
+  @override
+  Future<AudioProbe?> probe(String path) async => probes[path];
 
   Duration duration = const Duration(seconds: 10);
   double peak = 0.25;

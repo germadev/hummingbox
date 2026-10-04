@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
+import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/audio/levels.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
@@ -134,6 +136,56 @@ void main() {
     expect(levels.toSet(), {closeTo(levelFromPeak(1000 / 32768), 1e-9)});
     // No deja archivos temporales.
     expect(Directory(p.join(temp.path, 'editor')).listSync(), isEmpty);
+  });
+
+  test('vuelve a codificar el AAC con su tasa de bits', () async {
+    final low = await repository.setDetails(
+      recording,
+      audio: const AudioInfo(
+        format: RecordingFormat.aac,
+        sampleRate: 16000,
+        channels: 1,
+        bitRate: 32000,
+      ),
+    );
+    final editor = newEditor();
+    final session = await editor.open(low);
+    await editor.save(
+      session,
+      const AudioEdit(start: Duration.zero, end: Duration(seconds: 1)),
+      asCopy: false,
+    );
+    await editor.close(session);
+
+    expect(codec.bitRate, 32000);
+  });
+
+  test('un WAV se edita y se guarda como WAV, sin códecs', () async {
+    final path = await repository.createRecordingPath(
+      format: RecordingFormat.wav,
+    );
+    await File(
+      await writeWav(root, 'voz.wav', [for (var i = 0; i < 3000; i++) 500]),
+    ).rename(path);
+    final wav = (await repository.add(
+      path: path,
+      duration: const Duration(seconds: 3),
+    ))!;
+
+    final editor = newEditor();
+    final session = await editor.open(wav);
+    final copy = await editor.save(
+      session,
+      const AudioEdit(start: Duration.zero, end: Duration(seconds: 2)),
+      asCopy: true,
+    );
+    await editor.close(session);
+
+    expect(codec.calls, isEmpty);
+    expect(p.extension(copy.path), '.wav');
+    expect(await readSamples(copy.path), hasLength(2000));
+    expect(copy.audio?.format, RecordingFormat.wav);
+    expect(copy.audio?.sampleRate, 1000);
   });
 
   test('borra los temporales si no se puede abrir', () async {

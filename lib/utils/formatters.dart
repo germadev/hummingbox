@@ -1,5 +1,8 @@
 import 'package:intl/intl.dart';
 
+import '../audio/audio_info.dart';
+import '../models/recording_options.dart';
+
 /// Formatea una duración como `mm:ss` (o `h:mm:ss` si supera una hora).
 ///
 /// Con [showTenths] añade las décimas de segundo: `mm:ss,d`.
@@ -53,3 +56,34 @@ String formatGain(double db) {
 /// Formatea una duración corta en segundos con una décima: `1,5 s`.
 String formatSeconds(Duration duration) =>
     '${NumberFormat('0.0', 'es').format(duration.inMilliseconds / 1000)} s';
+
+/// Nombre corto de un formato: `AAC` o `WAV`.
+String formatName(RecordingFormat format) => switch (format) {
+  RecordingFormat.aac => 'AAC',
+  RecordingFormat.wav => 'WAV',
+};
+
+/// Frecuencia de muestreo: `44,1 kHz`, `16 kHz`.
+String formatSampleRate(int hertz) =>
+    '${NumberFormat('0.##', 'es').format(hertz / 1000)} kHz';
+
+/// Tasa de bits: `128 kbps`.
+String formatBitRate(int bitsPerSecond) =>
+    '${(bitsPerSecond / 1000).round()} kbps';
+
+/// Tamaño en megabytes, con una decimal como mucho: `0,5 MB`, `5,3 MB`.
+String formatMegabytes(int bytes) =>
+    '${NumberFormat('0.#', 'es').format(bytes / 1000000)} MB';
+
+/// Formato y calidad de un archivo de audio: `AAC · 128 kbps · 44,1 kHz` o
+/// `WAV · 16 bits · 48 kHz · estéreo`.
+String formatAudioInfo(AudioInfo info) {
+  return [
+    formatName(info.format),
+    if (info.bitRate case final bitRate?) formatBitRate(bitRate),
+    if (info.bitsPerSample case final bits?) '$bits bits',
+    formatSampleRate(info.sampleRate),
+    if (info.channels == 2) 'estéreo',
+    if (info.channels > 2) '${info.channels} canales',
+  ].join(' · ');
+}

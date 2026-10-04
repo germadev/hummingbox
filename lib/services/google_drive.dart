@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/recording_options.dart';
 import 'settings_store.dart';
 
 /// Hay que volver a conectar la cuenta de Google (sesión cerrada, permiso
@@ -173,7 +174,6 @@ class DriveApi {
     'https://www.googleapis.com/upload/drive/v3/files',
   );
   static const folderMimeType = 'application/vnd.google-apps.folder';
-  static const audioMimeType = 'audio/mp4';
   static const _jsonType = 'application/json; charset=UTF-8';
 
   /// Devuelve el id de la carpeta [name] creada por la app, creándola si no
@@ -226,7 +226,7 @@ class DriveApi {
     return _upload(path, {
       'name': name,
       'parents': [folderId],
-      'mimeType': audioMimeType,
+      'mimeType': _mimeTypeOf(path),
     });
   }
 
@@ -265,7 +265,7 @@ class DriveApi {
             ..headers.addAll({
               ...headers,
               'Content-Type': _jsonType,
-              'X-Upload-Content-Type': audioMimeType,
+              'X-Upload-Content-Type': _mimeTypeOf(path),
               'X-Upload-Content-Length': '$length',
             })
             ..body = jsonEncode(metadata);
@@ -281,7 +281,7 @@ class DriveApi {
 
     final request = http.StreamedRequest('PUT', Uri.parse(location))
       ..contentLength = length
-      ..headers['Content-Type'] = audioMimeType;
+      ..headers['Content-Type'] = _mimeTypeOf(path);
     final responseFuture = _client.send(request);
     await request.sink.addStream(File(path).openRead());
     await request.sink.close();
@@ -289,6 +289,9 @@ class DriveApi {
     _check(response);
     return _json(response)['id'] as String;
   }
+
+  static String _mimeTypeOf(String path) =>
+      (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
 
   /// Hace la petición y, si el token ha caducado, la repite una vez con uno
   /// nuevo.

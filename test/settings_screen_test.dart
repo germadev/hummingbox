@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/screens/settings_screen.dart';
 import 'package:voicerecorder/services/copy_sync.dart';
 
@@ -28,6 +29,52 @@ void main() {
     await sync.load();
     await tester.pumpAndSettle();
   }
+
+  testWidgets('elige el formato y la calidad de grabación', (tester) async {
+    await pumpSettings(tester);
+    expect(find.text('AAC (.m4a)'), findsOneWidget);
+    expect(
+      find.text('Alta · 44,1 kHz · 128 kbps · 1 MB por minuto'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('format-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('WAV (.wav)'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.recording.format, RecordingFormat.wav);
+    expect(
+      find.text('Alta · 44,1 kHz · 16 bits · 5,3 MB por minuto'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('quality-option')));
+    await tester.pumpAndSettle();
+    // Cada calidad muestra lo que ocupa con el formato elegido.
+    expect(find.text('16 kHz · 16 bits · 1,9 MB por minuto'), findsOneWidget);
+    await tester.tap(find.text('Baja'));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.settings.recording,
+      const RecordingOptions(
+        format: RecordingFormat.wav,
+        quality: RecordingQuality.low,
+      ),
+    );
+  });
+
+  testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('quality-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.recording, const RecordingOptions());
+  });
 
   testWidgets('elige la carpeta donde guardar las grabaciones', (tester) async {
     await pumpSettings(tester);

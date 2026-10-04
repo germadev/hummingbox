@@ -1,4 +1,6 @@
+import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import 'recording_options.dart';
 
 /// Una grabación de audio guardada en el dispositivo.
 class Recording {
@@ -11,6 +13,7 @@ class Recording {
     this.waveform,
     this.revision = 0,
     this.copies = const {},
+    this.audio,
   });
 
   /// Construye una grabación a partir de los metadatos guardados en el índice.
@@ -30,6 +33,7 @@ class Recording {
       duration: Duration(milliseconds: json['durationMs'] as int? ?? 0),
       waveform: decodeWaveform(json['waveform']),
       revision: json['revision'] as int? ?? 0,
+      audio: AudioInfo.fromJson(json['audio']),
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -63,12 +67,21 @@ class Recording {
   /// Copias guardadas fuera de la app, por destino (carpeta, Google Drive…).
   final Map<String, CopyState> copies;
 
+  /// Formato y calidad del audio, leídos del archivo, o `null` si todavía no
+  /// se han leído.
+  final AudioInfo? audio;
+
+  /// Formato del archivo según su extensión.
+  RecordingFormat get format =>
+      RecordingFormat.fromPath(path) ?? RecordingFormat.aac;
+
   Map<String, dynamic> toMetadata() => {
     'name': name,
     'createdAt': createdAt.toIso8601String(),
     'durationMs': duration.inMilliseconds,
     if (waveform != null) 'waveform': encodeWaveform(waveform!),
     if (revision != 0) 'revision': revision,
+    if (audio != null) 'audio': audio!.toJson(),
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -81,6 +94,7 @@ class Recording {
     List<double>? waveform,
     int? revision,
     Map<String, CopyState>? copies,
+    AudioInfo? audio,
   }) {
     return Recording(
       id: id,
@@ -91,6 +105,7 @@ class Recording {
       waveform: waveform ?? this.waveform,
       revision: revision ?? this.revision,
       copies: copies ?? this.copies,
+      audio: audio ?? this.audio,
     );
   }
 }

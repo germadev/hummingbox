@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/recordings_repository.dart';
 
@@ -14,6 +16,7 @@ class RecorderController extends ChangeNotifier {
     required this._recorder,
     required this._repository,
     this.maxAmplitudeSamples = 300,
+    this._probe = probeAudio,
   }) {
     _statusSubscription = _recorder.statusChanges().listen(_onPlatformStatus);
   }
@@ -27,6 +30,9 @@ class RecorderController extends ChangeNotifier {
 
   final AudioRecorderService _recorder;
   final RecordingsRepository _repository;
+
+  /// Lee el formato y la duración del archivo grabado.
+  final Future<AudioProbe?> Function(String path) _probe;
   final Stopwatch _stopwatch = Stopwatch();
   final List<double> _amplitudes = [];
 
@@ -51,17 +57,21 @@ class RecorderController extends ChangeNotifier {
   /// más reciente.
   List<double> get amplitudes => List.unmodifiable(_amplitudes);
 
-  /// Empieza una nueva grabación.
+  /// Empieza una nueva grabación con el formato y la calidad de [options].
   ///
   /// Devuelve `false` si el usuario no concedió el permiso del micrófono.
-  Future<bool> start() async {
+  Future<bool> start({
+    RecordingOptions options = const RecordingOptions(),
+  }) async {
     if (isActive || _busy) return true;
     _busy = true;
     try {
       if (!await _recorder.hasPermission()) return false;
 
-      final path = await _repository.createRecordingPath();
-      await _recorder.start(path);
+      final path = await _repository.createRecordingPath(
+        format: options.format,
+      );
+      await _recorder.start(path, options);
       _currentPath = path;
       _amplitudes.clear();
       _history.clear();
@@ -104,10 +114,15 @@ class RecorderController extends ChangeNotifier {
         _reset();
       }
       if (path == null) return null;
+      // La duración del archivo es más exacta que la del cronómetro.
+      final probe = await _probe(path);
       return await _repository.add(
         path: path,
-        duration: duration,
+        duration: probe != null && probe.duration > Duration.zero
+            ? probe.duration
+            : duration,
         waveform: waveform,
+        audio: probe?.info,
       );
     } finally {
       _busy = false;

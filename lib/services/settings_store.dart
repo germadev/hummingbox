@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../models/recording_options.dart';
+
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
 class FolderSettings {
   const FolderSettings({required this.id, required this.name});
@@ -59,7 +61,11 @@ class DriveSettings {
 
 /// Opciones de la app.
 class AppSettings {
-  const AppSettings({this.folder, this.drive});
+  const AppSettings({
+    this.folder,
+    this.drive,
+    this.recording = const RecordingOptions(),
+  });
 
   /// Carpeta del dispositivo donde se guarda una copia de cada grabación, o
   /// `null` si solo se guardan dentro de la app.
@@ -68,28 +74,39 @@ class AppSettings {
   /// Google Drive, si está conectado.
   final DriveSettings? drive;
 
+  /// Formato y calidad de las grabaciones nuevas.
+  final RecordingOptions recording;
+
   AppSettings withFolder(FolderSettings? folder) =>
-      AppSettings(folder: folder, drive: drive);
+      AppSettings(folder: folder, drive: drive, recording: recording);
 
   AppSettings withDrive(DriveSettings? drive) =>
-      AppSettings(folder: folder, drive: drive);
+      AppSettings(folder: folder, drive: drive, recording: recording);
+
+  AppSettings withRecording(RecordingOptions recording) =>
+      AppSettings(folder: folder, drive: drive, recording: recording);
 
   Map<String, dynamic> toJson() => {
     if (folder != null) 'folder': folder!.toJson(),
     if (drive != null) 'drive': drive!.toJson(),
+    'recording': recording.toJson(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
     folder: FolderSettings.fromJson(json['folder']),
     drive: DriveSettings.fromJson(json['drive']),
+    recording: RecordingOptions.fromJson(json['recording']),
   );
 
   @override
   bool operator ==(Object other) =>
-      other is AppSettings && other.folder == folder && other.drive == drive;
+      other is AppSettings &&
+      other.folder == folder &&
+      other.drive == drive &&
+      other.recording == recording;
 
   @override
-  int get hashCode => Object.hash(folder, drive);
+  int get hashCode => Object.hash(folder, drive, recording);
 }
 
 /// Guarda las opciones en un archivo JSON.

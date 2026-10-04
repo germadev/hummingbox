@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
 void main() {
@@ -37,6 +39,61 @@ void main() {
     expect(p.dirname(first), directory.path);
     expect(p.extension(first), '.m4a');
     expect(second, isNot(first));
+  });
+
+  test('crea rutas .wav y no repite el id de otro formato', () async {
+    final m4a = await createAudioFile();
+    final wav = await repository.createRecordingPath(
+      format: RecordingFormat.wav,
+    );
+
+    expect(p.extension(wav), '.wav');
+    expect(
+      p.basenameWithoutExtension(wav),
+      isNot(p.basenameWithoutExtension(m4a)),
+    );
+  });
+
+  test('lista las grabaciones de los dos formatos', () async {
+    final m4a = await createAudioFile();
+    final wav = await repository.createRecordingPath(
+      format: RecordingFormat.wav,
+    );
+    await File(wav).writeAsBytes([1]);
+
+    final all = await repository.loadAll();
+
+    expect(all.map((r) => r.path).toSet(), {m4a, wav});
+    expect(all.firstWhere((r) => r.path == wav).format, RecordingFormat.wav);
+  });
+
+  test('guarda el formato, la fecha y los detalles calculados', () async {
+    const audio = AudioInfo(
+      format: RecordingFormat.aac,
+      sampleRate: 16000,
+      channels: 1,
+      bitRate: 32000,
+    );
+    final createdAt = DateTime(2026, 5, 1, 10, 30);
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: Duration.zero,
+      createdAt: createdAt,
+      audio: audio,
+    );
+    expect(recording!.audio, audio);
+
+    await repository.setDetails(
+      recording,
+      waveform: [0.5],
+      duration: const Duration(seconds: 7),
+    );
+
+    final reloaded = (await newRepository().loadAll()).single;
+    expect(reloaded.createdAt, createdAt);
+    expect(reloaded.audio, audio);
+    expect(reloaded.waveform, [0.5]);
+    expect(reloaded.duration, const Duration(seconds: 7));
   });
 
   test('no registra archivos que no existen', () async {
@@ -182,7 +239,7 @@ void main() {
     // Se parte de la misma copia (desactualizada) de la grabación.
     await Future.wait([
       repository.rename(recording!, 'Nuevo nombre'),
-      repository.setWaveform(recording, [0.3]),
+      repository.setDetails(recording, waveform: [0.3]),
       repository.setCopy(
         recording,
         'drive',
@@ -213,7 +270,7 @@ void main() {
       'drive',
       const CopyState(destination: 'f', ref: 'id', revision: 0, name: 'x'),
     );
-    await repository.setWaveform(recording, [0.5]);
+    await repository.setDetails(recording, waveform: [0.5]);
     await repository.rename(recording, 'Fantasma');
 
     final index = File(p.join(directory.path, 'recordings.json'));

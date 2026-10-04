@@ -1,7 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
+import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/controllers/recorder_controller.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
@@ -67,6 +70,39 @@ void main() {
       'resume',
       'stop',
     ]);
+  });
+
+  test('graba con el formato y la calidad elegidos', () async {
+    const options = RecordingOptions(
+      format: RecordingFormat.wav,
+      quality: RecordingQuality.low,
+    );
+    const info = AudioInfo(
+      format: RecordingFormat.wav,
+      sampleRate: 16000,
+      channels: 1,
+      bitsPerSample: 16,
+    );
+    final probed = <String>[];
+    final probing = RecorderController(
+      recorder: recorder,
+      repository: FileRecordingsRepository(directory: () async => directory),
+      probe: (path) async {
+        probed.add(path);
+        return const AudioProbe(info, Duration(milliseconds: 1234));
+      },
+    );
+    addTearDown(probing.dispose);
+
+    await probing.start(options: options);
+    final recording = await probing.stop();
+
+    expect(recorder.options, options);
+    expect(p.extension(recorder.path!), '.wav');
+    expect(probed, [recorder.path]);
+    // La duración y el formato salen del archivo.
+    expect(recording!.duration, const Duration(milliseconds: 1234));
+    expect(recording.audio, info);
   });
 
   test('descartar borra el audio', () async {

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' show ClientException;
 
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import 'folder_access.dart';
 import 'google_drive.dart';
 import 'recordings_repository.dart';
@@ -113,7 +114,8 @@ class DriveCopyTarget implements CopyTarget {
 }
 
 /// Mantiene una copia de cada grabación en los destinos activados en las
-/// opciones (una carpeta del dispositivo y Google Drive).
+/// opciones (una carpeta del dispositivo y Google Drive). También carga y
+/// guarda el resto de las opciones de la app.
 ///
 /// Cada grabación guarda qué revisión y qué nombre se copiaron a cada destino,
 /// así que sincronizar es idempotente: solo se sube lo que ha cambiado y, si
@@ -136,6 +138,9 @@ class CopySync extends ChangeNotifier {
   AppSettings get settings => _settings;
 
   Future<void>? _loading;
+
+  /// Último cambio de las opciones pendiente de guardar, si hay alguno.
+  Future<void>? _saving;
   Future<void>? _running;
   bool _rerun = false;
   bool _disposed = false;
@@ -159,19 +164,50 @@ class CopySync extends ChangeNotifier {
     });
   }
 
-  Future<void> setFolder(FolderSettings? folder) =>
-      _update(_settings.withFolder(folder), FolderCopyTarget.targetKey);
+  Future<void> setFolder(FolderSettings? folder) => _changeTarget(
+    (settings) => settings.withFolder(folder),
+    FolderCopyTarget.targetKey,
+  );
 
-  Future<void> setDrive(DriveSettings? drive) =>
-      _update(_settings.withDrive(drive), DriveCopyTarget.targetKey);
+  Future<void> setDrive(DriveSettings? drive) => _changeTarget(
+    (settings) => settings.withDrive(drive),
+    DriveCopyTarget.targetKey,
+  );
 
-  Future<void> _update(AppSettings settings, String changedTarget) async {
-    await load();
-    await store.save(settings);
-    _settings = settings;
+  /// Cambia el formato y la calidad de las grabaciones nuevas.
+  Future<void> setRecordingOptions(RecordingOptions options) =>
+      _change((settings) => settings.withRecording(options));
+
+  Future<void> _changeTarget(
+    AppSettings Function(AppSettings settings) change,
+    String changedTarget,
+  ) async {
+    await _change(change);
     _errors = {..._errors}..remove(changedTarget);
     _notify();
     unawaited(sync());
+  }
+
+  /// Aplica [change] a las opciones actuales y las guarda. Los cambios se
+  /// encadenan, así que dos seguidos no se pisan.
+  Future<void> _change(AppSettings Function(AppSettings settings) change) {
+    Future<void> apply() async {
+      await load();
+      final settings = change(_settings);
+      if (settings == _settings) return;
+      await store.save(settings);
+      _settings = settings;
+      _notify();
+    }
+
+    final previous = _saving;
+    final result = previous == null ? apply() : previous.then((_) => apply());
+    final done = result.then((_) {}, onError: (_) {});
+    _saving = done;
+    done.then((_) {
+      if (identical(_saving, done)) _saving = null;
+    });
+    return result;
   }
 
   /// Copia lo que falte. Si ya hay una pasada en curso, se repite al
@@ -281,9 +317,11 @@ class CopySync extends ChangeNotifier {
     );
   }
 
-  /// Nombre del archivo de la copia: el que le dio el usuario.
+  /// Nombre del archivo de la copia: el que le dio el usuario, con la
+  /// extensión de su formato.
   static String copyFileName(Recording recording) =>
-      '${safeFileName(recording.name, fallback: recording.id)}.m4a';
+      '${safeFileName(recording.name, fallback: recording.id)}'
+      '${recording.format.extension}';
 
   static String _describeFailure(int failed, Object? error) {
     final count = failed == 1

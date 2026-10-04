@@ -27,6 +27,57 @@ Future<bool> showConfirmDialog(
   return confirmed ?? false;
 }
 
+/// Opción de [showChoiceDialog].
+class Choice<T> {
+  const Choice(this.value, this.title, {this.subtitle});
+
+  final T value;
+  final String title;
+  final String? subtitle;
+}
+
+/// Muestra una lista de opciones con la actual ([selected]) marcada.
+/// Devuelve la elegida, o `null` si se cancela.
+Future<T?> showChoiceDialog<T>(
+  BuildContext context, {
+  required String title,
+  required List<Choice<T>> choices,
+  required T selected,
+}) {
+  return showDialog<T>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      content: SingleChildScrollView(
+        child: RadioGroup<T>(
+          groupValue: selected,
+          onChanged: (value) => Navigator.pop(context, value),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final choice in choices)
+                RadioListTile<T>(
+                  value: choice.value,
+                  title: Text(choice.title),
+                  subtitle: choice.subtitle == null
+                      ? null
+                      : Text(choice.subtitle!),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Pide un nuevo nombre. Devuelve `null` si se cancela.
 Future<String?> showRenameDialog(BuildContext context, String currentName) {
   return showDialog<String>(

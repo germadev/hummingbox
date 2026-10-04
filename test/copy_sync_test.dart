@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/copy_sync.dart';
 import 'package:voicerecorder/services/google_drive.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
@@ -188,6 +189,33 @@ void main() {
     });
     // Se deja de intentar con el resto.
     expect(drive.calls, hasLength(1));
+  });
+
+  test('las copias de un WAV llevan la extensión .wav', () async {
+    final path = await repository.createRecordingPath(
+      format: RecordingFormat.wav,
+    );
+    await File(path).writeAsBytes([1, 2, 3]);
+    await repository.add(path: path, duration: Duration.zero);
+    store.settings = const AppSettings(folder: folder, drive: driveSettings);
+
+    await sync.sync();
+
+    expect(folders.calls, ['write Grabación 1.wav']);
+    expect(drive.calls, ['upload Grabación 1.wav']);
+  });
+
+  test('cambiar la calidad la guarda sin copiar nada', () async {
+    await addRecording();
+    store.settings = const AppSettings(folder: folder);
+    const options = RecordingOptions(quality: RecordingQuality.low);
+
+    await sync.setRecordingOptions(options);
+
+    expect(store.settings.recording, options);
+    expect(store.settings.folder, folder);
+    expect(sync.settings.recording, options);
+    expect(folders.calls, isEmpty);
   });
 
   test('agrupa las peticiones que llegan durante una pasada', () async {

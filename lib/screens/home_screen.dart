@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final RecorderController _recorder = RecorderController(
     recorder: widget.recorderFactory(),
     repository: widget.repository,
+    probe: widget.editor.probe,
   );
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
@@ -84,40 +85,86 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     _syncCopies();
-    await _addMissingWaveforms();
+    await _addMissingDetails();
   }
 
-  /// Calcula la onda de las grabaciones que no la tienen (las hechas con
-  /// versiones anteriores de la app). Si falla, se reintenta al volver a
-  /// abrirla.
-  Future<void> _addMissingWaveforms() async {
-    final pending = [
-      for (final recording in _recordings)
-        if (recording.waveform == null) recording,
-    ];
-    for (final recording in pending) {
-      if (!mounted) return;
-      try {
-        final levels = await widget.editor.extractWaveform(recording);
-        if (!mounted) return;
-        // Si entretanto se ha editado o borrado, ya no hace falta.
-        final current = _recordings.where((r) => r.id == recording.id);
-        if (current.isEmpty ||
-            current.single.waveform != null ||
-            current.single.revision != recording.revision) {
-          continue;
+  bool _addingDetails = false;
+  bool _detailsPending = false;
+
+  /// Calcula lo que les falta a las grabaciones hechas con versiones
+  /// anteriores de la app o importadas de la carpeta: la onda (decodificando
+  /// el audio), el formato y, si no se conoce, la duración. Si algo falla, se
+  /// reintenta al volver a abrir la app.
+  Future<void> _addMissingDetails() async {
+    if (_addingDetails) {
+      // Se repite al terminar para incluir las que han llegado entretanto.
+      _detailsPending = true;
+      return;
+    }
+    _addingDetails = true;
+    try {
+      do {
+        _detailsPending = false;
+        final pending = [
+          for (final recording in _recordings)
+            if (recording.waveform == null || recording.audio == null)
+              recording,
+        ];
+        for (final recording in pending) {
+          if (!mounted) return;
+          await _addDetails(recording);
         }
-        await widget.repository.setWaveform(recording, levels);
-        if (!mounted) return;
-        setState(() {
-          _recordings = [
-            for (final r in _recordings)
-              r.id == recording.id ? r.copyWith(waveform: levels) : r,
-          ];
-        });
+      } while (_detailsPending && mounted);
+    } finally {
+      _addingDetails = false;
+    }
+  }
+
+  Future<void> _addDetails(Recording recording) async {
+    final editor = widget.editor;
+    final probe = recording.audio == null
+        ? await editor.probe(recording.path)
+        : null;
+    List<double>? levels;
+    if (recording.waveform == null) {
+      try {
+        levels = await editor.extractWaveform(recording);
       } catch (_) {
         // Se sigue mostrando sin onda.
       }
+    }
+    final duration = recording.duration == Duration.zero
+        ? probe?.duration
+        : null;
+    if (!mounted || (probe == null && levels == null)) return;
+
+    // Si entretanto se ha editado o borrado, ya no hace falta.
+    final current = _recordings.where((r) => r.id == recording.id);
+    if (current.isEmpty || current.single.revision != recording.revision) {
+      return;
+    }
+    try {
+      final updated = await widget.repository.setDetails(
+        recording,
+        waveform: levels,
+        duration: duration,
+        audio: probe?.info,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recordings = [
+          for (final r in _recordings)
+            r.id == recording.id
+                ? r.copyWith(
+                    waveform: updated.waveform,
+                    duration: updated.duration,
+                    audio: updated.audio,
+                  )
+                : r,
+        ];
+      });
+    } catch (_) {
+      // Se reintenta en el siguiente arranque.
     }
   }
 
@@ -136,7 +183,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _startRecording() async {
     await _player.stop();
     try {
-      final started = await _recorder.start();
+      await widget.sync.load();
+      final started = await _recorder.start(
+        options: widget.sync.settings.recording,
+      );
       if (!started) {
         _showMessage(
           'Permite el acceso al micrófono en los ajustes para poder grabar',
