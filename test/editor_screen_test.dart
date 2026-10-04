@@ -60,9 +60,17 @@ void main() {
   }
 
   Finder saveButton() => find.byKey(const Key('save-edit-button'));
+  Finder saveCopyButton() => find.byKey(const Key('save-copy-button'));
 
-  bool canSave(WidgetTester tester) =>
-      tester.widget<ButtonStyleButton>(saveButton()).onPressed != null;
+  bool enabled(WidgetTester tester, Finder button) =>
+      tester.widget<ButtonStyleButton>(button).onPressed != null;
+
+  /// Si se puede guardar. Los dos botones se activan a la vez.
+  bool canSave(WidgetTester tester) {
+    final canSave = enabled(tester, saveButton());
+    expect(enabled(tester, saveCopyButton()), canSave);
+    return canSave;
+  }
 
   testWidgets('recorta arrastrando las asas', (tester) async {
     await pumpEditor(tester);
@@ -104,15 +112,30 @@ void main() {
     expect(find.text('Las partes más fuertes se saturarán'), findsOneWidget);
   });
 
-  testWidgets('guarda la edición como copia', (tester) async {
+  testWidgets('guarda la edición sustituyendo la original', (tester) async {
     await pumpEditor(tester);
     await tester.tap(find.text('Normalizar'));
     await tester.pump();
 
     await tester.tap(saveButton());
     await tester.pumpAndSettle();
-    expect(find.text('Guardar la edición'), findsOneWidget);
-    await tester.tap(find.text('Guardar copia'));
+
+    expect(closed, isTrue);
+    expect(result!.isCopy, isFalse);
+    expect(result!.recording.id, 'a');
+    expect(result!.recording.revision, 1);
+    expect(editor.savedAsCopy, isFalse);
+    expect(editor.savedEdit!.gainDb, 11.0);
+    expect(editor.closedSessions, 1);
+    expect(repository.recordings, hasLength(1));
+  });
+
+  testWidgets('guarda la edición como copia', (tester) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('Normalizar'));
+    await tester.pump();
+
+    await tester.tap(saveCopyButton());
     await tester.pumpAndSettle();
 
     expect(closed, isTrue);
@@ -176,5 +199,6 @@ void main() {
       findsOneWidget,
     );
     expect(saveButton(), findsNothing);
+    expect(saveCopyButton(), findsNothing);
   });
 }

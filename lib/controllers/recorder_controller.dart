@@ -13,12 +13,14 @@ class RecorderController extends ChangeNotifier {
   RecorderController({
     required this._recorder,
     required this._repository,
-    this.maxAmplitudeSamples = 60,
+    this.maxAmplitudeSamples = 300,
   }) {
     _statusSubscription = _recorder.statusChanges().listen(_onPlatformStatus);
   }
 
-  /// Número de muestras de amplitud que se conservan para la onda.
+  /// Número de muestras de amplitud que se conservan para la onda. Tienen que
+  /// sobrar para llenar el ancho de la pantalla: las barras sin muestra se
+  /// dibujan como el hueco anterior al inicio de la grabación.
   final int maxAmplitudeSamples;
 
   static const _tick = Duration(milliseconds: 100);

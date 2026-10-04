@@ -6,6 +6,7 @@ import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 
 import 'fakes.dart';
+import 'waveform_helpers.dart';
 
 void main() {
   late InMemoryRecordingsRepository repository;
@@ -220,6 +221,48 @@ void main() {
   group('panel de grabación', () {
     Finder handle() => find.byKey(const Key('panel-handle'));
 
+    testWidgets('al grabar, la onda solo cambia de color desde el inicio', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await tester.tap(handle());
+      await tester.pumpAndSettle();
+
+      final waveform = find.byKey(const Key('recording-waveform'));
+      final idle = Theme.of(tester.element(waveform))
+          .colorScheme
+          .onSurfaceVariant
+          .withValues(alpha: 0.4);
+      final bars = barColors(tester, waveform);
+      expect(bars, hasLength(greaterThan(3)));
+      expect(bars, everyElement(isSameColorAs(idle)));
+
+      await tester.tap(record());
+      await pumpAnimations(tester);
+      // Aún sin muestras: nada cambia de color.
+      expect(barColors(tester, waveform), everyElement(isSameColorAs(idle)));
+
+      for (final db in [-30.0, -10.0, -20.0]) {
+        recorder.amplitudeController.add(db);
+      }
+      await pumpAnimations(tester);
+      expect(barColors(tester, waveform), [
+        ...List.filled(3, isSameColorAs(recordRed)),
+        ...List.filled(bars.length - 3, isSameColorAs(idle)),
+      ]);
+
+      // En pausa se atenúa lo grabado, pero el hueco sigue igual.
+      await tester.tap(find.byKey(const Key('pause-button')));
+      await pumpAnimations(tester);
+      expect(barColors(tester, waveform), [
+        ...List.filled(3, isSameColorAs(recordRed.withValues(alpha: 0.4))),
+        ...List.filled(bars.length - 3, isSameColorAs(idle)),
+      ]);
+
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('al deslizarlo hacia arriba se prepara sin grabar', (
       tester,
     ) async {
@@ -333,8 +376,6 @@ void main() {
     await tester.tap(find.text('Normalizar'));
     await tester.pump();
     await tester.tap(find.byKey(const Key('save-edit-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Reemplazar'));
     await tester.pumpAndSettle();
 
     expect(find.text('Editar grabación'), findsNothing);
