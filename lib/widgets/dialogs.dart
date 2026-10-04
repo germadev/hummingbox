@@ -6,6 +6,7 @@ Future<bool> showConfirmDialog(
   required String title,
   required String message,
   required String confirmLabel,
+  String cancelLabel = 'Cancelar',
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
@@ -15,7 +16,7 @@ Future<bool> showConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancelar'),
+          child: Text(cancelLabel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
@@ -78,24 +79,50 @@ Future<T?> showChoiceDialog<T>(
   );
 }
 
-/// Pide un nuevo nombre. Devuelve `null` si se cancela.
+/// Pide un nuevo nombre para una grabación. Devuelve `null` si se cancela.
 Future<String?> showRenameDialog(BuildContext context, String currentName) {
-  return showDialog<String>(
-    context: context,
-    builder: (context) => _RenameDialog(initialName: currentName),
+  return showNameDialog(
+    context,
+    title: 'Renombrar grabación',
+    initialName: currentName,
+    confirmLabel: 'Guardar',
   );
 }
 
-class _RenameDialog extends StatefulWidget {
-  const _RenameDialog({required this.initialName});
-
-  final String initialName;
-
-  @override
-  State<_RenameDialog> createState() => _RenameDialogState();
+/// Pide un nombre (sin espacios al principio ni al final). Devuelve `null`
+/// si se cancela.
+Future<String?> showNameDialog(
+  BuildContext context, {
+  required String title,
+  required String confirmLabel,
+  String initialName = '',
+}) {
+  return showDialog<String>(
+    context: context,
+    builder: (context) => _NameDialog(
+      title: title,
+      initialName: initialName,
+      confirmLabel: confirmLabel,
+    ),
+  );
 }
 
-class _RenameDialogState extends State<_RenameDialog> {
+class _NameDialog extends StatefulWidget {
+  const _NameDialog({
+    required this.title,
+    required this.initialName,
+    required this.confirmLabel,
+  });
+
+  final String title;
+  final String initialName;
+  final String confirmLabel;
+
+  @override
+  State<_NameDialog> createState() => _NameDialogState();
+}
+
+class _NameDialogState extends State<_NameDialog> {
   late final TextEditingController _controller =
       TextEditingController(text: widget.initialName)
         ..selection = TextSelection(
@@ -117,7 +144,7 @@ class _RenameDialogState extends State<_RenameDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Renombrar grabación'),
+      title: Text(widget.title),
       content: TextField(
         controller: _controller,
         autofocus: true,
@@ -135,7 +162,7 @@ class _RenameDialogState extends State<_RenameDialog> {
           valueListenable: _controller,
           builder: (context, value, _) => FilledButton(
             onPressed: value.text.trim().isEmpty ? null : _submit,
-            child: const Text('Guardar'),
+            child: Text(widget.confirmLabel),
           ),
         ),
       ],

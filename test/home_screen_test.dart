@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:voicerecorder/app.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 
 import 'fakes.dart';
@@ -13,6 +14,8 @@ void main() {
   late FakeAudioRecorderService recorder;
   late FakeAudioPlayerService player;
   late FakeRecordingEditor editor;
+  late InMemorySettingsStore store;
+  late FakeFolderAccess folders;
 
   setUpAll(() => initializeDateFormatting('es'));
 
@@ -20,17 +23,24 @@ void main() {
     repository = InMemoryRecordingsRepository();
     recorder = FakeAudioRecorderService();
     player = FakeAudioPlayerService();
+    store = InMemorySettingsStore();
+    folders = FakeFolderAccess();
   });
 
-  Recording sample(String id, String name, {List<double>? waveform}) =>
-      Recording(
-        id: id,
-        path: '/fake/$id.m4a',
-        name: name,
-        createdAt: DateTime(2026, 9, 28, 8, 30),
-        duration: const Duration(seconds: 83),
-        waveform: waveform,
-      );
+  Recording sample(
+    String id,
+    String name, {
+    List<double>? waveform,
+    String folder = '',
+  }) => Recording(
+    id: id,
+    path: '/fake/$id.m4a',
+    name: name,
+    createdAt: DateTime(2026, 9, 28, 8, 30),
+    duration: const Duration(seconds: 83),
+    waveform: waveform,
+    folder: folder,
+  );
 
   Future<void> pumpApp(WidgetTester tester) async {
     editor = FakeRecordingEditor(repository: repository);
@@ -40,7 +50,7 @@ void main() {
         recorderFactory: () => recorder,
         playerFactory: () => player,
         editor: editor,
-        sync: fakeCopySync(repository),
+        sync: fakeCopySync(repository, store: store, folders: folders),
       ),
     );
     await tester.pumpAndSettle();
@@ -398,6 +408,114 @@ void main() {
 
     expect(find.text('Detén la grabación para poder editar'), findsOneWidget);
     expect(find.text('Editar grabación'), findsNothing);
+  });
+
+  group('carpetas', () {
+    Future<void> openDrawer(WidgetTester tester) async {
+      // Deslizando desde el borde izquierdo.
+      await tester.dragFrom(const Offset(2, 300), const Offset(300, 0));
+      await tester.pumpAndSettle();
+    }
+
+    String title(WidgetTester tester) => tester
+        .widget<Text>(
+          find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
+        )
+        .data!;
+
+    testWidgets('el menú lateral muestra las subcarpetas y abre una', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'En la principal'),
+        sample('b', 'Tema 1', folder: 'Clases'),
+      ]);
+      store.settings = const AppSettings(folders: ['Ideas']);
+      await pumpApp(tester);
+      expect(title(tester), 'Grabadora');
+      expect(find.text('Tema 1'), findsNothing);
+
+      await openDrawer(tester);
+      expect(find.text('Grabaciones'), findsOneWidget);
+      expect(find.text('Clases'), findsOneWidget);
+      expect(find.text('Ideas'), findsOneWidget);
+
+      await tester.tap(find.text('Clases'));
+      await tester.pumpAndSettle();
+
+      // Su nombre arriba a la izquierda y solo sus grabaciones.
+      expect(title(tester), 'Clases');
+      expect(find.text('Tema 1'), findsOneWidget);
+      expect(find.text('En la principal'), findsNothing);
+      expect(store.settings.openFolder, 'Clases');
+    });
+
+    testWidgets('graba en la carpeta abierta', (tester) async {
+      store.settings = const AppSettings(openFolder: 'Clases');
+      await pumpApp(tester);
+      expect(title(tester), 'Clases');
+      expect(find.text('Esta carpeta está vacía'), findsOneWidget);
+
+      await tester.tap(record());
+      await pumpAnimations(tester);
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+
+      expect(repository.recordings.single.folder, 'Clases');
+      expect(find.text('Grabación 1'), findsOneWidget);
+    });
+
+    testWidgets('crea una carpeta y la abre', (tester) async {
+      await pumpApp(tester);
+      await openDrawer(tester);
+
+      await tester.tap(find.byKey(const Key('new-folder')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '  Reuniones ');
+      await tester.pump();
+      await tester.tap(find.text('Crear'));
+      await tester.pumpAndSettle();
+
+      expect(title(tester), 'Reuniones');
+      expect(store.settings.folders, ['Reuniones']);
+      expect(find.text('Esta carpeta está vacía'), findsOneWidget);
+    });
+
+    testWidgets('«atrás» en una subcarpeta vuelve a la principal', (
+      tester,
+    ) async {
+      store.settings = const AppSettings(openFolder: 'Clases');
+      await pumpApp(tester);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(title(tester), 'Grabadora');
+      expect(store.settings.openFolder, '');
+    });
+
+    testWidgets('muestra las grabaciones que había en la carpeta', (
+      tester,
+    ) async {
+      const music = FolderSettings(id: 'tree://music', name: 'Music');
+      store.settings = const AppSettings(folder: music);
+      folders.addFile(music.id, 'Idea.m4a');
+      folders.addFile(music.id, 'Tema 1.m4a', subfolder: 'Clases');
+      await pumpApp(tester);
+
+      expect(find.text('Idea'), findsOneWidget);
+      expect(
+        find.text('Se han añadido 2 grabaciones de la carpeta'),
+        findsOneWidget,
+      );
+
+      await openDrawer(tester);
+      // La principal lleva el nombre de la carpeta del dispositivo.
+      expect(find.text('Music'), findsOneWidget);
+      await tester.tap(find.text('Clases'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tema 1'), findsOneWidget);
+    });
   });
 
   testWidgets('abre las opciones desde la barra superior', (tester) async {

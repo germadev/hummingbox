@@ -95,6 +95,30 @@ void main() {
     );
   });
 
+  testWidgets('pregunta antes de añadir los audios de la carpeta', (
+    tester,
+  ) async {
+    folders.addFile('tree://music', 'Idea.m4a', bytes: List.filled(500000, 0));
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('folder-option')));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Añadir las grabaciones de la carpeta?'), findsOneWidget);
+    expect(find.textContaining('1 audio (0,5 MB)'), findsOneWidget);
+
+    await tester.tap(find.text('No añadir'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.folder!.importFiles, isFalse);
+    final option = find.byKey(const Key('import-option'));
+    await tester.scrollUntilVisible(option, 100);
+    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    expect(store.settings.folder!.importFiles, isTrue);
+  });
+
   testWidgets('no cambia nada si se cancela el selector', (tester) async {
     folders.picked = null;
     await pumpSettings(tester);

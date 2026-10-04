@@ -45,12 +45,14 @@ abstract interface class DriveService {
   /// Cierra la sesión y retira el permiso.
   Future<void> disconnect();
 
-  /// Sube [path] a la carpeta [folderId] con el nombre [name]. Si [fileId]
-  /// sigue existiendo, sustituye su contenido. Devuelve el id del archivo.
+  /// Sube [path] a la carpeta [folderId] (o a su subcarpeta [subfolder],
+  /// que se crea si no existe) con el nombre [name]. Si [fileId] sigue
+  /// existiendo, sustituye su contenido. Devuelve el id del archivo.
   Future<String> upload({
     required String folderId,
     required String path,
     required String name,
+    String subfolder = '',
     String? fileId,
   });
 
@@ -83,6 +85,9 @@ class GoogleDriveService implements DriveService {
 
   late final DriveApi _api = DriveApi(_http, _authHeaders);
   Future<void>? _initialization;
+
+  /// Ids de las subcarpetas ya encontradas o creadas, por carpeta y nombre.
+  final _subfolders = <(String, String), Future<String>>{};
 
   @override
   bool get isAvailable {
@@ -150,8 +155,31 @@ class GoogleDriveService implements DriveService {
     required String folderId,
     required String path,
     required String name,
+    String subfolder = '',
     String? fileId,
-  }) => _api.upload(folderId: folderId, path: path, name: name, fileId: fileId);
+  }) async {
+    var parent = folderId;
+    if (subfolder.isNotEmpty) {
+      final key = (folderId, subfolder);
+      final lookup = _subfolders[key] ??= _api.ensureFolder(
+        subfolder,
+        parentId: folderId,
+      );
+      try {
+        parent = await lookup;
+      } catch (_) {
+        // Se vuelve a intentar en la siguiente subida.
+        _subfolders.remove(key);
+        rethrow;
+      }
+    }
+    return _api.upload(
+      folderId: parent,
+      path: path,
+      name: name,
+      fileId: fileId,
+    );
+  }
 
   @override
   Future<void> rename({required String fileId, required String name}) =>
@@ -176,17 +204,22 @@ class DriveApi {
   static const folderMimeType = 'application/vnd.google-apps.folder';
   static const _jsonType = 'application/json; charset=UTF-8';
 
-  /// Devuelve el id de la carpeta [name] creada por la app, creándola si no
-  /// existe.
-  Future<String> ensureFolder(String name) async {
-    final escaped = name.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+  /// Devuelve el id de la carpeta [name] creada por la app (dentro de
+  /// [parentId], si se indica), creándola si no existe.
+  Future<String> ensureFolder(String name, {String? parentId}) async {
+    String escape(String value) =>
+        value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    final conditions = [
+      "mimeType='$folderMimeType'",
+      "name='${escape(name)}'",
+      'trashed=false',
+      if (parentId != null) "'${escape(parentId)}' in parents",
+    ];
     final found = await _send(
       (headers) => _client.get(
         _files.replace(
           queryParameters: {
-            'q':
-                "mimeType='$folderMimeType' and name='$escaped' "
-                'and trashed=false',
+            'q': conditions.join(' and '),
             'fields': 'files(id)',
             'spaces': 'drive',
           },
@@ -203,7 +236,11 @@ class DriveApi {
       (headers) => _client.post(
         _files.replace(queryParameters: {'fields': 'id'}),
         headers: {...headers, 'Content-Type': _jsonType},
-        body: jsonEncode({'name': name, 'mimeType': folderMimeType}),
+        body: jsonEncode({
+          'name': name,
+          'mimeType': folderMimeType,
+          if (parentId != null) 'parents': [parentId],
+        }),
       ),
     );
     return _json(created)['id'] as String;

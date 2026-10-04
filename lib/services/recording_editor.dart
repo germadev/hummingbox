@@ -124,6 +124,7 @@ class RecordingEditor {
       waveform: result.levels,
       name: '${recording.name}$copySuffix',
       audio: audio,
+      folder: recording.folder,
     );
     if (copy == null) throw StateError('No se pudo registrar la copia');
     return copy;

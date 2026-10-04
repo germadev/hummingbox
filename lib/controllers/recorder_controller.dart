@@ -43,6 +43,9 @@ class RecorderController extends ChangeNotifier {
   StreamSubscription<double>? _amplitudeSubscription;
   Timer? _ticker;
   String? _currentPath;
+
+  /// Subcarpeta en la que se guarda la grabación en curso.
+  String _folder = '';
   bool _busy = false;
   bool _disposed = false;
 
@@ -57,11 +60,13 @@ class RecorderController extends ChangeNotifier {
   /// más reciente.
   List<double> get amplitudes => List.unmodifiable(_amplitudes);
 
-  /// Empieza una nueva grabación con el formato y la calidad de [options].
+  /// Empieza una nueva grabación con el formato y la calidad de [options],
+  /// que se guardará en la subcarpeta [folder].
   ///
   /// Devuelve `false` si el usuario no concedió el permiso del micrófono.
   Future<bool> start({
     RecordingOptions options = const RecordingOptions(),
+    String folder = '',
   }) async {
     if (isActive || _busy) return true;
     _busy = true;
@@ -73,6 +78,7 @@ class RecorderController extends ChangeNotifier {
       );
       await _recorder.start(path, options);
       _currentPath = path;
+      _folder = folder;
       _amplitudes.clear();
       _history.clear();
       _amplitudeSubscription = _recorder
@@ -123,6 +129,7 @@ class RecorderController extends ChangeNotifier {
             : duration,
         waveform: waveform,
         audio: probe?.info,
+        folder: _folder,
       );
     } finally {
       _busy = false;

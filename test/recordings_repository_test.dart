@@ -80,6 +80,7 @@ void main() {
       duration: Duration.zero,
       createdAt: createdAt,
       audio: audio,
+      folder: 'Clases',
     );
     expect(recording!.audio, audio);
 
@@ -92,6 +93,7 @@ void main() {
     final reloaded = (await newRepository().loadAll()).single;
     expect(reloaded.createdAt, createdAt);
     expect(reloaded.audio, audio);
+    expect(reloaded.folder, 'Clases');
     expect(reloaded.waveform, [0.5]);
     expect(reloaded.duration, const Duration(seconds: 7));
   });

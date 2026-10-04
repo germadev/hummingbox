@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -8,28 +9,76 @@ import '../models/recording_options.dart';
 
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
 class FolderSettings {
-  const FolderSettings({required this.id, required this.name});
+  const FolderSettings({
+    required this.id,
+    required this.name,
+    this.importFiles = true,
+    this.ignored = const {},
+  });
 
   /// Identificador persistente de la carpeta (ver `NativeFolder.id`).
   final String id;
   final String name;
 
-  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  /// Si las grabaciones que hay en la carpeta (y en sus subcarpetas) se
+  /// añaden a la app.
+  final bool importFiles;
+
+  /// Referencias de los archivos de la carpeta que no se importan: los de
+  /// las grabaciones que se eliminaron en la app.
+  final Set<String> ignored;
+
+  /// La misma carpeta, ignorando además el archivo [ref].
+  FolderSettings ignoring(String ref) => FolderSettings(
+    id: id,
+    name: name,
+    importFiles: importFiles,
+    ignored: {...ignored, ref},
+  );
+
+  FolderSettings withImportFiles(bool importFiles) => FolderSettings(
+    id: id,
+    name: name,
+    importFiles: importFiles,
+    ignored: ignored,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    if (!importFiles) 'import': false,
+    if (ignored.isNotEmpty) 'ignored': ignored.toList(),
+  };
 
   static FolderSettings? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final id = json['id'];
     final name = json['name'];
+    final ignored = json['ignored'];
     if (id is! String || name is! String) return null;
-    return FolderSettings(id: id, name: name);
+    return FolderSettings(
+      id: id,
+      name: name,
+      importFiles: json['import'] != false,
+      ignored: {
+        if (ignored is List)
+          for (final ref in ignored)
+            if (ref is String) ref,
+      },
+    );
   }
 
   @override
   bool operator ==(Object other) =>
-      other is FolderSettings && other.id == id && other.name == name;
+      other is FolderSettings &&
+      other.id == id &&
+      other.name == name &&
+      other.importFiles == importFiles &&
+      setEquals(other.ignored, ignored);
 
   @override
-  int get hashCode => Object.hash(id, name);
+  int get hashCode =>
+      Object.hash(id, name, importFiles, Object.hashAllUnordered(ignored));
 }
 
 /// Cuenta de Google Drive conectada y carpeta donde se guardan las copias.
@@ -65,6 +114,8 @@ class AppSettings {
     this.folder,
     this.drive,
     this.recording = const RecordingOptions(),
+    this.folders = const [],
+    this.openFolder = '',
   });
 
   /// Carpeta del dispositivo donde se guarda una copia de cada grabación, o
@@ -77,36 +128,80 @@ class AppSettings {
   /// Formato y calidad de las grabaciones nuevas.
   final RecordingOptions recording;
 
-  AppSettings withFolder(FolderSettings? folder) =>
-      AppSettings(folder: folder, drive: drive, recording: recording);
+  /// Subcarpetas creadas en la app, aunque todavía estén vacías.
+  final List<String> folders;
 
-  AppSettings withDrive(DriveSettings? drive) =>
-      AppSettings(folder: folder, drive: drive, recording: recording);
+  /// Subcarpeta abierta en la pantalla principal, en la que se graba; vacío
+  /// para la principal.
+  final String openFolder;
+
+  AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
+
+  AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
 
   AppSettings withRecording(RecordingOptions recording) =>
-      AppSettings(folder: folder, drive: drive, recording: recording);
+      _copy(recording: recording);
+
+  AppSettings withFolders(List<String> folders) => _copy(folders: folders);
+
+  AppSettings withOpenFolder(String openFolder) =>
+      _copy(openFolder: openFolder);
+
+  AppSettings _copy({
+    FolderSettings? Function()? folder,
+    DriveSettings? Function()? drive,
+    RecordingOptions? recording,
+    List<String>? folders,
+    String? openFolder,
+  }) => AppSettings(
+    folder: folder == null ? this.folder : folder(),
+    drive: drive == null ? this.drive : drive(),
+    recording: recording ?? this.recording,
+    folders: folders ?? this.folders,
+    openFolder: openFolder ?? this.openFolder,
+  );
 
   Map<String, dynamic> toJson() => {
     if (folder != null) 'folder': folder!.toJson(),
     if (drive != null) 'drive': drive!.toJson(),
     'recording': recording.toJson(),
+    if (folders.isNotEmpty) 'folders': folders,
+    if (openFolder.isNotEmpty) 'openFolder': openFolder,
   };
 
-  factory AppSettings.fromJson(Map<String, dynamic> json) => AppSettings(
-    folder: FolderSettings.fromJson(json['folder']),
-    drive: DriveSettings.fromJson(json['drive']),
-    recording: RecordingOptions.fromJson(json['recording']),
-  );
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    final folders = json['folders'];
+    final openFolder = json['openFolder'];
+    return AppSettings(
+      folder: FolderSettings.fromJson(json['folder']),
+      drive: DriveSettings.fromJson(json['drive']),
+      recording: RecordingOptions.fromJson(json['recording']),
+      folders: [
+        if (folders is List)
+          for (final name in folders)
+            if (name is String) name,
+      ],
+      openFolder: openFolder is String ? openFolder : '',
+    );
+  }
 
   @override
   bool operator ==(Object other) =>
       other is AppSettings &&
       other.folder == folder &&
       other.drive == drive &&
-      other.recording == recording;
+      other.recording == recording &&
+      listEquals(other.folders, folders) &&
+      other.openFolder == openFolder;
 
   @override
-  int get hashCode => Object.hash(folder, drive, recording);
+  int get hashCode => Object.hash(
+    folder,
+    drive,
+    recording,
+    Object.hashAll(folders),
+    openFolder,
+  );
 }
 
 /// Guarda las opciones en un archivo JSON.

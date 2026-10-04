@@ -12,6 +12,7 @@ import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
 import '../services/share_service.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/folder_drawer.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
@@ -50,21 +51,31 @@ class _HomeScreenState extends State<HomeScreen> {
   );
 
   late final AppLifecycleListener _lifecycle;
+  late final StreamSubscription<List<Recording>> _imports;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Todas las grabaciones, de todas las carpetas.
   List<Recording> _recordings = const [];
   bool _loading = true;
+
+  /// Subcarpeta abierta; vacío para la principal.
+  String get _folder => widget.sync.settings.openFolder;
 
   @override
   void initState() {
     super.initState();
-    // Al volver a la app se reintentan las copias pendientes.
+    // Al volver a la app se reintentan las copias pendientes y se buscan
+    // grabaciones nuevas en la carpeta.
     _lifecycle = AppLifecycleListener(onResume: _syncCopies);
+    _imports = widget.sync.imports.listen(_onImported);
+    widget.sync.load();
     _loadRecordings();
   }
 
   @override
   void dispose() {
     _lifecycle.dispose();
+    _imports.cancel();
     _recorder.dispose();
     _player.dispose();
     super.dispose();
@@ -170,6 +181,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _syncCopies() => unawaited(widget.sync.sync());
 
+  /// Añade a la lista las grabaciones que se acaban de traer de la carpeta.
+  void _onImported(List<Recording> imported) {
+    if (!mounted) return;
+    final known = {for (final r in _recordings) r.id};
+    final added = [
+      for (final r in imported)
+        if (!known.contains(r.id)) r,
+    ];
+    if (added.isEmpty) return;
+    setState(() {
+      _recordings = [..._recordings, ...added]
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    });
+    _showMessage(
+      added.length == 1
+          ? 'Se ha añadido 1 grabación de la carpeta'
+          : 'Se han añadido ${added.length} grabaciones de la carpeta',
+    );
+    unawaited(_addMissingDetails());
+  }
+
+  // --- Carpetas ---
+
+  /// Subcarpetas: las creadas en la app, las de la carpeta del dispositivo y
+  /// las de las grabaciones.
+  List<String> get _folderNames {
+    final names = <String>{
+      ...widget.sync.settings.folders,
+      ...widget.sync.deviceFolders,
+      for (final recording in _recordings) recording.folder,
+      _folder,
+    }..remove('');
+    return names.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  Future<void> _openFolder(String folder) async {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
+    await _player.stop();
+    await widget.sync.openFolder(folder);
+  }
+
+  Future<void> _createFolder() async {
+    final input = await showNameDialog(
+      context,
+      title: 'Nueva carpeta',
+      confirmLabel: 'Crear',
+    );
+    if (input == null || !mounted) return;
+    final name = safeFileName(input, fallback: '');
+    if (name.isEmpty || name.startsWith('.')) {
+      _showMessage('Ese nombre no vale para una carpeta');
+      return;
+    }
+    await widget.sync.createFolder(name);
+    if (!mounted) return;
+    await _openFolder(name);
+  }
+
   // --- Grabación ---
 
   Future<void> _onRecordPressed() async {
@@ -186,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await widget.sync.load();
       final started = await _recorder.start(
         options: widget.sync.settings.recording,
+        folder: _folder,
       );
       if (!started) {
         _showMessage(
@@ -335,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_player.isCurrent(recording)) await _player.stop();
     try {
-      await widget.repository.delete(recording);
+      await widget.sync.delete(recording);
       if (!mounted) return;
       setState(() {
         _recordings = [
@@ -369,9 +441,21 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Las carpetas y la abierta dependen de las opciones.
+    return ListenableBuilder(
+      listenable: Listenable.merge([_recorder, widget.sync]),
+      builder: (context, _) => _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
+    final folder = _folder;
+    final folderNames = _folderNames;
     final scaffold = Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Grabadora'),
+        // Nombre de la carpeta abierta, arriba a la izquierda.
+        title: Text(folder.isEmpty ? 'Grabadora' : folder),
         actions: [
           _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
           IconButton(
@@ -383,7 +467,24 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      body: _buildBody(),
+      // Se abre deslizando desde la izquierda. Al abrirlo se buscan
+      // subcarpetas nuevas.
+      drawer: FolderDrawer(
+        rootName: widget.sync.settings.folder?.name ?? 'Grabaciones',
+        folders: folderNames,
+        counts: {
+          for (final name in ['', ...folderNames]) name: _countIn(name),
+        },
+        selected: folder,
+        onSelected: _openFolder,
+        onCreate: _createFolder,
+      ),
+      onDrawerChanged: (opened) {
+        if (opened) _syncCopies();
+      },
+      // Mientras se graba no se cambia de carpeta.
+      drawerEnableOpenDragGesture: !_recorder.isActive,
+      body: _buildBody(folder),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
         onRecordPressed: _onRecordPressed,
@@ -391,32 +492,41 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Evita salir de la app por accidente en mitad de una grabación.
-    return ListenableBuilder(
-      listenable: _recorder,
+    // Evita salir de la app por accidente en mitad de una grabación. En una
+    // subcarpeta, «atrás» vuelve a la principal.
+    return PopScope(
+      canPop: !_recorder.isActive && folder.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_recorder.isActive) {
+          _showMessage('Detén la grabación antes de salir');
+        } else {
+          _openFolder('');
+        }
+      },
       child: scaffold,
-      builder: (context, child) => PopScope(
-        canPop: !_recorder.isActive,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _showMessage('Detén la grabación antes de salir');
-        },
-        child: child!,
-      ),
     );
   }
 
-  Widget _buildBody() {
+  int _countIn(String folder) =>
+      _recordings.where((recording) => recording.folder == folder).length;
+
+  Widget _buildBody(String folder) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_recordings.isEmpty) {
-      return const _EmptyState();
+    final recordings = [
+      for (final recording in _recordings)
+        if (recording.folder == folder) recording,
+    ];
+    if (recordings.isEmpty) {
+      return _EmptyState(inFolder: folder.isNotEmpty);
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _recordings.length,
+      itemCount: recordings.length,
       itemBuilder: (context, index) {
-        final recording = _recordings[index];
+        final recording = recordings[index];
         return RecordingTile(
           key: ValueKey(recording.id),
           recording: recording,
@@ -468,7 +578,10 @@ class _SyncIndicator extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.inFolder});
+
+  /// Si es una subcarpeta (vacía) y no la carpeta principal.
+  final bool inFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -480,15 +593,20 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.mic_none_rounded,
+              inFolder ? Icons.folder_open : Icons.mic_none_rounded,
               size: 72,
               color: theme.colorScheme.outline,
             ),
             const SizedBox(height: 16),
-            Text('Aún no hay grabaciones', style: theme.textTheme.titleMedium),
+            Text(
+              inFolder ? 'Esta carpeta está vacía' : 'Aún no hay grabaciones',
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
-              'Pulsa el botón rojo para empezar a grabar.',
+              inFolder
+                  ? 'Pulsa el botón rojo para grabar en ella.'
+                  : 'Pulsa el botón rojo para empezar a grabar.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

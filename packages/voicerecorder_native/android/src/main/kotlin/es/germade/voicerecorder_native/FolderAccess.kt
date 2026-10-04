@@ -13,13 +13,14 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 import java.io.FileInputStream
 import java.io.FileNotFoundException
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 
 /**
- * Copia archivos a una carpeta elegida por el usuario con el selector del
- * sistema (Storage Access Framework). El permiso sobre la carpeta se conserva
- * entre reinicios.
+ * Lee y copia archivos en una carpeta elegida por el usuario con el selector
+ * del sistema (Storage Access Framework) y en sus subcarpetas. El permiso
+ * sobre la carpeta se conserva entre reinicios.
  */
 internal class FolderAccess(private val context: Context) :
     MethodChannel.MethodCallHandler,
@@ -46,8 +47,32 @@ internal class FolderAccess(private val context: Context) :
                 val folder = call.argument<String>("folder") ?: return badArgs(result)
                 val source = call.argument<String>("source") ?: return badArgs(result)
                 val name = call.argument<String>("name") ?: return badArgs(result)
+                val subfolder = call.argument<String>("subfolder") ?: ""
                 val ref = call.argument<String>("ref")
-                runner.run(result) { writeFile(Uri.parse(folder), ref?.let(Uri::parse), source, name) }
+                runner.run(result) {
+                    writeFile(Uri.parse(folder), subfolder, ref?.let(Uri::parse), source, name)
+                }
+            }
+            "listFiles" -> {
+                val folder = call.argument<String>("folder") ?: return badArgs(result)
+                val subfolder = call.argument<String>("subfolder") ?: ""
+                runner.run(result) { listFiles(Uri.parse(folder), subfolder) }
+            }
+            "readFile" -> {
+                val ref = call.argument<String>("ref") ?: return badArgs(result)
+                val destination = call.argument<String>("destination") ?: return badArgs(result)
+                runner.run(result) {
+                    readFile(Uri.parse(ref), destination)
+                    null
+                }
+            }
+            "createFolder" -> {
+                val folder = call.argument<String>("folder") ?: return badArgs(result)
+                val name = call.argument<String>("name") ?: return badArgs(result)
+                runner.run(result) {
+                    subfolderDocument(Uri.parse(folder), name, create = true)
+                    null
+                }
             }
             "renameFile" -> {
                 val ref = call.argument<String>("ref") ?: return badArgs(result)
@@ -111,16 +136,100 @@ internal class FolderAccess(private val context: Context) :
         return true
     }
 
-    private fun writeFile(tree: Uri, ref: Uri?, source: String, name: String): String {
+    private fun writeFile(tree: Uri, subfolder: String, ref: Uri?, source: String, name: String): String {
         val resolver = context.contentResolver
         val existing = ref?.takeIf { exists(it) }
         val target = existing
-            ?: DocumentsContract.createDocument(resolver, folderDocument(tree), mimeTypeOf(name), name)
+            ?: DocumentsContract.createDocument(
+                resolver,
+                if (subfolder.isEmpty()) folderDocument(tree) else subfolderDocument(tree, subfolder, create = true)!!,
+                mimeTypeOf(name),
+                name,
+            )
             ?: throw IOException("No se pudo crear el archivo en la carpeta")
         openForWriting(target).use { output ->
             FileInputStream(source).use { input -> input.copyTo(output) }
         }
         return target.toString()
+    }
+
+    /**
+     * Archivos y subcarpetas de la carpeta o de su subcarpeta [subfolder]. Si
+     * la subcarpeta no existe, la lista está vacía.
+     */
+    private fun listFiles(tree: Uri, subfolder: String): List<Map<String, Any?>> {
+        val parent = if (subfolder.isEmpty()) {
+            folderDocument(tree)
+        } else {
+            subfolderDocument(tree, subfolder, create = false) ?: return emptyList()
+        }
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(
+            tree, DocumentsContract.getDocumentId(parent),
+        )
+        val files = mutableListOf<Map<String, Any?>>()
+        val cursor = context.contentResolver.query(
+            children,
+            arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+                DocumentsContract.Document.COLUMN_SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+            ),
+            null, null, null,
+        ) ?: throw IOException("No se pudo leer la carpeta")
+        cursor.use {
+            while (it.moveToNext()) {
+                val id = it.getString(0) ?: continue
+                val name = it.getString(1) ?: continue
+                files += mapOf(
+                    "ref" to DocumentsContract.buildDocumentUriUsingTree(tree, id).toString(),
+                    "name" to name,
+                    "isDirectory" to (it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR),
+                    "size" to if (it.isNull(3)) null else it.getLong(3),
+                    "modified" to if (it.isNull(4)) null else it.getLong(4),
+                )
+            }
+        }
+        return files
+    }
+
+    private fun readFile(ref: Uri, destination: String) {
+        val input = context.contentResolver.openInputStream(ref)
+            ?: throw IOException("No se pudo leer el archivo")
+        input.use { FileOutputStream(destination).use { output -> input.copyTo(output) } }
+    }
+
+    /**
+     * Documento de la subcarpeta [name] de la carpeta. Si no existe, la crea
+     * si [create] o devuelve `null`.
+     */
+    private fun subfolderDocument(tree: Uri, name: String, create: Boolean): Uri? {
+        val parent = folderDocument(tree)
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(
+            tree, DocumentsContract.getDocumentId(parent),
+        )
+        context.contentResolver.query(
+            children,
+            arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE,
+            ),
+            null, null, null,
+        )?.use {
+            while (it.moveToNext()) {
+                if (it.getString(1) == name &&
+                    it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
+                ) {
+                    return DocumentsContract.buildDocumentUriUsingTree(tree, it.getString(0))
+                }
+            }
+        }
+        if (!create) return null
+        return DocumentsContract.createDocument(
+            context.contentResolver, parent, DocumentsContract.Document.MIME_TYPE_DIR, name,
+        ) ?: throw IOException("No se pudo crear la carpeta")
     }
 
     /** Abre el documento truncándolo; algunos proveedores solo admiten "w". */

@@ -43,6 +43,29 @@ class NativeFolder {
   final String name;
 }
 
+/// Archivo o subcarpeta de una carpeta elegida por el usuario.
+class NativeFolderEntry {
+  const NativeFolderEntry({
+    required this.ref,
+    required this.name,
+    required this.isDirectory,
+    this.size,
+    this.modified,
+  });
+
+  /// Referencia persistente: el URI del documento en Android y la ruta
+  /// relativa a la carpeta en iOS.
+  final String ref;
+  final String name;
+  final bool isDirectory;
+
+  /// Tamaño en bytes, si se conoce.
+  final int? size;
+
+  /// Fecha de la última modificación, si se conoce.
+  final DateTime? modified;
+}
+
 /// Acceso a carpetas fuera de la app (almacenamiento del dispositivo, iCloud
 /// Drive, tarjeta SD…) elegidas por el usuario.
 class NativeFolders {
@@ -63,7 +86,8 @@ class NativeFolders {
     );
   }
 
-  /// Copia el archivo de [source] a la carpeta [folder].
+  /// Copia el archivo de [source] a la carpeta [folder] o, si se indica, a
+  /// su subcarpeta [subfolder] (que se crea si no existe).
   ///
   /// Si [ref] apunta a un archivo que sigue existiendo, se sobrescribe; si no,
   /// se crea uno nuevo llamado [name] (o con un sufijo si ya existe).
@@ -72,15 +96,66 @@ class NativeFolders {
     required String folder,
     required String source,
     required String name,
+    String subfolder = '',
     String? ref,
   }) async {
     final result = await _channel.invokeMethod<String>('writeFile', {
       'folder': folder,
+      'subfolder': subfolder,
       'source': source,
       'name': name,
       'ref': ref,
     });
     return result!;
+  }
+
+  /// Archivos y subcarpetas de [folder] o, si se indica, de su subcarpeta
+  /// [subfolder]. Si la subcarpeta no existe, devuelve una lista vacía.
+  Future<List<NativeFolderEntry>> listFiles({
+    required String folder,
+    String subfolder = '',
+  }) async {
+    final result = await _channel.invokeListMethod<Map<Object?, Object?>>(
+      'listFiles',
+      {'folder': folder, 'subfolder': subfolder},
+    );
+    return [
+      for (final entry in result ?? const <Map<Object?, Object?>>[])
+        NativeFolderEntry(
+          ref: entry['ref']! as String,
+          name: entry['name']! as String,
+          isDirectory: entry['isDirectory'] == true,
+          size: (entry['size'] as num?)?.toInt(),
+          modified: switch (entry['modified']) {
+            final num millis => DateTime.fromMillisecondsSinceEpoch(
+              millis.toInt(),
+            ),
+            _ => null,
+          },
+        ),
+    ];
+  }
+
+  /// Copia el archivo [ref] de la carpeta [folder] a la ruta local
+  /// [destination]. En iCloud Drive lo descarga si hace falta.
+  Future<void> readFile({
+    required String folder,
+    required String ref,
+    required String destination,
+  }) {
+    return _channel.invokeMethod<void>('readFile', {
+      'folder': folder,
+      'ref': ref,
+      'destination': destination,
+    });
+  }
+
+  /// Crea la subcarpeta [name] en [folder], si no existe ya.
+  Future<void> createFolder({required String folder, required String name}) {
+    return _channel.invokeMethod<void>('createFolder', {
+      'folder': folder,
+      'name': name,
+    });
   }
 
   /// Renombra el archivo [ref] de la carpeta [folder]. Devuelve su nueva

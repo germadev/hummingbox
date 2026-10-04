@@ -2,18 +2,42 @@ import 'package:voicerecorder_native/voicerecorder_native.dart';
 
 import 'settings_store.dart';
 
-/// Acceso a una carpeta del dispositivo elegida por el usuario. Abstraído
-/// para poder sustituirlo en los tests.
+/// Archivo o subcarpeta de la carpeta elegida por el usuario.
+class FolderEntry {
+  const FolderEntry({
+    required this.ref,
+    required this.name,
+    this.isDirectory = false,
+    this.size,
+    this.modified,
+  });
+
+  /// Referencia persistente del archivo (ver [FolderAccess.writeFile]).
+  final String ref;
+  final String name;
+  final bool isDirectory;
+
+  /// Tamaño en bytes, si se conoce.
+  final int? size;
+
+  /// Fecha de la última modificación, si se conoce.
+  final DateTime? modified;
+}
+
+/// Acceso a una carpeta del dispositivo elegida por el usuario y a sus
+/// subcarpetas. Abstraído para poder sustituirlo en los tests.
 abstract interface class FolderAccess {
   /// Abre el selector de carpetas. Devuelve `null` si se cancela.
   Future<FolderSettings?> pickFolder();
 
-  /// Copia [source] a la carpeta: sobrescribe [ref] si existe o crea un
-  /// archivo llamado [name]. Devuelve la referencia del archivo.
+  /// Copia [source] a la carpeta o a su subcarpeta [subfolder]: sobrescribe
+  /// [ref] si existe o crea un archivo llamado [name]. Devuelve la
+  /// referencia del archivo.
   Future<String> writeFile({
     required String folder,
     required String source,
     required String name,
+    String subfolder = '',
     String? ref,
   });
 
@@ -23,6 +47,22 @@ abstract interface class FolderAccess {
     required String ref,
     required String name,
   });
+
+  /// Archivos y subcarpetas de la carpeta o de su subcarpeta [subfolder].
+  Future<List<FolderEntry>> listFiles({
+    required String folder,
+    String subfolder = '',
+  });
+
+  /// Copia el archivo [ref] de la carpeta a la ruta local [destination].
+  Future<void> readFile({
+    required String folder,
+    required String ref,
+    required String destination,
+  });
+
+  /// Crea la subcarpeta [name], si no existe.
+  Future<void> createFolder({required String folder, required String name});
 }
 
 /// Implementación con el selector y los permisos del sistema.
@@ -43,8 +83,15 @@ class PlatformFolderAccess implements FolderAccess {
     required String folder,
     required String source,
     required String name,
+    String subfolder = '',
     String? ref,
-  }) => _native.writeFile(folder: folder, source: source, name: name, ref: ref);
+  }) => _native.writeFile(
+    folder: folder,
+    source: source,
+    name: name,
+    subfolder: subfolder,
+    ref: ref,
+  );
 
   @override
   Future<String> renameFile({
@@ -52,4 +99,33 @@ class PlatformFolderAccess implements FolderAccess {
     required String ref,
     required String name,
   }) => _native.renameFile(folder: folder, ref: ref, name: name);
+
+  @override
+  Future<List<FolderEntry>> listFiles({
+    required String folder,
+    String subfolder = '',
+  }) async => [
+    for (final entry in await _native.listFiles(
+      folder: folder,
+      subfolder: subfolder,
+    ))
+      FolderEntry(
+        ref: entry.ref,
+        name: entry.name,
+        isDirectory: entry.isDirectory,
+        size: entry.size,
+        modified: entry.modified,
+      ),
+  ];
+
+  @override
+  Future<void> readFile({
+    required String folder,
+    required String ref,
+    required String destination,
+  }) => _native.readFile(folder: folder, ref: ref, destination: destination);
+
+  @override
+  Future<void> createFolder({required String folder, required String name}) =>
+      _native.createFolder(folder: folder, name: name);
 }

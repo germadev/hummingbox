@@ -21,9 +21,10 @@ abstract interface class RecordingsRepository {
   /// Devuelve todas las grabaciones, de la más reciente a la más antigua.
   Future<List<Recording>> loadAll();
 
-  /// Registra el archivo de audio de [path] como una nueva grabación, con
-  /// [name] o, si no se indica, el siguiente nombre libre ("Grabación N"), y
-  /// con fecha [createdAt] o, si no se indica, la actual.
+  /// Registra el archivo de audio de [path] como una nueva grabación de la
+  /// subcarpeta [folder], con [name] o, si no se indica, el siguiente nombre
+  /// libre ("Grabación N"), y con fecha [createdAt] o, si no se indica, la
+  /// actual.
   ///
   /// Devuelve `null` si el archivo no existe.
   Future<Recording?> add({
@@ -34,6 +35,7 @@ abstract interface class RecordingsRepository {
     DateTime? createdAt,
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
+    String folder = '',
   });
 
   Future<Recording> rename(Recording recording, String name);
@@ -163,6 +165,7 @@ class FileRecordingsRepository implements RecordingsRepository {
     DateTime? createdAt,
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
+    String folder = '',
   }) async {
     if (!await File(path).exists()) return null;
 
@@ -180,6 +183,7 @@ class FileRecordingsRepository implements RecordingsRepository {
         waveform: waveform,
         audio: audio,
         copies: copies,
+        folder: folder,
       );
       index[recording.id] = recording.toMetadata();
       await _writeIndex(directory, index);

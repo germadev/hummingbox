@@ -151,6 +151,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
     DateTime? createdAt,
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
+    String folder = '',
   }) async {
     final recording = Recording(
       id: p.basenameWithoutExtension(path),
@@ -165,6 +166,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
       waveform: waveform,
       audio: audio,
       copies: copies,
+      folder: folder,
     );
     recordings.add(recording);
     return recording;
@@ -194,6 +196,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         revision: current.revision + 1,
         copies: current.copies,
         audio: audio,
+        folder: current.folder,
       ),
     );
   }
@@ -362,13 +365,53 @@ class FakeFolderAccess implements FolderAccess {
     name: 'Music',
   );
 
-  /// Archivos de la carpeta: referencia → nombre.
+  /// Archivos: referencia → nombre.
   final files = <String, String>{};
+
+  /// Carpeta (id) de cada archivo.
+  final owners = <String, String>{};
+
+  /// Subcarpeta de cada archivo; si no está, la principal.
+  final fileFolders = <String, String>{};
+
+  /// Tamaño de cada archivo, si se conoce.
+  final sizes = <String, int>{};
+
+  /// Contenido de los archivos que se pueden leer.
+  final contents = <String, List<int>>{};
+  final modified = <String, DateTime>{};
+
+  /// Subcarpetas de cada carpeta (id).
+  final subfolders = <String, Set<String>>{};
   final calls = <String>[];
 
   /// Si se indica, las escrituras fallan con este error.
   PlatformException? writeError;
+
+  /// Si se indica, leer la carpeta falla con este error.
+  PlatformException? listError;
   var _counter = 0;
+
+  /// Añade un archivo a la carpeta [folder] (o a su [subfolder]).
+  String addFile(
+    String folder,
+    String name, {
+    String subfolder = '',
+    List<int> bytes = const [1, 2, 3],
+    DateTime? modified,
+  }) {
+    final ref = 'doc${_counter++}';
+    files[ref] = name;
+    owners[ref] = folder;
+    if (subfolder.isNotEmpty) {
+      fileFolders[ref] = subfolder;
+      subfolders.putIfAbsent(folder, () => {}).add(subfolder);
+    }
+    sizes[ref] = bytes.length;
+    contents[ref] = bytes;
+    if (modified != null) this.modified[ref] = modified;
+    return ref;
+  }
 
   @override
   Future<FolderSettings?> pickFolder() async => picked;
@@ -378,14 +421,23 @@ class FakeFolderAccess implements FolderAccess {
     required String folder,
     required String source,
     required String name,
+    String subfolder = '',
     String? ref,
   }) async {
-    calls.add('write $name${ref == null ? '' : ' ($ref)'}');
+    final path = subfolder.isEmpty ? name : '$subfolder/$name';
+    calls.add('write $path${ref == null ? '' : ' ($ref)'}');
     if (writeError case final error?) throw error;
     final target = ref != null && files.containsKey(ref)
         ? ref
         : 'doc${_counter++}';
     files.putIfAbsent(target, () => name);
+    owners.putIfAbsent(target, () => folder);
+    if (subfolder.isNotEmpty) {
+      fileFolders.putIfAbsent(target, () => subfolder);
+      subfolders.putIfAbsent(folder, () => {}).add(subfolder);
+    }
+    final file = File(source);
+    if (file.existsSync()) sizes[target] = file.lengthSync();
     return target;
   }
 
@@ -401,6 +453,53 @@ class FakeFolderAccess implements FolderAccess {
     }
     files[ref] = name;
     return ref;
+  }
+
+  @override
+  Future<List<FolderEntry>> listFiles({
+    required String folder,
+    String subfolder = '',
+  }) async {
+    if (listError case final error?) throw error;
+    return [
+      if (subfolder.isEmpty)
+        for (final name in subfolders[folder] ?? const <String>{})
+          FolderEntry(ref: 'dir:$name', name: name, isDirectory: true),
+      for (final MapEntry(key: ref, value: name) in files.entries)
+        if (owners[ref] == folder && (fileFolders[ref] ?? '') == subfolder)
+          FolderEntry(
+            ref: ref,
+            name: name,
+            size: sizes[ref],
+            modified: modified[ref],
+          ),
+    ];
+  }
+
+  @override
+  Future<void> readFile({
+    required String folder,
+    required String ref,
+    required String destination,
+  }) async {
+    calls.add('read $ref');
+    final bytes = contents[ref];
+    if (bytes == null) {
+      throw PlatformException(code: 'failed', message: 'No se puede leer');
+    }
+    // En los tests de widgets las rutas son falsas: no se escribe nada.
+    if (Directory(p.dirname(destination)).existsSync()) {
+      File(destination).writeAsBytesSync(bytes);
+    }
+  }
+
+  @override
+  Future<void> createFolder({
+    required String folder,
+    required String name,
+  }) async {
+    calls.add('mkdir $name');
+    subfolders.putIfAbsent(folder, () => {}).add(name);
   }
 }
 
@@ -433,9 +532,11 @@ class FakeDriveService implements DriveService {
     required String folderId,
     required String path,
     required String name,
+    String subfolder = '',
     String? fileId,
   }) async {
-    calls.add('upload $name${fileId == null ? '' : ' ($fileId)'}');
+    final file = subfolder.isEmpty ? name : '$subfolder/$name';
+    calls.add('upload $file${fileId == null ? '' : ' ($fileId)'}');
     if (uploadError case final error?) throw error;
     final id = fileId != null && files.containsKey(fileId)
         ? fileId
@@ -465,5 +566,7 @@ CopySync fakeCopySync(
     store: store ?? InMemorySettingsStore(),
     folders: folders ?? FakeFolderAccess(),
     drive: drive ?? FakeDriveService(),
+    // Sin archivos de verdad que leer.
+    probe: (_) async => null,
   );
 }

@@ -18,13 +18,40 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
+  bool _scanning = false;
 
   CopySync get _sync => widget.sync;
 
   Future<void> _pickFolder() async {
     try {
-      final folder = await _sync.folders.pickFolder();
-      if (folder == null) return;
+      final picked = await _sync.folders.pickFolder();
+      if (picked == null || !mounted) return;
+      var folder = picked;
+
+      // Antes de copiar a la app lo que haya en la carpeta, se pregunta (por
+      // si se elige por error una carpeta con mucha música, por ejemplo).
+      setState(() => _scanning = true);
+      final FolderScan scan;
+      try {
+        scan = await _sync.scanFolder(picked);
+      } finally {
+        if (mounted) setState(() => _scanning = false);
+      }
+      if (scan.count > 0) {
+        if (!mounted) return;
+        final files = scan.count == 1 ? '1 audio' : '${scan.count} audios';
+        final add = await showConfirmDialog(
+          context,
+          title: '¿Añadir las grabaciones de la carpeta?',
+          message:
+              '«${picked.name}» tiene $files '
+              '(${formatMegabytes(scan.bytes)}) que no están en la app. Si '
+              'los añades, aparecerán en la lista y se copiarán a la app.',
+          confirmLabel: 'Añadir',
+          cancelLabel: 'No añadir',
+        );
+        folder = picked.withImportFiles(add);
+      }
       await _sync.setFolder(folder);
     } catch (_) {
       _showMessage('No se pudo usar esa carpeta');
@@ -192,8 +219,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Las grabaciones se guardan siempre dentro de la app. '
                   'Además, puedes guardar una copia de cada una en una carpeta '
                   'del dispositivo y en Google Drive, con el nombre que le '
-                  'hayas dado. Las copias se actualizan al renombrar o editar '
-                  'una grabación, pero no se borran al eliminarla.',
+                  'hayas dado y en su subcarpeta. Las copias se actualizan al '
+                  'renombrar o editar una grabación, pero no se borran al '
+                  'eliminarla.',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -217,14 +245,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                 onTap: _pickFolder,
               ),
-              if (folder != null)
+              if (_scanning) const LinearProgressIndicator(),
+              if (folder != null) ...[
                 Padding(
                   padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
-                  child: TextButton(
-                    onPressed: _pickFolder,
-                    child: const Text('Elegir otra carpeta'),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton(
+                      onPressed: _pickFolder,
+                      child: const Text('Elegir otra carpeta'),
+                    ),
                   ),
                 ),
+                SwitchListTile(
+                  key: const Key('import-option'),
+                  secondary: const Icon(Icons.library_music_outlined),
+                  title: const Text('Mostrar las grabaciones de la carpeta'),
+                  subtitle: const Text(
+                    'Añade a la app los audios (.m4a y .wav) que haya en la '
+                    'carpeta y en sus subcarpetas',
+                  ),
+                  value: folder.importFiles,
+                  onChanged: _sync.setImportFiles,
+                ),
+              ],
               if (errors[FolderCopyTarget.targetKey] case final error?)
                 _ErrorText(error),
               const Divider(),
@@ -300,9 +344,28 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _ErrorText extends StatelessWidget {
-  const _ErrorText(this.text);
+  const _ErrorText(this.error);
 
-  final String text;
+  final CopyError error;
+
+  String get text {
+    final count = error.count;
+    final message = switch (error.kind) {
+      CopyErrorKind.copy =>
+        count == 1
+            ? 'No se pudo copiar 1 grabación'
+            : 'No se pudieron copiar $count grabaciones',
+      CopyErrorKind.import =>
+        count == 1
+            ? 'No se pudo añadir 1 grabación de la carpeta'
+            : 'No se pudieron añadir $count grabaciones de la carpeta',
+      CopyErrorKind.readFolder => 'No se pudo leer la carpeta',
+      CopyErrorKind.readRecordings => 'No se pudieron leer las grabaciones',
+      CopyErrorKind.driveAuth => 'Vuelve a conectar tu cuenta de Google Drive',
+    };
+    final detail = error.offline ? 'Sin conexión' : error.detail;
+    return detail == null ? message : '$message: $detail';
+  }
 
   @override
   Widget build(BuildContext context) {

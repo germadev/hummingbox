@@ -14,6 +14,7 @@ class Recording {
     this.revision = 0,
     this.copies = const {},
     this.audio,
+    this.folder = '',
   });
 
   /// Construye una grabación a partir de los metadatos guardados en el índice.
@@ -34,6 +35,7 @@ class Recording {
       waveform: decodeWaveform(json['waveform']),
       revision: json['revision'] as int? ?? 0,
       audio: AudioInfo.fromJson(json['audio']),
+      folder: json['folder'] as String? ?? '',
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -71,6 +73,10 @@ class Recording {
   /// se han leído.
   final AudioInfo? audio;
 
+  /// Subcarpeta en la que está (en la app y en la carpeta del dispositivo);
+  /// vacío si está en la principal.
+  final String folder;
+
   /// Formato del archivo según su extensión.
   RecordingFormat get format =>
       RecordingFormat.fromPath(path) ?? RecordingFormat.aac;
@@ -82,6 +88,7 @@ class Recording {
     if (waveform != null) 'waveform': encodeWaveform(waveform!),
     if (revision != 0) 'revision': revision,
     if (audio != null) 'audio': audio!.toJson(),
+    if (folder.isNotEmpty) 'folder': folder,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -106,6 +113,7 @@ class Recording {
       revision: revision ?? this.revision,
       copies: copies ?? this.copies,
       audio: audio ?? this.audio,
+      folder: folder,
     );
   }
 }

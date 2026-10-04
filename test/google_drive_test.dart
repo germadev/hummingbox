@@ -80,6 +80,25 @@ void main() {
     });
   });
 
+  test('busca y crea las subcarpetas dentro de la de la app', () async {
+    final drive = api((request) async {
+      if (request.method == 'GET') return json({'files': <Object>[]});
+      return json({'id': 'sub1'});
+    });
+
+    expect(await drive.ensureFolder('Clases', parentId: 'folder1'), 'sub1');
+    expect(
+      requests.first.url.queryParameters['q'],
+      "mimeType='application/vnd.google-apps.folder' and name='Clases' "
+      "and trashed=false and 'folder1' in parents",
+    );
+    expect(jsonDecode(requests.last.body), {
+      'name': 'Clases',
+      'mimeType': 'application/vnd.google-apps.folder',
+      'parents': ['folder1'],
+    });
+  });
+
   test('sube un archivo nuevo con una subida reanudable', () async {
     final drive = api((request) async {
       if (request.method == 'POST') {
