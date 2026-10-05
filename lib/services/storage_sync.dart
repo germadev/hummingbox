@@ -355,6 +355,10 @@ class StorageSync extends ChangeNotifier {
   Future<void> setCountdown(int seconds) =>
       _change((settings) => settings.withCountdown(seconds));
 
+  /// Elige si la pantalla se mantiene encendida mientras se graba.
+  Future<void> setKeepScreenOn(bool keepScreenOn) =>
+      _change((settings) => settings.withKeepScreenOn(keepScreenOn));
+
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>
       _change((settings) => settings.withOpenFolder(name));

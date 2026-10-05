@@ -342,6 +342,13 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => 'Garder l\'écran allumé';
+
+  @override
+  String get keepScreenOnSubtitle =>
+      'Pendant l\'enregistrement ou l\'attente avant de commencer, pour que le système n\'arrête pas l\'app';
+
+  @override
   String get recordingSection => 'Enregistrement';
 
   @override

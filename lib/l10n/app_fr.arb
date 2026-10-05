@@ -99,6 +99,8 @@
   "countdown": "Compte à rebours",
   "secondsCount": "{seconds} secondes",
   "countdownSubtitle": "{seconds} secondes avant d'enregistrer avec le bouton de compte à rebours",
+  "keepScreenOn": "Garder l'écran allumé",
+  "keepScreenOnSubtitle": "Pendant l'enregistrement ou l'attente avant de commencer, pour que le système n'arrête pas l'app",
   "recordingSection": "Enregistrement",
   "formatNote": "S'applique aux nouveaux enregistrements. Lors de la modification, chaque enregistrement conserve son format.",
   "storageSection": "Emplacement des enregistrements",

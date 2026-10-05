@@ -105,6 +105,18 @@ void main() {
     expect(find.textContaining('10 segundos antes'), findsOneWidget);
   });
 
+  testWidgets('desactiva mantener la pantalla encendida', (tester) async {
+    await pumpSettings(tester);
+    final option = find.byKey(const Key('keep-screen-on-option'));
+    expect(tester.widget<SwitchListTile>(option).value, isTrue);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+
+    expect(store.settings.keepScreenOn, isFalse);
+    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+  });
+
   testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {
     await pumpSettings(tester);
 

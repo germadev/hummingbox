@@ -93,6 +93,7 @@ class AppSettings {
     this.folders = const [],
     this.openFolder = '',
     this.countdownSeconds = defaultCountdown,
+    this.keepScreenOn = true,
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -131,6 +132,10 @@ class AppSettings {
   /// Segundos de la cuenta atrás antes de empezar a grabar.
   final int countdownSeconds;
 
+  /// Si la pantalla se mantiene encendida mientras se graba (o se espera para
+  /// empezar), para que el sistema no pare la app al apagarse.
+  final bool keepScreenOn;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -145,6 +150,9 @@ class AppSettings {
 
   AppSettings withCountdown(int seconds) => _copy(countdownSeconds: seconds);
 
+  AppSettings withKeepScreenOn(bool keepScreenOn) =>
+      _copy(keepScreenOn: keepScreenOn);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -152,6 +160,7 @@ class AppSettings {
     List<String>? folders,
     String? openFolder,
     int? countdownSeconds,
+    bool? keepScreenOn,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -159,6 +168,7 @@ class AppSettings {
     folders: folders ?? this.folders,
     openFolder: openFolder ?? this.openFolder,
     countdownSeconds: countdownSeconds ?? this.countdownSeconds,
+    keepScreenOn: keepScreenOn ?? this.keepScreenOn,
   );
 
   Map<String, dynamic> toJson() => {
@@ -168,6 +178,7 @@ class AppSettings {
     if (folders.isNotEmpty) 'folders': folders,
     if (openFolder.isNotEmpty) 'openFolder': openFolder,
     if (countdownSeconds != defaultCountdown) 'countdown': countdownSeconds,
+    if (!keepScreenOn) 'keepScreenOn': false,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -187,6 +198,7 @@ class AppSettings {
       countdownSeconds: countdownChoices.contains(countdown)
           ? countdown as int
           : defaultCountdown,
+      keepScreenOn: json['keepScreenOn'] != false,
     );
   }
 
@@ -198,7 +210,8 @@ class AppSettings {
       other.recording == recording &&
       listEquals(other.folders, folders) &&
       other.openFolder == openFolder &&
-      other.countdownSeconds == countdownSeconds;
+      other.countdownSeconds == countdownSeconds &&
+      other.keepScreenOn == keepScreenOn;
 
   @override
   int get hashCode => Object.hash(
@@ -208,6 +221,7 @@ class AppSettings {
     Object.hashAll(folders),
     openFolder,
     countdownSeconds,
+    keepScreenOn,
   );
 }
 

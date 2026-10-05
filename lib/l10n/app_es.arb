@@ -99,6 +99,8 @@
   "countdown": "Cuenta atrás",
   "secondsCount": "{seconds} segundos",
   "countdownSubtitle": "{seconds} segundos antes de empezar a grabar con el botón de cuenta atrás",
+  "keepScreenOn": "Mantener la pantalla encendida",
+  "keepScreenOnSubtitle": "Mientras se graba o se espera para empezar, para que el sistema no detenga la app",
   "recordingSection": "Grabación",
   "formatNote": "Se aplica a las grabaciones nuevas. Al editar, cada grabación conserva su formato.",
   "storageSection": "Dónde se guardan las grabaciones",

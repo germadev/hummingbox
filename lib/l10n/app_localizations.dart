@@ -704,6 +704,18 @@ abstract class AppLocalizations {
   /// **'{seconds} seconds before recording with the countdown button'**
   String countdownSubtitle(int seconds);
 
+  /// Opción para que la pantalla no se apague mientras se graba
+  ///
+  /// In en, this message translates to:
+  /// **'Keep the screen on'**
+  String get keepScreenOn;
+
+  /// No description provided for @keepScreenOnSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'While recording or waiting to start, so the system doesn\'t stop the app'**
+  String get keepScreenOnSubtitle;
+
   /// Sección de las opciones
   ///
   /// In en, this message translates to:

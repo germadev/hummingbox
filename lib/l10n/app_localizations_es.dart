@@ -337,6 +337,13 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => 'Mantener la pantalla encendida';
+
+  @override
+  String get keepScreenOnSubtitle =>
+      'Mientras se graba o se espera para empezar, para que el sistema no detenga la app';
+
+  @override
   String get recordingSection => 'Grabación';
 
   @override

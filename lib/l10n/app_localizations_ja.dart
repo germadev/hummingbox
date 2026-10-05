@@ -331,6 +331,12 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => '画面をオンのままにする';
+
+  @override
+  String get keepScreenOnSubtitle => '録音中や開始を待つ間、システムがアプリを停止しないように';
+
+  @override
   String get recordingSection => '録音';
 
   @override

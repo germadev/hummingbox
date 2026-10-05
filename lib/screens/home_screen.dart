@@ -12,6 +12,7 @@ import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
+import '../services/screen_awake.dart';
 import '../services/settings_store.dart';
 import '../services/share_service.dart';
 import '../services/storage_sync.dart';
@@ -31,6 +32,7 @@ class HomeScreen extends StatefulWidget {
     required this.playerFactory,
     required this.editor,
     required this.sync,
+    this.screen = const PlatformScreenAwake(),
   });
 
   final RecordingsRepository repository;
@@ -41,6 +43,10 @@ class HomeScreen extends StatefulWidget {
   /// Dónde se guardan las grabaciones (la carpeta del dispositivo o Google
   /// Drive) y el resto de las opciones.
   final StorageSync sync;
+
+  /// Mantiene la pantalla encendida mientras se graba (si está activado en
+  /// las opciones).
+  final ScreenAwake screen;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -76,6 +82,8 @@ class _HomeScreenState extends State<HomeScreen> {
     // destino.
     _lifecycle = AppLifecycleListener(onResume: _syncStorage);
     _changes = widget.sync.changes.listen(_onStorageChanged);
+    _recorder.addListener(_updateScreen);
+    widget.sync.addListener(_updateScreen);
     widget.sync.load();
     _loadRecordings();
   }
@@ -91,6 +99,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _lifecycle.dispose();
     _changes.cancel();
+    widget.sync.removeListener(_updateScreen);
+    if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
     _recorder.dispose();
     _player.dispose();
     super.dispose();
@@ -200,6 +210,18 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _syncStorage() => unawaited(widget.sync.sync());
+
+  bool _screenKeptOn = false;
+
+  /// Mantiene la pantalla encendida mientras se graba o se espera para
+  /// empezar (si está activado): al apagarse, el sistema puede parar la app y
+  /// con ella la grabación.
+  void _updateScreen() {
+    final keepOn = _recorder.isBusy && widget.sync.settings.keepScreenOn;
+    if (keepOn == _screenKeptOn) return;
+    _screenKeptOn = keepOn;
+    unawaited(widget.screen.keepOn(keepOn));
+  }
 
   /// Vuelve a cargar la lista cuando cambian las grabaciones del destino
   /// (hay nuevas, se han borrado o cambiado fuera de la app, o se ha elegido

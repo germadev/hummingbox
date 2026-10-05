@@ -241,6 +241,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 onTap: _chooseCountdown,
               ),
+              SwitchListTile(
+                key: const Key('keep-screen-on-option'),
+                secondary: const Icon(Icons.light_mode_outlined),
+                title: Text(l10n.keepScreenOn),
+                subtitle: Text(l10n.keepScreenOnSubtitle),
+                value: settings.keepScreenOn,
+                onChanged: _sync.setKeepScreenOn,
+              ),
               const Divider(),
               _SectionTitle(l10n.storageSection),
               Padding(

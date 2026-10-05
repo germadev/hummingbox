@@ -62,6 +62,14 @@ void main() {
     expect(await store.load(), settings);
   });
 
+  test('mantiene la pantalla encendida salvo que se desactive', () async {
+    expect((await store.load()).keepScreenOn, isTrue);
+
+    await store.save(const AppSettings(keepScreenOn: false));
+    expect((await store.load()).keepScreenOn, isFalse);
+    expect(const AppSettings().toJson().containsKey('keepScreenOn'), isFalse);
+  });
+
   test('las grabaciones van a la carpeta y, si no hay, a Drive', () {
     const folder = FolderSettings(id: 'tree://music', name: 'Music');
     const drive = DriveSettings(email: 'ana@example.com', folderId: 'f1');

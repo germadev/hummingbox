@@ -99,6 +99,8 @@
   "countdown": "Countdown",
   "secondsCount": "{seconds} Sekunden",
   "countdownSubtitle": "{seconds} Sekunden vor der Aufnahme mit der Countdown-Taste",
+  "keepScreenOn": "Bildschirm eingeschaltet lassen",
+  "keepScreenOnSubtitle": "Während der Aufnahme oder beim Warten auf den Start, damit das System die App nicht beendet",
   "recordingSection": "Aufnahme",
   "formatNote": "Gilt für neue Aufnahmen. Beim Bearbeiten behält jede Aufnahme ihr Format.",
   "storageSection": "Speicherort der Aufnahmen",

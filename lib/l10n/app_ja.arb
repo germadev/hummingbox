@@ -99,6 +99,8 @@
   "countdown": "カウントダウン",
   "secondsCount": "{seconds} 秒",
   "countdownSubtitle": "カウントダウンボタンで録音を始めるまで {seconds} 秒",
+  "keepScreenOn": "画面をオンのままにする",
+  "keepScreenOnSubtitle": "録音中や開始を待つ間、システムがアプリを停止しないように",
   "recordingSection": "録音",
   "formatNote": "新しい録音に適用されます。編集しても各録音の形式は変わりません。",
   "storageSection": "録音の保存先",

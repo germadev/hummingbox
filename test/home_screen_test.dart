@@ -20,6 +20,7 @@ void main() {
   late InMemorySettingsStore store;
   late FakeFolderAccess folders;
   late FakeDriveService drive;
+  late FakeScreenAwake screen;
 
   setUpAll(() => initializeDateFormatting('es'));
 
@@ -30,6 +31,7 @@ void main() {
     store = InMemorySettingsStore(const AppSettings(folder: testFolder));
     folders = FakeFolderAccess();
     drive = FakeDriveService();
+    screen = FakeScreenAwake();
   });
 
   Recording sample(
@@ -66,6 +68,7 @@ void main() {
           folders: folders,
           drive: drive,
         ),
+        screen: screen,
       ),
     );
     await tester.pumpAndSettle();
@@ -113,6 +116,38 @@ void main() {
     expect(find.text('Grabación 1'), findsOneWidget);
     expect(find.text('Guardada como «Grabación 1»'), findsOneWidget);
     expect(recorder.calls, ['hasPermission', 'start', 'pause', 'stop']);
+  });
+
+  testWidgets('mantiene la pantalla encendida mientras graba', (tester) async {
+    await pumpApp(tester);
+    expect(screen.calls, isEmpty);
+
+    await tester.tap(record());
+    await pumpAnimations(tester);
+    expect(screen.calls, [true]);
+
+    // En pausa sigue la grabación en curso.
+    await tester.tap(find.byKey(const Key('pause-button')));
+    await pumpAnimations(tester);
+    expect(screen.calls, [true]);
+
+    await tester.tap(record());
+    await tester.pumpAndSettle();
+    expect(screen.calls, [true, false]);
+  });
+
+  testWidgets('no mantiene la pantalla encendida si está desactivado', (
+    tester,
+  ) async {
+    store.settings = store.settings.withKeepScreenOn(false);
+    await pumpApp(tester);
+
+    await tester.tap(record());
+    await pumpAnimations(tester);
+    await tester.tap(record());
+    await tester.pumpAndSettle();
+
+    expect(screen.calls, isEmpty);
   });
 
   testWidgets('avisa si no hay permiso de micrófono', (tester) async {
@@ -395,6 +430,10 @@ void main() {
 
       await tester.tap(find.byKey(const Key('settings-button')));
       await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byTooltip('Dejar de usar la carpeta'),
+        200,
+      );
       await tester.tap(find.byTooltip('Dejar de usar la carpeta'));
       await tester.pumpAndSettle();
       expect(find.text('¿Dejar de usar «Grabaciones»?'), findsOneWidget);
@@ -831,6 +870,7 @@ void main() {
 
     expect(find.text('Opciones'), findsOneWidget);
     expect(find.text('Formato'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Carpeta del dispositivo'), 200);
     expect(find.text('Carpeta del dispositivo'), findsOneWidget);
   });
 }

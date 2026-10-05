@@ -15,6 +15,7 @@ import 'package:voicerecorder/services/folder_access.dart';
 import 'package:voicerecorder/services/google_drive.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
+import 'package:voicerecorder/services/screen_awake.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/services/storage_sync.dart';
 
@@ -425,6 +426,16 @@ class FakeRecordingEditor extends RecordingEditor {
     previews.add(edit);
     return '/fake/editor/preview_${previews.length - 1}.wav';
   }
+}
+
+class FakeScreenAwake implements ScreenAwake {
+  /// Valores pedidos, en orden.
+  final calls = <bool>[];
+
+  bool get isKeptOn => calls.isNotEmpty && calls.last;
+
+  @override
+  Future<void> keepOn(bool on) async => calls.add(on);
 }
 
 class InMemorySettingsStore implements SettingsStore {

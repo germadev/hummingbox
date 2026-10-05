@@ -7,6 +7,7 @@ import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
+import 'services/screen_awake.dart';
 import 'services/storage_sync.dart';
 
 /// Morado del icono (`docs/icono.svg`), del que sale el tema de la app.
@@ -23,6 +24,7 @@ class VoiceRecorderApp extends StatelessWidget {
     required this.playerFactory,
     required this.editor,
     required this.sync,
+    this.screen = const PlatformScreenAwake(),
     this.locale,
   });
 
@@ -39,6 +41,7 @@ class VoiceRecorderApp extends StatelessWidget {
   final AudioPlayerService Function() playerFactory;
   final RecordingEditor editor;
   final StorageSync sync;
+  final ScreenAwake screen;
 
   /// Idioma fijo (para los tests); si es `null`, el del sistema.
   final Locale? locale;
@@ -65,6 +68,7 @@ class VoiceRecorderApp extends StatelessWidget {
         playerFactory: playerFactory,
         editor: editor,
         sync: sync,
+        screen: screen,
       ),
     );
   }

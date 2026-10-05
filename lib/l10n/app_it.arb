@@ -99,6 +99,8 @@
   "countdown": "Conto alla rovescia",
   "secondsCount": "{seconds} secondi",
   "countdownSubtitle": "{seconds} secondi prima di iniziare a registrare con il pulsante del conto alla rovescia",
+  "keepScreenOn": "Mantieni lo schermo acceso",
+  "keepScreenOnSubtitle": "Durante la registrazione o l'attesa per iniziare, perché il sistema non fermi l'app",
   "recordingSection": "Registrazione",
   "formatNote": "Si applica alle nuove registrazioni. Durante la modifica, ogni registrazione mantiene il suo formato.",
   "storageSection": "Dove vengono salvate le registrazioni",

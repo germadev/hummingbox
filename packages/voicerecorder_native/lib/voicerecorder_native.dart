@@ -41,6 +41,18 @@ class NativeAudioCodec {
   }
 }
 
+/// Pantalla del dispositivo.
+class NativeScreen {
+  const NativeScreen();
+
+  static const _channel = MethodChannel('es.germade.voicerecorder/screen');
+
+  /// Mantiene la pantalla encendida mientras la app está abierta si [on] es
+  /// `true`; si no, deja que se apague como siempre.
+  Future<void> keepOn(bool on) =>
+      _channel.invokeMethod<void>('keepOn', {'on': on});
+}
+
 /// Carpeta elegida por el usuario con el selector del sistema.
 class NativeFolder {
   const NativeFolder({required this.id, required this.name});

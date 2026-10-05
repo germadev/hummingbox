@@ -253,6 +253,11 @@
       }
     }
   },
+  "keepScreenOn": "Keep the screen on",
+  "@keepScreenOn": {
+    "description": "Opción para que la pantalla no se apague mientras se graba"
+  },
+  "keepScreenOnSubtitle": "While recording or waiting to start, so the system doesn't stop the app",
   "recordingSection": "Recording",
   "@recordingSection": {
     "description": "Sección de las opciones"

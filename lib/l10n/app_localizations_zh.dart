@@ -331,6 +331,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => '保持屏幕常亮';
+
+  @override
+  String get keepScreenOnSubtitle => '录音或等待开始时，以免系统停止应用';
+
+  @override
   String get recordingSection => '录音';
 
   @override

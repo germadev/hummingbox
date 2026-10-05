@@ -345,6 +345,13 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => 'Bildschirm eingeschaltet lassen';
+
+  @override
+  String get keepScreenOnSubtitle =>
+      'Während der Aufnahme oder beim Warten auf den Start, damit das System die App nicht beendet';
+
+  @override
   String get recordingSection => 'Aufnahme';
 
   @override
