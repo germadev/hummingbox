@@ -5,12 +5,12 @@ import 'app.dart';
 import 'services/audio_codec.dart';
 import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
-import 'services/copy_sync.dart';
 import 'services/folder_access.dart';
 import 'services/google_drive.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/settings_store.dart';
+import 'services/storage_sync.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +19,17 @@ Future<void> main() async {
   await initializeDateFormatting();
 
   final repository = FileRecordingsRepository();
+  final sync = StorageSync(
+    repository: repository,
+    store: FileSettingsStore(),
+    folders: const PlatformFolderAccess(),
+    // Los IDs de cliente de Google se pasan al compilar con --dart-define
+    // (ver README → «Google Drive»).
+    drive: GoogleDriveService(
+      iosClientId: const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID'),
+      serverClientId: const String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID'),
+    ),
+  );
 
   runApp(
     VoiceRecorderApp(
@@ -28,20 +39,10 @@ Future<void> main() async {
       editor: RecordingEditor(
         codec: const PlatformAudioCodec(),
         repository: repository,
+        // Las grabaciones guardadas fuera de la app se leen de allí.
+        audioPath: sync.audioPath,
       ),
-      sync: CopySync(
-        repository: repository,
-        store: FileSettingsStore(),
-        folders: const PlatformFolderAccess(),
-        // Los IDs de cliente de Google se pasan al compilar con
-        // --dart-define (ver README → «Google Drive»).
-        drive: GoogleDriveService(
-          iosClientId: const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID'),
-          serverClientId: const String.fromEnvironment(
-            'GOOGLE_SERVER_CLIENT_ID',
-          ),
-        ),
-      ),
+      sync: sync,
     ),
   );
 }

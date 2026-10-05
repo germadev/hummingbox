@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voicerecorder/controllers/player_controller.dart';
 import 'package:voicerecorder/models/recording.dart';
@@ -106,5 +109,52 @@ void main() {
     PlayerController(player: service).dispose();
 
     expect(service.disposed, isTrue);
+  });
+
+  group('audio guardado fuera de la app', () {
+    test('reproduce la ruta que da audioPath', () async {
+      controller.dispose();
+      controller = PlayerController(
+        player: player,
+        audioPath: (recording) async => '/cache/${recording.id}.m4a',
+      );
+
+      await controller.toggle(first);
+
+      expect(player.calls, ['play /cache/a.m4a @0']);
+    });
+
+    test('si no se puede leer, la descarga y lanza el error', () async {
+      controller.dispose();
+      controller = PlayerController(
+        player: player,
+        audioPath: (_) async => throw const FileSystemException('sin red'),
+      );
+
+      await expectLater(controller.toggle(first), throwsA(anything));
+
+      expect(controller.currentId, isNull);
+      expect(controller.isLoading(first), isFalse);
+      expect(player.calls, isEmpty);
+    });
+
+    test('si se elige otra mientras se lee, no reproduce la primera', () async {
+      final gate = Completer<String>();
+      controller.dispose();
+      controller = PlayerController(
+        player: player,
+        audioPath: (recording) =>
+            recording.id == 'a' ? gate.future : Future.value(recording.path),
+      );
+
+      final loading = controller.toggle(first);
+      expect(controller.isLoading(first), isTrue);
+      await controller.toggle(second);
+      gate.complete('/cache/a.m4a');
+      await loading;
+
+      expect(player.calls, ['play /b.m4a @0']);
+      expect(controller.isCurrent(second), isTrue);
+    });
   });
 }

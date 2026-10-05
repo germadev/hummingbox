@@ -42,17 +42,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadRecordingsFailed => 'Couldn\'t load the recordings';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count recordings added from the folder',
-      one: '1 recording added from the folder',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => 'New folder';
 
   @override
@@ -117,12 +106,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rootFolder => 'Recordings';
-
-  @override
-  String get savingCopies => 'Saving copies…';
-
-  @override
-  String get copiesFailed => 'Some copies couldn\'t be saved';
 
   @override
   String get emptyFolderTitle => 'This folder is empty';
@@ -302,30 +285,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get playbackPosition => 'Playback position';
 
   @override
-  String get importTitle => 'Add the folder\'s recordings?';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count audio files',
-      one: '1 audio file',
-    );
-    return '“$folder” has $_temp0 ($size) that aren\'t in the app. If you add them, they\'ll appear in the list and be copied into the app.';
-  }
-
-  @override
-  String get add => 'Add';
-
-  @override
-  String get dontAdd => 'Don\'t add';
-
-  @override
   String get folderFailed => 'Couldn\'t use that folder';
-
-  @override
-  String get copiesKept => 'The copies already in the folder are kept';
 
   @override
   String get driveConnectFailed => 'Couldn\'t connect to Google Drive';
@@ -387,27 +347,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get storageSection => 'Where recordings are saved';
 
   @override
-  String get storageDescription =>
-      'Recordings are always saved inside the app. You can also keep a copy of each one in a device folder and in Google Drive, with the name you gave it and in its subfolder. Copies are updated when you rename or edit a recording, but aren\'t deleted when you delete it.';
-
-  @override
   String get deviceFolder => 'Device folder';
 
   @override
-  String get noFolder => 'Not saved to any folder';
-
-  @override
-  String get stopSavingToFolder => 'Stop saving to the folder';
+  String get noFolder => 'None';
 
   @override
   String get chooseAnotherFolder => 'Choose another folder';
-
-  @override
-  String get showFolderRecordings => 'Show the folder\'s recordings';
-
-  @override
-  String get showFolderRecordingsSubtitle =>
-      'Adds the audio files (.m4a and .wav) in the folder and its subfolders to the app';
 
   @override
   String driveAccount(String email, String folder) {
@@ -422,29 +368,12 @@ class AppLocalizationsEn extends AppLocalizations {
       'Not available: this version of the app isn\'t set up to access Google';
 
   @override
-  String get copyNow => 'Copy now';
-
-  @override
-  String get copyNowSubtitle => 'Only what\'s missing or changed is copied';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Couldn\'t copy $count recordings',
-      one: 'Couldn\'t copy 1 recording',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Couldn\'t add $count recordings from the folder',
-      one: 'Couldn\'t add 1 recording from the folder',
+      other: 'Couldn\'t add $count recordings',
+      one: 'Couldn\'t add 1 recording',
     );
     return '$_temp0';
   }
@@ -469,4 +398,111 @@ class AppLocalizationsEn extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message: $detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count new recordings',
+      one: '1 new recording',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => 'Couldn\'t play the recording';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return 'It will also be deleted from “$folder”. This can\'t be undone.';
+  }
+
+  @override
+  String get deleteFromDriveMessage =>
+      'It will be moved to the trash in your Google Drive.';
+
+  @override
+  String get syncing => 'Syncing…';
+
+  @override
+  String get syncFailed => 'Couldn\'t sync everything';
+
+  @override
+  String get setupTitle => 'Where do you want to save your recordings?';
+
+  @override
+  String get setupMessage => 'You can change this later in the settings.';
+
+  @override
+  String get setupFolder => 'In a folder on this device';
+
+  @override
+  String get setupFolderDescription =>
+      'Internal storage, an SD card, iCloud Drive… Any recordings already in it will appear in the app.';
+
+  @override
+  String get setupDrive => 'In Google Drive';
+
+  @override
+  String get setupDriveDescription =>
+      'In a folder in your Drive. Any that can\'t be uploaded yet are kept inside the app.';
+
+  @override
+  String get storageFolderDescription =>
+      'Recordings are saved in the chosen folder, with the name you give them and in their subfolder, and the app shows all the audio files (.m4a and .wav) in it. Whatever you delete, rename or edit in the app also changes in the folder.';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return 'Recordings are saved in the “$folder” folder of your Google Drive and downloaded to play or edit them. Those that couldn\'t be uploaded yet (for example, while offline) are kept inside the app. If you choose a device folder, they\'ll be saved there and Drive will keep a copy.';
+  }
+
+  @override
+  String get stopUsingFolder => 'Stop using the folder';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return 'Stop using “$folder”?';
+  }
+
+  @override
+  String get stopUsingFolderMessage =>
+      'The recordings will stay in the folder but will no longer appear in the app. Then you\'ll need to choose where to save new ones.';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      'The recordings will stay in the folder, and the app will switch to the ones in your Google Drive, where new ones will be saved.';
+
+  @override
+  String get stopUsing => 'Stop using';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      'The recordings will stay in your Drive but will no longer appear in the app. Then you\'ll need to choose where to save new ones.';
+
+  @override
+  String folderInUse(String folder) {
+    return 'Recordings are now saved in “$folder”';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Couldn\'t save $count recordings',
+      one: 'Couldn\'t save 1 recording',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => 'Couldn\'t read Google Drive';
+
+  @override
+  String get syncNow => 'Sync now';
+
+  @override
+  String get syncNowSubtitle =>
+      'Saves anything pending and looks for changes where recordings are saved';
 }

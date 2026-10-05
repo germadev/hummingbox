@@ -7,7 +7,12 @@ import '../services/audio_player_service.dart';
 
 /// Reproduce las grabaciones de una en una.
 class PlayerController extends ChangeNotifier {
-  PlayerController({required this._player}) {
+  /// [audioPath] da la ruta local del audio de cada grabación (ver
+  /// `StorageSync.audioPath`); por defecto, la de dentro de la app.
+  PlayerController({
+    required this._player,
+    Future<String> Function(Recording recording)? audioPath,
+  }) : _audioPath = audioPath ?? _localPath {
     _subscriptions = [
       _player.statusChanges.listen(_onStatus),
       _player.positionChanges.listen(_onPosition),
@@ -16,6 +21,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   final AudioPlayerService _player;
+  final Future<String> Function(Recording recording) _audioPath;
   late final List<StreamSubscription<Object?>> _subscriptions;
   bool _disposed = false;
 
@@ -38,6 +44,12 @@ class PlayerController extends ChangeNotifier {
   bool isPlaying(Recording recording) =>
       isCurrent(recording) && _status == PlaybackStatus.playing;
 
+  bool _loading = false;
+
+  /// Indica si se está leyendo el audio de [recording] para reproducirlo
+  /// (p. ej. descargándolo de Google Drive).
+  bool isLoading(Recording recording) => isCurrent(recording) && _loading;
+
   /// Reproduce [recording] o, si ya es la actual, alterna entre reproducir y
   /// pausar.
   Future<void> toggle(Recording recording) async {
@@ -52,7 +64,7 @@ class PlayerController extends ChangeNotifier {
         case PlaybackStatus.stopped:
         case PlaybackStatus.completed:
           // Vuelve a cargar el audio desde la posición elegida.
-          await _player.play(recording.path, position: _position);
+          await _play(recording, position: _position);
           return;
       }
     }
@@ -61,7 +73,7 @@ class PlayerController extends ChangeNotifier {
     _position = Duration.zero;
     _duration = recording.duration;
     _notify();
-    await _player.play(recording.path);
+    await _play(recording);
   }
 
   /// Carga [recording] y la reproduce desde [position].
@@ -75,8 +87,34 @@ class PlayerController extends ChangeNotifier {
     _position = position;
     _duration = recording.duration;
     _notify();
-    await _player.play(recording.path, position: position);
+    await _play(recording, position: position);
   }
+
+  /// Lee el audio de [recording] (si está guardada fuera de la app, puede
+  /// tardar) y lo reproduce, salvo que entretanto se haya elegido otra. Si no
+  /// se puede leer, la descarga y lanza el error.
+  Future<void> _play(Recording recording, {Duration? position}) async {
+    final String path;
+    _loading = true;
+    _notify();
+    try {
+      path = await _audioPath(recording);
+    } catch (_) {
+      if (isCurrent(recording)) {
+        _currentId = null;
+        _status = PlaybackStatus.stopped;
+        _position = Duration.zero;
+      }
+      rethrow;
+    } finally {
+      if (isCurrent(recording) || _currentId == null) _loading = false;
+      _notify();
+    }
+    if (!isCurrent(recording)) return;
+    await _player.play(path, position: position);
+  }
+
+  static Future<String> _localPath(Recording recording) async => recording.path;
 
   Future<void> seek(Duration position) async {
     if (_currentId == null) return;
@@ -89,6 +127,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> stop() async {
     if (_currentId == null) return;
     _currentId = null;
+    _loading = false;
     _status = PlaybackStatus.stopped;
     _position = Duration.zero;
     _notify();

@@ -170,12 +170,6 @@ abstract class AppLocalizations {
   /// **'Couldn\'t load the recordings'**
   String get loadRecordingsFailed;
 
-  /// Grabaciones añadidas desde la carpeta del dispositivo
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 recording added from the folder} other{{count} recordings added from the folder}}'**
-  String importedFromFolder(int count);
-
   /// No description provided for @newFolder.
   ///
   /// In en, this message translates to:
@@ -295,18 +289,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Recordings'**
   String get rootFolder;
-
-  /// No description provided for @savingCopies.
-  ///
-  /// In en, this message translates to:
-  /// **'Saving copies…'**
-  String get savingCopies;
-
-  /// No description provided for @copiesFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Some copies couldn\'t be saved'**
-  String get copiesFailed;
 
   /// No description provided for @emptyFolderTitle.
   ///
@@ -632,41 +614,11 @@ abstract class AppLocalizations {
   /// **'Playback position'**
   String get playbackPosition;
 
-  /// No description provided for @importTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Add the folder\'s recordings?'**
-  String get importTitle;
-
-  /// Al elegir una carpeta con audios que la app no tiene
-  ///
-  /// In en, this message translates to:
-  /// **'“{folder}” has {count, plural, =1{1 audio file} other{{count} audio files}} ({size}) that aren\'t in the app. If you add them, they\'ll appear in the list and be copied into the app.'**
-  String importMessage(String folder, int count, String size);
-
-  /// No description provided for @add.
-  ///
-  /// In en, this message translates to:
-  /// **'Add'**
-  String get add;
-
-  /// No description provided for @dontAdd.
-  ///
-  /// In en, this message translates to:
-  /// **'Don\'t add'**
-  String get dontAdd;
-
   /// No description provided for @folderFailed.
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t use that folder'**
   String get folderFailed;
-
-  /// No description provided for @copiesKept.
-  ///
-  /// In en, this message translates to:
-  /// **'The copies already in the folder are kept'**
-  String get copiesKept;
 
   /// No description provided for @driveConnectFailed.
   ///
@@ -770,12 +722,6 @@ abstract class AppLocalizations {
   /// **'Where recordings are saved'**
   String get storageSection;
 
-  /// No description provided for @storageDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Recordings are always saved inside the app. You can also keep a copy of each one in a device folder and in Google Drive, with the name you gave it and in its subfolder. Copies are updated when you rename or edit a recording, but aren\'t deleted when you delete it.'**
-  String get storageDescription;
-
   /// No description provided for @deviceFolder.
   ///
   /// In en, this message translates to:
@@ -785,32 +731,14 @@ abstract class AppLocalizations {
   /// No description provided for @noFolder.
   ///
   /// In en, this message translates to:
-  /// **'Not saved to any folder'**
+  /// **'None'**
   String get noFolder;
-
-  /// No description provided for @stopSavingToFolder.
-  ///
-  /// In en, this message translates to:
-  /// **'Stop saving to the folder'**
-  String get stopSavingToFolder;
 
   /// No description provided for @chooseAnotherFolder.
   ///
   /// In en, this message translates to:
   /// **'Choose another folder'**
   String get chooseAnotherFolder;
-
-  /// No description provided for @showFolderRecordings.
-  ///
-  /// In en, this message translates to:
-  /// **'Show the folder\'s recordings'**
-  String get showFolderRecordings;
-
-  /// No description provided for @showFolderRecordingsSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Adds the audio files (.m4a and .wav) in the folder and its subfolders to the app'**
-  String get showFolderRecordingsSubtitle;
 
   /// Cuenta y carpeta de Google Drive conectadas
   ///
@@ -830,28 +758,10 @@ abstract class AppLocalizations {
   /// **'Not available: this version of the app isn\'t set up to access Google'**
   String get driveUnavailable;
 
-  /// No description provided for @copyNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy now'**
-  String get copyNow;
-
-  /// No description provided for @copyNowSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Only what\'s missing or changed is copied'**
-  String get copyNowSubtitle;
-
-  /// No description provided for @copyFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Couldn\'t copy 1 recording} other{Couldn\'t copy {count} recordings}}'**
-  String copyFailed(int count);
-
   /// No description provided for @importFailed.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{Couldn\'t add 1 recording from the folder} other{Couldn\'t add {count} recordings from the folder}}'**
+  /// **'{count, plural, =1{Couldn\'t add 1 recording} other{Couldn\'t add {count} recordings}}'**
   String importFailed(int count);
 
   /// No description provided for @readFolderFailed.
@@ -889,6 +799,156 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{message}: {detail}'**
   String errorWithDetail(String message, String detail);
+
+  /// Grabaciones nuevas encontradas en el destino (la carpeta o Drive)
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 new recording} other{{count} new recordings}}'**
+  String newRecordingsFound(int count);
+
+  /// No description provided for @playFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t play the recording'**
+  String get playFailed;
+
+  /// Al eliminar una grabación guardada en la carpeta del dispositivo
+  ///
+  /// In en, this message translates to:
+  /// **'It will also be deleted from “{folder}”. This can\'t be undone.'**
+  String deleteFromFolderMessage(String folder);
+
+  /// Al eliminar una grabación guardada en Google Drive
+  ///
+  /// In en, this message translates to:
+  /// **'It will be moved to the trash in your Google Drive.'**
+  String get deleteFromDriveMessage;
+
+  /// Mientras se guardan las grabaciones o se lee el destino
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing…'**
+  String get syncing;
+
+  /// No description provided for @syncFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t sync everything'**
+  String get syncFailed;
+
+  /// Menú inicial, cuando todavía no se ha elegido dónde guardar las grabaciones
+  ///
+  /// In en, this message translates to:
+  /// **'Where do you want to save your recordings?'**
+  String get setupTitle;
+
+  /// No description provided for @setupMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You can change this later in the settings.'**
+  String get setupMessage;
+
+  /// No description provided for @setupFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'In a folder on this device'**
+  String get setupFolder;
+
+  /// No description provided for @setupFolderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Internal storage, an SD card, iCloud Drive… Any recordings already in it will appear in the app.'**
+  String get setupFolderDescription;
+
+  /// No description provided for @setupDrive.
+  ///
+  /// In en, this message translates to:
+  /// **'In Google Drive'**
+  String get setupDrive;
+
+  /// No description provided for @setupDriveDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'In a folder in your Drive. Any that can\'t be uploaded yet are kept inside the app.'**
+  String get setupDriveDescription;
+
+  /// Opciones, si las grabaciones se guardan en la carpeta del dispositivo
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings are saved in the chosen folder, with the name you give them and in their subfolder, and the app shows all the audio files (.m4a and .wav) in it. Whatever you delete, rename or edit in the app also changes in the folder.'**
+  String get storageFolderDescription;
+
+  /// Opciones, si las grabaciones se guardan en Google Drive
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings are saved in the “{folder}” folder of your Google Drive and downloaded to play or edit them. Those that couldn\'t be uploaded yet (for example, while offline) are kept inside the app. If you choose a device folder, they\'ll be saved there and Drive will keep a copy.'**
+  String storageDriveDescription(String folder);
+
+  /// No description provided for @stopUsingFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop using the folder'**
+  String get stopUsingFolder;
+
+  /// No description provided for @stopUsingFolderTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop using “{folder}”?'**
+  String stopUsingFolderTitle(String folder);
+
+  /// Al dejar de usar la carpeta del dispositivo sin Google Drive conectado
+  ///
+  /// In en, this message translates to:
+  /// **'The recordings will stay in the folder but will no longer appear in the app. Then you\'ll need to choose where to save new ones.'**
+  String get stopUsingFolderMessage;
+
+  /// Al dejar de usar la carpeta del dispositivo con Google Drive conectado
+  ///
+  /// In en, this message translates to:
+  /// **'The recordings will stay in the folder, and the app will switch to the ones in your Google Drive, where new ones will be saved.'**
+  String get stopUsingFolderDriveMessage;
+
+  /// No description provided for @stopUsing.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop using'**
+  String get stopUsing;
+
+  /// Al desconectar Google Drive si las grabaciones se guardan en él
+  ///
+  /// In en, this message translates to:
+  /// **'The recordings will stay in your Drive but will no longer appear in the app. Then you\'ll need to choose where to save new ones.'**
+  String get disconnectDriveStorageMessage;
+
+  /// Tras elegir la carpeta del dispositivo
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings are now saved in “{folder}”'**
+  String folderInUse(String folder);
+
+  /// No description provided for @saveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Couldn\'t save 1 recording} other{Couldn\'t save {count} recordings}}'**
+  String saveFailed(int count);
+
+  /// No description provided for @readDriveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read Google Drive'**
+  String get readDriveFailed;
+
+  /// No description provided for @syncNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get syncNow;
+
+  /// No description provided for @syncNowSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Saves anything pending and looks for changes where recordings are saved'**
+  String get syncNowSubtitle;
 }
 
 class _AppLocalizationsDelegate

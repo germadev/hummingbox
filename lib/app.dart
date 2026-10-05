@@ -5,9 +5,9 @@ import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
-import 'services/copy_sync.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
+import 'services/storage_sync.dart';
 
 /// Morado del icono (`docs/icono.svg`), del que sale el tema de la app.
 const brandPurple = Color(0xFF5B3FD9);
@@ -38,7 +38,7 @@ class VoiceRecorderApp extends StatelessWidget {
   final AudioRecorderService Function() recorderFactory;
   final AudioPlayerService Function() playerFactory;
   final RecordingEditor editor;
-  final CopySync sync;
+  final StorageSync sync;
 
   /// Idioma fijo (para los tests); si es `null`, el del sistema.
   final Locale? locale;

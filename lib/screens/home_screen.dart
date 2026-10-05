@@ -5,20 +5,23 @@ import 'package:flutter/material.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../l10n/l10n.dart';
+import '../audio/audio_info.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
-import '../services/copy_sync.dart';
 import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
+import '../services/settings_store.dart';
 import '../services/share_service.dart';
+import '../services/storage_sync.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/folder_drawer.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
 import 'settings_screen.dart';
+import 'storage_setup_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -35,8 +38,9 @@ class HomeScreen extends StatefulWidget {
   final AudioPlayerService Function() playerFactory;
   final RecordingEditor editor;
 
-  /// Copias de las grabaciones en una carpeta y en Google Drive.
-  final CopySync sync;
+  /// Dónde se guardan las grabaciones (la carpeta del dispositivo o Google
+  /// Drive) y el resto de las opciones.
+  final StorageSync sync;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -51,10 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
   );
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
+    audioPath: widget.sync.audioPath,
   );
 
   late final AppLifecycleListener _lifecycle;
-  late final StreamSubscription<List<Recording>> _imports;
+  late final StreamSubscription<int> _changes;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   /// Todas las grabaciones, de todas las carpetas.
@@ -67,10 +72,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Al volver a la app se reintentan las copias pendientes y se buscan
-    // grabaciones nuevas en la carpeta.
-    _lifecycle = AppLifecycleListener(onResume: _syncCopies);
-    _imports = widget.sync.imports.listen(_onImported);
+    // Al volver a la app se guarda lo pendiente y se buscan cambios en el
+    // destino.
+    _lifecycle = AppLifecycleListener(onResume: _syncStorage);
+    _changes = widget.sync.changes.listen(_onStorageChanged);
     widget.sync.load();
     _loadRecordings();
   }
@@ -85,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _lifecycle.dispose();
-    _imports.cancel();
+    _changes.cancel();
     _recorder.dispose();
     _player.dispose();
     super.dispose();
@@ -105,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _showMessage((l10n) => l10n.loadRecordingsFailed);
       return;
     }
-    _syncCopies();
+    _syncStorage();
     await _addMissingDetails();
   }
 
@@ -113,9 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _detailsPending = false;
 
   /// Calcula lo que les falta a las grabaciones hechas con versiones
-  /// anteriores de la app o importadas de la carpeta: la onda (decodificando
-  /// el audio), el formato y, si no se conoce, la duración. Si algo falla, se
-  /// reintenta al volver a abrir la app.
+  /// anteriores de la app o añadidas desde el destino: la onda (decodificando
+  /// el audio), el formato y, si no se conoce, la duración. Si algo falla
+  /// (p. ej. no se puede descargar), se reintenta al volver a abrir la app.
   Future<void> _addMissingDetails() async {
     if (_addingDetails) {
       // Se repite al terminar para incluir las que han llegado entretanto.
@@ -143,9 +148,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _addDetails(Recording recording) async {
     final editor = widget.editor;
-    final probe = recording.audio == null
-        ? await editor.probe(recording.path)
-        : null;
+    final AudioProbe? probe;
+    try {
+      probe = recording.audio == null
+          ? await editor.probe(await widget.sync.audioPath(recording))
+          : null;
+    } catch (_) {
+      return;
+    }
     List<double>? levels;
     if (recording.waveform == null) {
       try {
@@ -189,33 +199,36 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _syncCopies() => unawaited(widget.sync.sync());
+  void _syncStorage() => unawaited(widget.sync.sync());
 
-  /// Añade a la lista las grabaciones que se acaban de traer de la carpeta.
-  void _onImported(List<Recording> imported) {
+  /// Vuelve a cargar la lista cuando cambian las grabaciones del destino
+  /// (hay nuevas, se han borrado o cambiado fuera de la app, o se ha elegido
+  /// otro destino). [added] son las nuevas.
+  Future<void> _onStorageChanged(int added) async {
+    final List<Recording> recordings;
+    try {
+      recordings = await widget.repository.loadAll();
+    } catch (_) {
+      return;
+    }
     if (!mounted) return;
-    final known = {for (final r in _recordings) r.id};
-    final added = [
-      for (final r in imported)
-        if (!known.contains(r.id)) r,
-    ];
-    if (added.isEmpty) return;
-    setState(() {
-      _recordings = [..._recordings, ...added]
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    });
-    _showMessage((l10n) => l10n.importedFromFolder(added.length));
+    if (_player.currentId case final id?
+        when !recordings.any((r) => r.id == id)) {
+      await _player.stop();
+    }
+    setState(() => _recordings = recordings);
+    if (added > 0) _showMessage((l10n) => l10n.newRecordingsFound(added));
     unawaited(_addMissingDetails());
   }
 
   // --- Carpetas ---
 
-  /// Subcarpetas: las creadas en la app, las de la carpeta del dispositivo y
-  /// las de las grabaciones.
+  /// Subcarpetas: las creadas en la app, las del destino y las de las
+  /// grabaciones.
   List<String> get _folderNames {
     final names = <String>{
       ...widget.sync.settings.folders,
-      ...widget.sync.deviceFolders,
+      ...widget.sync.storageFolders,
       for (final recording in _recordings) recording.folder,
       _folder,
     }..remove('');
@@ -307,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final saved = recording;
     setState(() => _recordings = [saved, ..._recordings]);
     _showMessage((l10n) => l10n.savedAs(saved.name));
-    _syncCopies();
+    _syncStorage();
   }
 
   Future<void> _confirmCancel() async {
@@ -332,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _showMessage((l10n) => l10n.stopToPlay);
       return;
     }
-    _player.toggle(recording);
+    unawaited(_play(() => _player.toggle(recording)));
   }
 
   void _seek(Recording recording, Duration position) {
@@ -343,7 +356,16 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_player.isCurrent(recording)) {
       _player.seek(position);
     } else {
-      _player.playFrom(recording, position);
+      unawaited(_play(() => _player.playFrom(recording, position)));
+    }
+  }
+
+  /// Avisa si no se puede reproducir (p. ej. si no se puede descargar).
+  Future<void> _play(Future<void> Function() play) async {
+    try {
+      await play();
+    } catch (_) {
+      _showMessage((l10n) => l10n.playFailed);
     }
   }
 
@@ -391,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _showMessage(
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
-    _syncCopies();
+    _syncStorage();
   }
 
   Future<void> _rename(Recording recording) async {
@@ -405,7 +427,7 @@ class _HomeScreenState extends State<HomeScreen> {
           for (final r in _recordings) r.id == renamed.id ? renamed : r,
         ];
       });
-      _syncCopies();
+      _syncStorage();
     } catch (_) {
       _showMessage((l10n) => l10n.renameFailed);
     }
@@ -418,18 +440,30 @@ class _HomeScreenState extends State<HomeScreen> {
         ? box.localToGlobal(Offset.zero) & box.size
         : null;
     try {
-      await shareRecording(recording, origin: origin);
+      await shareRecording(
+        recording,
+        path: await widget.sync.audioPath(recording),
+        origin: origin,
+      );
     } catch (_) {
       _showMessage((l10n) => l10n.shareFailed);
     }
   }
 
   Future<void> _delete(Recording recording) async {
+    final l10n = context.l10n;
+    final settings = widget.sync.settings;
     final confirmed = await showConfirmDialog(
       context,
-      title: context.l10n.deleteTitle(recording.name),
-      message: context.l10n.deleteMessage,
-      confirmLabel: context.l10n.delete,
+      title: l10n.deleteTitle(recording.name),
+      message: switch (settings.storage) {
+        StorageKind.folder => l10n.deleteFromFolderMessage(
+          settings.folder!.name,
+        ),
+        StorageKind.drive => l10n.deleteFromDriveMessage,
+        null => l10n.deleteMessage,
+      },
+      confirmLabel: l10n.delete,
     );
     if (!confirmed) return;
 
@@ -479,6 +513,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildScaffold(BuildContext context) {
+    final sync = widget.sync;
+    if (!sync.isLoaded) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    // Hasta que se elige dónde guardar las grabaciones, el menú inicial.
+    if (sync.settings.storage == null) return StorageSetupScreen(sync: sync);
+
     final folder = _folder;
     final folderNames = _folderNames;
     final scaffold = Scaffold(
@@ -500,7 +541,10 @@ class _HomeScreenState extends State<HomeScreen> {
       // Se abre deslizando desde la izquierda. Al abrirlo se buscan
       // subcarpetas nuevas.
       drawer: FolderDrawer(
-        rootName: widget.sync.settings.folder?.name ?? context.l10n.rootFolder,
+        rootName:
+            sync.settings.folder?.name ??
+            sync.settings.drive?.folderName ??
+            context.l10n.rootFolder,
         folders: folderNames,
         counts: {
           for (final name in ['', ...folderNames]) name: _countIn(name),
@@ -510,11 +554,17 @@ class _HomeScreenState extends State<HomeScreen> {
         onCreate: _createFolder,
       ),
       onDrawerChanged: (opened) {
-        if (opened) _syncCopies();
+        if (opened) _syncStorage();
       },
       // Mientras se graba no se cambia de carpeta.
       drawerEnableOpenDragGesture: !_recorder.isBusy,
-      body: _buildBody(folder),
+      // También se abre deslizando hacia la derecha en cualquier punto de la
+      // lista, no solo desde el borde.
+      body: _SwipeToOpenDrawer(
+        enabled: !_recorder.isBusy,
+        onOpen: () => _scaffoldKey.currentState?.openDrawer(),
+        child: _buildBody(folder),
+      ),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
         countdownSeconds: widget.sync.settings.countdownSeconds,
@@ -576,12 +626,72 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Indica en la barra superior si se están guardando copias o si ha habido
-/// errores al hacerlo.
+/// Llama a [onOpen] al deslizar hacia la derecha (hacia la izquierda en los
+/// idiomas que se escriben de derecha a izquierda) en cualquier punto de
+/// [child]. Lo que se arrastra dentro de [child] (p. ej. la onda para saltar)
+/// tiene prioridad.
+class _SwipeToOpenDrawer extends StatefulWidget {
+  const _SwipeToOpenDrawer({
+    required this.enabled,
+    required this.onOpen,
+    required this.child,
+  });
+
+  final bool enabled;
+  final VoidCallback onOpen;
+  final Widget child;
+
+  @override
+  State<_SwipeToOpenDrawer> createState() => _SwipeToOpenDrawerState();
+}
+
+class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
+  /// Lo que hay que deslizar para abrir el menú.
+  static const _distance = 48.0;
+
+  /// Velocidad a partir de la cual basta con un gesto rápido.
+  static const _flingVelocity = 300.0;
+
+  double _dragged = 0;
+  bool _opened = false;
+
+  double get _direction =>
+      Directionality.of(context) == TextDirection.rtl ? -1 : 1;
+
+  void _open() {
+    if (_opened) return;
+    _opened = true;
+    widget.onOpen();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) {
+        _dragged = 0;
+        _opened = false;
+      },
+      onHorizontalDragUpdate: (details) {
+        _dragged += (details.primaryDelta ?? 0) * _direction;
+        if (_dragged > _distance) _open();
+      },
+      onHorizontalDragEnd: (details) {
+        final velocity = (details.primaryVelocity ?? 0) * _direction;
+        if (_dragged > 0 && velocity > _flingVelocity) _open();
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// Indica en la barra superior si se están guardando las grabaciones o
+/// leyendo el destino, o si ha habido errores al hacerlo.
 class _SyncIndicator extends StatelessWidget {
   const _SyncIndicator({required this.sync, required this.onPressed});
 
-  final CopySync sync;
+  final StorageSync sync;
   final VoidCallback onPressed;
 
   @override
@@ -591,14 +701,14 @@ class _SyncIndicator extends StatelessWidget {
       builder: (context, _) {
         if (sync.syncing) {
           return IconButton(
-            tooltip: context.l10n.savingCopies,
+            tooltip: context.l10n.syncing,
             icon: const Icon(Icons.sync),
             onPressed: onPressed,
           );
         }
         if (sync.errors.isNotEmpty) {
           return IconButton(
-            tooltip: context.l10n.copiesFailed,
+            tooltip: context.l10n.syncFailed,
             icon: Icon(
               Icons.sync_problem,
               color: Theme.of(context).colorScheme.error,

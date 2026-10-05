@@ -63,6 +63,9 @@ abstract interface class FolderAccess {
 
   /// Crea la subcarpeta [name], si no existe.
   Future<void> createFolder({required String folder, required String name});
+
+  /// Borra el archivo [ref]. Si ya no existe, no hace nada.
+  Future<void> deleteFile({required String folder, required String ref});
 }
 
 /// Implementación con el selector y los permisos del sistema.
@@ -128,4 +131,8 @@ class PlatformFolderAccess implements FolderAccess {
   @override
   Future<void> createFolder({required String folder, required String name}) =>
       _native.createFolder(folder: folder, name: name);
+
+  @override
+  Future<void> deleteFile({required String folder, required String ref}) =>
+      _native.deleteFile(folder: folder, ref: ref);
 }

@@ -9,79 +9,31 @@ import '../models/recording_options.dart';
 
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
 class FolderSettings {
-  const FolderSettings({
-    required this.id,
-    required this.name,
-    this.importFiles = true,
-    this.ignored = const {},
-  });
+  const FolderSettings({required this.id, required this.name});
 
   /// Identificador persistente de la carpeta (ver `NativeFolder.id`).
   final String id;
   final String name;
 
-  /// Si las grabaciones que hay en la carpeta (y en sus subcarpetas) se
-  /// añaden a la app.
-  final bool importFiles;
-
-  /// Referencias de los archivos de la carpeta que no se importan: los de
-  /// las grabaciones que se eliminaron en la app.
-  final Set<String> ignored;
-
-  /// La misma carpeta, ignorando además el archivo [ref].
-  FolderSettings ignoring(String ref) => FolderSettings(
-    id: id,
-    name: name,
-    importFiles: importFiles,
-    ignored: {...ignored, ref},
-  );
-
-  FolderSettings withImportFiles(bool importFiles) => FolderSettings(
-    id: id,
-    name: name,
-    importFiles: importFiles,
-    ignored: ignored,
-  );
-
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    if (!importFiles) 'import': false,
-    if (ignored.isNotEmpty) 'ignored': ignored.toList(),
-  };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
 
   static FolderSettings? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final id = json['id'];
     final name = json['name'];
-    final ignored = json['ignored'];
     if (id is! String || name is! String) return null;
-    return FolderSettings(
-      id: id,
-      name: name,
-      importFiles: json['import'] != false,
-      ignored: {
-        if (ignored is List)
-          for (final ref in ignored)
-            if (ref is String) ref,
-      },
-    );
+    return FolderSettings(id: id, name: name);
   }
 
   @override
   bool operator ==(Object other) =>
-      other is FolderSettings &&
-      other.id == id &&
-      other.name == name &&
-      other.importFiles == importFiles &&
-      setEquals(other.ignored, ignored);
+      other is FolderSettings && other.id == id && other.name == name;
 
   @override
-  int get hashCode =>
-      Object.hash(id, name, importFiles, Object.hashAllUnordered(ignored));
+  int get hashCode => Object.hash(id, name);
 }
 
-/// Cuenta de Google Drive conectada y carpeta donde se guardan las copias.
+/// Cuenta de Google Drive conectada y carpeta de la app en Drive.
 class DriveSettings {
   const DriveSettings({
     required this.email,
@@ -129,6 +81,9 @@ class DriveSettings {
   int get hashCode => Object.hash(email, folderId, folderName);
 }
 
+/// Dónde se guardan las grabaciones.
+enum StorageKind { folder, drive }
+
 /// Opciones de la app.
 class AppSettings {
   const AppSettings({
@@ -144,12 +99,24 @@ class AppSettings {
   static const countdownChoices = [3, 5, 10];
   static const defaultCountdown = 3;
 
-  /// Carpeta del dispositivo donde se guarda una copia de cada grabación, o
-  /// `null` si solo se guardan dentro de la app.
+  /// Carpeta del dispositivo donde se guardan las grabaciones, si se eligió
+  /// una.
   final FolderSettings? folder;
 
-  /// Google Drive, si está conectado.
+  /// Google Drive, si está conectado: donde se guardan las grabaciones si no
+  /// hay [folder] o, si la hay, donde se guarda una copia de cada una.
   final DriveSettings? drive;
+
+  /// Dónde se guardan las grabaciones: en la carpeta del dispositivo si se
+  /// eligió una y, si no, en Google Drive. `null` si todavía no se ha
+  /// elegido.
+  StorageKind? get storage => folder != null
+      ? StorageKind.folder
+      : (drive != null ? StorageKind.drive : null);
+
+  /// Indica si se guarda una copia de cada grabación en Google Drive (además
+  /// de en la carpeta del dispositivo).
+  bool get copiesToDrive => folder != null && drive != null;
 
   /// Formato y calidad de las grabaciones nuevas.
   final RecordingOptions recording;

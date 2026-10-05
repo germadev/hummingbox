@@ -65,7 +65,16 @@ class RecordingTile extends StatelessWidget {
                   // para que contraste con el fondo del botón.
                   color: theme.colorScheme.onPrimary,
                   tooltip: isPlaying ? l10n.pause : l10n.play,
-                  icon: Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                  // Mientras se lee el audio (p. ej. de Google Drive).
+                  icon: player.isLoading(recording)
+                      ? SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        )
+                      : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
                   onPressed: onTogglePlay,
                 ),
                 // Tocar el nombre lo edita (el resto de la tarjeta reproduce).

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../l10n/l10n.dart';
 import '../models/recording_options.dart';
-import '../services/copy_sync.dart';
 import '../services/settings_store.dart';
+import '../services/storage_sync.dart';
 import '../utils/formatters.dart';
 import '../widgets/dialogs.dart';
 
@@ -12,7 +12,7 @@ import '../widgets/dialogs.dart';
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.sync});
 
-  final CopySync sync;
+  final StorageSync sync;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -20,50 +20,43 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _busy = false;
-  bool _scanning = false;
 
-  CopySync get _sync => widget.sync;
+  StorageSync get _sync => widget.sync;
 
   Future<void> _pickFolder() async {
     try {
-      final picked = await _sync.folders.pickFolder();
-      if (picked == null || !mounted) return;
-      var folder = picked;
-
-      // Antes de copiar a la app lo que haya en la carpeta, se pregunta (por
-      // si se elige por error una carpeta con mucha música, por ejemplo).
-      setState(() => _scanning = true);
-      final FolderScan scan;
-      try {
-        scan = await _sync.scanFolder(picked);
-      } finally {
-        if (mounted) setState(() => _scanning = false);
-      }
-      if (scan.count > 0) {
-        if (!mounted) return;
-        final l10n = context.l10n;
-        final add = await showConfirmDialog(
-          context,
-          title: l10n.importTitle,
-          message: l10n.importMessage(
-            picked.name,
-            scan.count,
-            formatMegabytes(scan.bytes),
-          ),
-          confirmLabel: l10n.add,
-          cancelLabel: l10n.dontAdd,
-        );
-        folder = picked.withImportFiles(add);
-      }
+      final folder = await _sync.folders.pickFolder();
+      if (folder == null || !mounted) return;
       await _sync.setFolder(folder);
+      _showMessage((l10n) => l10n.folderInUse(folder.name));
     } catch (_) {
       _showMessage((l10n) => l10n.folderFailed);
     }
   }
 
   Future<void> _clearFolder() async {
+    final settings = _sync.settings;
+    final folder = settings.folder;
+    if (folder == null) return;
+    final l10n = context.l10n;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.stopUsingFolderTitle(folder.name),
+      // Con Drive conectado, las grabaciones pasan a guardarse en él.
+      message: settings.drive != null
+          ? l10n.stopUsingFolderDriveMessage
+          : l10n.stopUsingFolderMessage,
+      confirmLabel: l10n.stopUsing,
+    );
+    if (!confirmed || !mounted) return;
     await _sync.setFolder(null);
-    _showMessage((l10n) => l10n.copiesKept);
+    _closeIfNoStorage();
+  }
+
+  /// Sin destino, se vuelve a la pantalla principal, que muestra el menú
+  /// inicial para elegir otro.
+  void _closeIfNoStorage() {
+    if (mounted && _sync.settings.storage == null) Navigator.pop(context);
   }
 
   Future<void> _connectDrive() async {
@@ -84,7 +77,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showConfirmDialog(
       context,
       title: context.l10n.disconnectDriveTitle,
-      message: context.l10n.disconnectDriveMessage,
+      message: _sync.settings.storage == StorageKind.drive
+          ? context.l10n.disconnectDriveStorageMessage
+          : context.l10n.disconnectDriveMessage,
       confirmLabel: context.l10n.disconnect,
     );
     if (!confirmed || !mounted) return;
@@ -96,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     await _sync.setDrive(null);
     if (mounted) setState(() => _busy = false);
+    _closeIfNoStorage();
   }
 
   Future<void> _chooseFormat() async {
@@ -250,7 +246,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
-                  l10n.storageDescription,
+                  switch ((settings.storage, drive)) {
+                    (StorageKind.drive, final drive?) =>
+                      l10n.storageDriveDescription(drive.folderName),
+                    _ => l10n.storageFolderDescription,
+                  },
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -264,14 +264,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: folder == null
                     ? const Icon(Icons.chevron_right)
                     : IconButton(
-                        tooltip: l10n.stopSavingToFolder,
+                        tooltip: l10n.stopUsingFolder,
                         icon: const Icon(Icons.close),
                         onPressed: _clearFolder,
                       ),
                 onTap: _pickFolder,
               ),
-              if (_scanning) const LinearProgressIndicator(),
-              if (folder != null) ...[
+              if (folder != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
                   child: Align(
@@ -282,16 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                 ),
-                SwitchListTile(
-                  key: const Key('import-option'),
-                  secondary: const Icon(Icons.library_music_outlined),
-                  title: Text(l10n.showFolderRecordings),
-                  subtitle: Text(l10n.showFolderRecordingsSubtitle),
-                  value: folder.importFiles,
-                  onChanged: _sync.setImportFiles,
-                ),
-              ],
-              if (errors[FolderCopyTarget.targetKey] case final error?)
+              if (errors[FolderTarget.targetKey] case final error?)
                 _ErrorText(error),
               const Divider(),
               SwitchListTile(
@@ -314,9 +304,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           enabled ? _connectDrive() : _disconnectDrive(),
               ),
               if (_busy) const LinearProgressIndicator(),
-              if (errors[DriveCopyTarget.targetKey] case final error?)
-                _ErrorText(error),
-              if (folder != null || drive != null) ...[
+              if (errors[DriveTarget.targetKey] case final error?)
+                _ErrorText(error, drive: true),
+              if (settings.storage != null) ...[
                 const Divider(),
                 ListTile(
                   leading: _sync.syncing
@@ -328,8 +318,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         )
                       : const Icon(Icons.sync),
-                  title: Text(_sync.syncing ? l10n.savingCopies : l10n.copyNow),
-                  subtitle: Text(l10n.copyNowSubtitle),
+                  title: Text(_sync.syncing ? l10n.syncing : l10n.syncNow),
+                  subtitle: Text(l10n.syncNowSubtitle),
                   enabled: !_sync.syncing,
                   onTap: _sync.sync,
                 ),
@@ -363,17 +353,21 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _ErrorText extends StatelessWidget {
-  const _ErrorText(this.error);
+  const _ErrorText(this.error, {this.drive = false});
 
-  final CopyError error;
+  final SyncError error;
+
+  /// Si es el error de Google Drive (si no, el de la carpeta).
+  final bool drive;
 
   String text(AppLocalizations l10n) {
     final message = switch (error.kind) {
-      CopyErrorKind.copy => l10n.copyFailed(error.count),
-      CopyErrorKind.import => l10n.importFailed(error.count),
-      CopyErrorKind.readFolder => l10n.readFolderFailed,
-      CopyErrorKind.readRecordings => l10n.readRecordingsFailed,
-      CopyErrorKind.driveAuth => l10n.driveReconnect,
+      SyncErrorKind.upload => l10n.saveFailed(error.count),
+      SyncErrorKind.import => l10n.importFailed(error.count),
+      SyncErrorKind.read =>
+        drive ? l10n.readDriveFailed : l10n.readFolderFailed,
+      SyncErrorKind.readRecordings => l10n.readRecordingsFailed,
+      SyncErrorKind.driveAuth => l10n.driveReconnect,
     };
     final detail = error.offline
         ? l10n.offline

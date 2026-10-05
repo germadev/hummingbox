@@ -7,15 +7,16 @@ import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/services/audio_cache.dart';
 import 'package:voicerecorder/services/audio_codec.dart';
 import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
-import 'package:voicerecorder/services/copy_sync.dart';
 import 'package:voicerecorder/services/folder_access.dart';
 import 'package:voicerecorder/services/google_drive.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 import 'package:voicerecorder/services/settings_store.dart';
+import 'package:voicerecorder/services/storage_sync.dart';
 
 class FakeAudioRecorderService implements AudioRecorderService {
   FakeAudioRecorderService({
@@ -130,6 +131,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   final List<Recording> recordings;
   final discarded = <String>[];
 
+  /// Grabaciones cuyo audio se ha sacado de la app (ids).
+  final released = <String>[];
+
   @override
   String defaultNamePrefix = 'Grabación';
   var _counter = 0;
@@ -230,6 +234,54 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
       copies[target] = state;
     }
     return _replace(current.copyWith(copies: copies));
+  }
+
+  @override
+  Future<Recording> updateStoredFile(
+    Recording recording,
+    String key,
+    CopyState file, {
+    String? name,
+    bool audioChanged = false,
+  }) async {
+    final current = byId(recording.id);
+    final revision = current.revision + (audioChanged ? 1 : 0);
+    final newName = name ?? current.name;
+    return _replace(
+      Recording(
+        id: current.id,
+        path: current.path,
+        name: newName,
+        createdAt: current.createdAt,
+        duration: audioChanged ? Duration.zero : current.duration,
+        waveform: audioChanged ? null : current.waveform,
+        revision: revision,
+        copies: {
+          ...current.copies,
+          key: CopyState(
+            destination: file.destination,
+            ref: file.ref,
+            revision: revision,
+            name: newName,
+            size: file.size,
+          ),
+        },
+        audio: audioChanged ? null : current.audio,
+        folder: current.folder,
+      ),
+    );
+  }
+
+  @override
+  Future<bool> releaseAudio(
+    Recording recording, {
+    required String key,
+    required String moveTo,
+  }) async {
+    final current = recordings.where((r) => r.id == recording.id).firstOrNull;
+    if (current == null || !current.isSavedIn(key)) return false;
+    released.add(recording.id);
+    return true;
   }
 
   @override
@@ -419,6 +471,9 @@ class FakeFolderAccess implements FolderAccess {
 
   /// Si se indica, leer la carpeta falla con este error.
   PlatformException? listError;
+
+  /// Si se indica, borrar falla con este error.
+  PlatformException? deleteError;
   var _counter = 0;
 
   /// Añade un archivo a la carpeta [folder] (o a su [subfolder]).
@@ -466,7 +521,10 @@ class FakeFolderAccess implements FolderAccess {
       subfolders.putIfAbsent(folder, () => {}).add(subfolder);
     }
     final file = File(source);
-    if (file.existsSync()) sizes[target] = file.lengthSync();
+    if (file.existsSync()) {
+      sizes[target] = file.lengthSync();
+      contents[target] = file.readAsBytesSync();
+    }
     return target;
   }
 
@@ -530,6 +588,13 @@ class FakeFolderAccess implements FolderAccess {
     calls.add('mkdir $name');
     subfolders.putIfAbsent(folder, () => {}).add(name);
   }
+
+  @override
+  Future<void> deleteFile({required String folder, required String ref}) async {
+    calls.add('delete $ref');
+    if (deleteError case final error?) throw error;
+    files.remove(ref);
+  }
 }
 
 class FakeDriveService implements DriveService {
@@ -544,11 +609,40 @@ class FakeDriveService implements DriveService {
     folderId: 'folder1',
   );
 
+  /// Archivos: id → nombre.
   final files = <String, String>{};
+
+  /// Subcarpeta de cada archivo; si no está, la principal.
+  final fileFolders = <String, String>{};
+  final sizes = <String, int>{};
+  final contents = <String, List<int>>{};
+
+  /// Subcarpetas creadas.
+  final subfolders = <String>{};
   final calls = <String>[];
   Object? uploadError;
+
+  /// Si se indica, leer la carpeta falla con este error.
+  Object? listError;
   bool disconnected = false;
   var _counter = 0;
+
+  /// Añade un archivo creado por la app (en otro dispositivo, p. ej.).
+  String addFile(
+    String name, {
+    String subfolder = '',
+    List<int> bytes = const [1, 2, 3],
+  }) {
+    final id = 'file${_counter++}';
+    files[id] = name;
+    if (subfolder.isNotEmpty) {
+      fileFolders[id] = subfolder;
+      subfolders.add(subfolder);
+    }
+    sizes[id] = bytes.length;
+    contents[id] = bytes;
+    return id;
+  }
 
   @override
   Future<DriveSettings?> connect({required String folderName}) async => account;
@@ -571,6 +665,15 @@ class FakeDriveService implements DriveService {
         ? fileId
         : 'file${_counter++}';
     files[id] = name;
+    if (subfolder.isNotEmpty) {
+      fileFolders[id] = subfolder;
+      subfolders.add(subfolder);
+    }
+    final source = File(path);
+    if (source.existsSync()) {
+      sizes[id] = source.lengthSync();
+      contents[id] = source.readAsBytesSync();
+    }
     return id;
   }
 
@@ -582,20 +685,74 @@ class FakeDriveService implements DriveService {
     }
     files[fileId] = name;
   }
+
+  @override
+  Future<List<FolderEntry>> list({
+    required String folderId,
+    String subfolder = '',
+  }) async {
+    if (listError case final error?) throw error;
+    return [
+      if (subfolder.isEmpty)
+        for (final name in subfolders)
+          FolderEntry(ref: 'dir:$name', name: name, isDirectory: true),
+      for (final MapEntry(key: id, value: name) in files.entries)
+        if ((fileFolders[id] ?? '') == subfolder)
+          FolderEntry(ref: id, name: name, size: sizes[id]),
+    ];
+  }
+
+  @override
+  Future<void> download({
+    required String fileId,
+    required String destination,
+  }) async {
+    calls.add('download $fileId');
+    final bytes = contents[fileId];
+    if (bytes == null) throw const DriveException(404, 'File not found');
+    if (Directory(p.dirname(destination)).existsSync()) {
+      File(destination).writeAsBytesSync(bytes);
+    }
+  }
+
+  @override
+  Future<void> delete({required String fileId}) async {
+    calls.add('delete $fileId');
+    files.remove(fileId);
+  }
+
+  @override
+  Future<void> createFolder({
+    required String folderId,
+    required String name,
+  }) async {
+    calls.add('mkdir $name');
+    subfolders.add(name);
+  }
 }
 
-CopySync fakeCopySync(
+/// Carpeta del dispositivo de los tests de widgets.
+const testFolder = FolderSettings(
+  id: 'tree://grabaciones',
+  name: 'Grabaciones',
+);
+
+/// Sincronización para los tests de widgets: sin archivos de verdad (todas
+/// las rutas «existen») y, si no se indica otra cosa, con las grabaciones
+/// guardadas en [testFolder].
+StorageSync fakeStorageSync(
   RecordingsRepository repository, {
   SettingsStore? store,
   FolderAccess? folders,
   DriveService? drive,
 }) {
-  return CopySync(
+  return StorageSync(
     repository: repository,
-    store: store ?? InMemorySettingsStore(),
+    store:
+        store ?? InMemorySettingsStore(const AppSettings(folder: testFolder)),
     folders: folders ?? FakeFolderAccess(),
     drive: drive ?? FakeDriveService(),
-    // Sin archivos de verdad que leer.
-    probe: (_) async => null,
+    cache: AudioCache(directory: () async => Directory('/fake/cache')),
+    fileExists: (_) => true,
   );
 }

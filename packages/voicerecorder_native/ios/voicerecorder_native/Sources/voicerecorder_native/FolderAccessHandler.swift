@@ -2,8 +2,8 @@ import Flutter
 import UIKit
 import UniformTypeIdentifiers
 
-/// Lee y copia archivos en una carpeta elegida por el usuario (En mi iPhone,
-/// iCloud Drive…) y en sus subcarpetas. El acceso se conserva entre reinicios
+/// Lee, escribe y borra archivos en una carpeta elegida por el usuario (En mi
+/// iPhone, iCloud Drive…) y en sus subcarpetas. El acceso se conserva entre reinicios
 /// con un marcador de seguridad. Las referencias de los archivos son rutas
 /// relativas a la carpeta («Clases/Tema 1.m4a»).
 final class FolderAccessHandler: NSObject, UIDocumentPickerDelegate {
@@ -56,6 +56,14 @@ final class FolderAccessHandler: NSObject, UIDocumentPickerDelegate {
       else { return badArguments(result) }
       runner.run(result) {
         try FolderAccessHandler.renameFile(folder: folder, ref: ref, name: name)
+      }
+    case "deleteFile":
+      guard let folder = args["folder"] as? String,
+        let ref = args["ref"] as? String
+      else { return badArguments(result) }
+      runner.run(result) {
+        try FolderAccessHandler.deleteFile(folder: folder, ref: ref)
+        return nil
       }
     default:
       result(FlutterMethodNotImplemented)
@@ -174,6 +182,24 @@ final class FolderAccessHandler: NSObject, UIDocumentPickerDelegate {
         try FileManager.default.moveItem(at: url, to: target)
       }
       return relativePath(of: target, in: directory)
+    }
+  }
+
+  /// Borra el archivo [ref]. Si no está descargado de iCloud Drive, se borra
+  /// su marcador. Si ya no existe, no hace nada.
+  private static func deleteFile(folder: String, ref: String) throws {
+    try withFolder(folder) { directory in
+      let fileManager = FileManager.default
+      var target = directory.appendingPathComponent(ref)
+      if !fileManager.fileExists(atPath: target.path) {
+        let placeholder = target.deletingLastPathComponent()
+          .appendingPathComponent(".\(target.lastPathComponent).icloud")
+        guard fileManager.fileExists(atPath: placeholder.path) else { return }
+        target = placeholder
+      }
+      try coordinate(writingAt: target, options: .forDeleting) { url in
+        try fileManager.removeItem(at: url)
+      }
     }
   }
 

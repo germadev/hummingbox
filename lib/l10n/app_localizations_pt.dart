@@ -42,17 +42,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get loadRecordingsFailed => 'Não foi possível carregar as gravações';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count gravações adicionadas da pasta',
-      one: '1 gravação adicionada da pasta',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => 'Nova pasta';
 
   @override
@@ -117,12 +106,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get rootFolder => 'Gravações';
-
-  @override
-  String get savingCopies => 'Salvando cópias…';
-
-  @override
-  String get copiesFailed => 'Não foi possível salvar algumas cópias';
 
   @override
   String get emptyFolderTitle => 'Esta pasta está vazia';
@@ -303,30 +286,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get playbackPosition => 'Posição da reprodução';
 
   @override
-  String get importTitle => 'Adicionar as gravações da pasta?';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count áudios',
-      one: '1 áudio',
-    );
-    return '“$folder” tem $_temp0 ($size) que não estão no app. Se você adicioná-los, eles aparecerão na lista e serão copiados para o app.';
-  }
-
-  @override
-  String get add => 'Adicionar';
-
-  @override
-  String get dontAdd => 'Não adicionar';
-
-  @override
   String get folderFailed => 'Não foi possível usar essa pasta';
-
-  @override
-  String get copiesKept => 'As cópias que já estão na pasta são mantidas';
 
   @override
   String get driveConnectFailed => 'Não foi possível conectar ao Google Drive';
@@ -388,27 +348,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get storageSection => 'Onde as gravações são salvas';
 
   @override
-  String get storageDescription =>
-      'As gravações são sempre salvas dentro do app. Você também pode manter uma cópia de cada uma em uma pasta do dispositivo e no Google Drive, com o nome que você deu e na sua subpasta. As cópias são atualizadas ao renomear ou editar uma gravação, mas não são excluídas ao excluí-la.';
-
-  @override
   String get deviceFolder => 'Pasta do dispositivo';
 
   @override
-  String get noFolder => 'Não é salvo em nenhuma pasta';
-
-  @override
-  String get stopSavingToFolder => 'Parar de salvar na pasta';
+  String get noFolder => 'Nenhuma';
 
   @override
   String get chooseAnotherFolder => 'Escolher outra pasta';
-
-  @override
-  String get showFolderRecordings => 'Mostrar as gravações da pasta';
-
-  @override
-  String get showFolderRecordingsSubtitle =>
-      'Adiciona ao app os áudios (.m4a e .wav) da pasta e das suas subpastas';
 
   @override
   String driveAccount(String email, String folder) {
@@ -423,29 +369,12 @@ class AppLocalizationsPt extends AppLocalizations {
       'Indisponível: esta versão do app não está configurada para acessar o Google';
 
   @override
-  String get copyNow => 'Copiar agora';
-
-  @override
-  String get copyNowSubtitle => 'Só é copiado o que falta ou mudou';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Não foi possível copiar $count gravações',
-      one: 'Não foi possível copiar 1 gravação',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'Não foi possível adicionar $count gravações da pasta',
-      one: 'Não foi possível adicionar 1 gravação da pasta',
+      other: 'Não foi possível adicionar $count gravações',
+      one: 'Não foi possível adicionar 1 gravação',
     );
     return '$_temp0';
   }
@@ -470,4 +399,111 @@ class AppLocalizationsPt extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message: $detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count gravações novas',
+      one: '1 gravação nova',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => 'Não foi possível reproduzir a gravação';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return 'Ela também será excluída de “$folder”. Esta ação não pode ser desfeita.';
+  }
+
+  @override
+  String get deleteFromDriveMessage =>
+      'Ela será movida para a lixeira do seu Google Drive.';
+
+  @override
+  String get syncing => 'Sincronizando…';
+
+  @override
+  String get syncFailed => 'Não foi possível sincronizar tudo';
+
+  @override
+  String get setupTitle => 'Onde você quer salvar as gravações?';
+
+  @override
+  String get setupMessage => 'Você pode mudar isso depois nas configurações.';
+
+  @override
+  String get setupFolder => 'Em uma pasta do dispositivo';
+
+  @override
+  String get setupFolderDescription =>
+      'No armazenamento interno, em um cartão SD, no iCloud Drive… As gravações que já estiverem nela aparecerão no app.';
+
+  @override
+  String get setupDrive => 'No Google Drive';
+
+  @override
+  String get setupDriveDescription =>
+      'Em uma pasta do seu Drive. As que ainda não puderem ser enviadas ficam salvas no app.';
+
+  @override
+  String get storageFolderDescription =>
+      'As gravações são salvas na pasta escolhida, com o nome que você der e na subpasta delas, e o app mostra todos os áudios (.m4a e .wav) que estão nela. O que você excluir, renomear ou editar no app também muda na pasta.';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return 'As gravações são salvas na pasta “$folder” do seu Google Drive e baixadas para ouvir ou editar. As que ainda não puderam ser enviadas (por exemplo, sem conexão) ficam salvas no app. Se você escolher uma pasta do dispositivo, elas serão salvas nela e o Drive guardará uma cópia.';
+  }
+
+  @override
+  String get stopUsingFolder => 'Deixar de usar a pasta';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return 'Deixar de usar “$folder”?';
+  }
+
+  @override
+  String get stopUsingFolderMessage =>
+      'As gravações ficarão na pasta, mas deixarão de aparecer no app. Depois você terá que escolher onde salvar as novas.';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      'As gravações ficarão na pasta e o app passará a usar as do seu Google Drive, onde as novas serão salvas.';
+
+  @override
+  String get stopUsing => 'Deixar de usar';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      'As gravações ficarão no seu Drive, mas deixarão de aparecer no app. Depois você terá que escolher onde salvar as novas.';
+
+  @override
+  String folderInUse(String folder) {
+    return 'As gravações agora são salvas em “$folder”';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Não foi possível salvar $count gravações',
+      one: 'Não foi possível salvar 1 gravação',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => 'Não foi possível ler o Google Drive';
+
+  @override
+  String get syncNow => 'Sincronizar agora';
+
+  @override
+  String get syncNowSubtitle =>
+      'Salva o que estiver pendente e procura mudanças onde as gravações são salvas';
 }

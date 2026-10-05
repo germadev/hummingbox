@@ -19,6 +19,7 @@ void main() {
   late FakeRecordingEditor editor;
   late InMemorySettingsStore store;
   late FakeFolderAccess folders;
+  late FakeDriveService drive;
 
   setUpAll(() => initializeDateFormatting('es'));
 
@@ -26,8 +27,9 @@ void main() {
     repository = InMemoryRecordingsRepository();
     recorder = FakeAudioRecorderService();
     player = FakeAudioPlayerService();
-    store = InMemorySettingsStore();
+    store = InMemorySettingsStore(const AppSettings(folder: testFolder));
     folders = FakeFolderAccess();
+    drive = FakeDriveService();
   });
 
   Recording sample(
@@ -58,7 +60,12 @@ void main() {
         recorderFactory: () => recorder,
         playerFactory: () => player,
         editor: editor,
-        sync: fakeCopySync(repository, store: store, folders: folders),
+        sync: fakeStorageSync(
+          repository,
+          store: store,
+          folders: folders,
+          drive: drive,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -300,6 +307,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('¿Eliminar «Entrevista»?'), findsOneWidget);
 
+    // Está guardada en la carpeta: se borra también de allí.
+    expect(
+      find.text(
+        'También se borrará de «Grabaciones». Esta acción no se puede '
+        'deshacer.',
+      ),
+      findsOneWidget,
+    );
+
     await tester.tap(find.widgetWithText(FilledButton, 'Eliminar'));
     await tester.pumpAndSettle();
 
@@ -307,6 +323,90 @@ void main() {
     expect(find.text('Notas'), findsOneWidget);
     expect(repository.recordings.map((r) => r.name), ['Notas']);
     expect(player.calls.last, 'stop');
+    expect(folders.files.values, ['Notas.m4a']);
+  });
+
+  group('menú inicial', () {
+    setUp(() => store = InMemorySettingsStore());
+
+    testWidgets('sin destino, pide elegirlo antes de grabar', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      expect(
+        find.text('¿Dónde quieres guardar las grabaciones?'),
+        findsOneWidget,
+      );
+      expect(record(), findsNothing);
+      expect(find.text('Entrevista'), findsNothing);
+      expect(folders.calls, isEmpty);
+    });
+
+    testWidgets('elige una carpeta y guarda en ella lo que había', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      folders.addFile('tree://music', 'Idea.m4a');
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('setup-folder')));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.folder!.id, 'tree://music');
+      expect(record(), findsOneWidget);
+      expect(find.text('Entrevista'), findsOneWidget);
+      expect(find.text('Idea'), findsOneWidget);
+      // Ya está en la carpeta: su audio sale de la app.
+      expect(folders.calls, contains('write Entrevista.m4a'));
+      expect(repository.released, contains('a'));
+    });
+
+    testWidgets('elige Google Drive', (tester) async {
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('setup-drive')));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.storage, StorageKind.drive);
+      expect(find.text('Aún no hay grabaciones'), findsOneWidget);
+
+      await tester.tap(record());
+      await pumpAnimations(tester);
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+      expect(drive.calls, ['upload Grabación 1.m4a']);
+    });
+
+    testWidgets('sin Google Drive configurado, solo deja elegir carpeta', (
+      tester,
+    ) async {
+      drive.isAvailable = false;
+      await pumpApp(tester);
+
+      expect(find.textContaining('No disponible'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('setup-drive')));
+      await tester.pumpAndSettle();
+      expect(store.settings.storage, isNull);
+    });
+
+    testWidgets('vuelve a él al dejar de usar la carpeta', (tester) async {
+      store.settings = const AppSettings(folder: testFolder);
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('settings-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Dejar de usar la carpeta'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Dejar de usar «Grabaciones»?'), findsOneWidget);
+      await tester.tap(find.text('Dejar de usarla'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.storage, isNull);
+      expect(
+        find.text('¿Dónde quieres guardar las grabaciones?'),
+        findsOneWidget,
+      );
+    });
   });
 
   group('panel de grabación', () {
@@ -390,7 +490,10 @@ void main() {
     });
 
     testWidgets('graba al terminar la cuenta atrás', (tester) async {
-      store.settings = const AppSettings(countdownSeconds: 5);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        countdownSeconds: 5,
+      );
       await pumpApp(tester);
       await tester.drag(handle(), const Offset(0, -300));
       await tester.pumpAndSettle();
@@ -516,6 +619,15 @@ void main() {
       await tester.tapAt(Offset(box.left + box.width / 4, box.top + 10));
       await tester.pumpAndSettle();
       expect(player.calls.last, 'seek 20750');
+
+      // Arrastrar sobre la onda salta, no abre el menú lateral.
+      await tester.dragFrom(
+        Offset(box.left + 10, box.top + 10),
+        Offset(box.width / 2, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(player.calls.last, startsWith('seek'));
+      expect(find.byKey(const Key('new-folder')), findsNothing);
     });
 
     testWidgets('calcula la onda de las grabaciones que no la tienen', (
@@ -591,7 +703,10 @@ void main() {
         sample('a', 'En la principal'),
         sample('b', 'Tema 1', folder: 'Clases'),
       ]);
-      store.settings = const AppSettings(folders: ['Ideas']);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        folders: ['Ideas'],
+      );
       await pumpApp(tester);
       expect(title(tester), 'Grabadora');
       expect(find.text('Tema 1'), findsNothing);
@@ -612,7 +727,10 @@ void main() {
     });
 
     testWidgets('graba en la carpeta abierta', (tester) async {
-      store.settings = const AppSettings(openFolder: 'Clases');
+      store.settings = const AppSettings(
+        folder: testFolder,
+        openFolder: 'Clases',
+      );
       await pumpApp(tester);
       expect(title(tester), 'Clases');
       expect(find.text('Esta carpeta está vacía'), findsOneWidget);
@@ -624,6 +742,32 @@ void main() {
 
       expect(repository.recordings.single.folder, 'Clases');
       expect(find.text('Grabación 1'), findsOneWidget);
+    });
+
+    testWidgets('el menú lateral se abre deslizando en la lista', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      expect(find.byKey(const Key('new-folder')), findsNothing);
+
+      // Desde el centro de la tarjeta, no desde el borde.
+      await tester.drag(find.text('Entrevista'), const Offset(200, 0));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
+    });
+
+    testWidgets('deslizar hacia la izquierda no abre el menú', (tester) async {
+      await pumpApp(tester);
+
+      await tester.drag(
+        find.text('Aún no hay grabaciones'),
+        const Offset(-200, 0),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('new-folder')), findsNothing);
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {
@@ -645,7 +789,10 @@ void main() {
     testWidgets('«atrás» en una subcarpeta vuelve a la principal', (
       tester,
     ) async {
-      store.settings = const AppSettings(openFolder: 'Clases');
+      store.settings = const AppSettings(
+        folder: testFolder,
+        openFolder: 'Clases',
+      );
       await pumpApp(tester);
 
       await tester.binding.handlePopRoute();
@@ -665,10 +812,7 @@ void main() {
       await pumpApp(tester);
 
       expect(find.text('Idea'), findsOneWidget);
-      expect(
-        find.text('Se han añadido 2 grabaciones de la carpeta'),
-        findsOneWidget,
-      );
+      expect(find.text('Hay 2 grabaciones nuevas'), findsOneWidget);
 
       await openDrawer(tester);
       // La principal lleva el nombre de la carpeta del dispositivo.

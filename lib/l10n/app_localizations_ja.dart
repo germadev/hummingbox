@@ -42,16 +42,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get loadRecordingsFailed => '録音を読み込めませんでした';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'フォルダから $count 件の録音を追加しました',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => '新しいフォルダ';
 
   @override
@@ -114,12 +104,6 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get rootFolder => '録音';
-
-  @override
-  String get savingCopies => 'コピーを保存中…';
-
-  @override
-  String get copiesFailed => '一部のコピーを保存できませんでした';
 
   @override
   String get emptyFolderTitle => 'このフォルダは空です';
@@ -298,24 +282,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get playbackPosition => '再生位置';
 
   @override
-  String get importTitle => 'フォルダの録音を追加しますか？';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    return '「$folder」には、アプリにない音声ファイルが $count 件（$size）あります。追加すると一覧に表示され、アプリにコピーされます。';
-  }
-
-  @override
-  String get add => '追加';
-
-  @override
-  String get dontAdd => '追加しない';
-
-  @override
   String get folderFailed => 'そのフォルダは使用できません';
-
-  @override
-  String get copiesKept => 'フォルダ内の既存のコピーは残ります';
 
   @override
   String get driveConnectFailed => 'Google ドライブに接続できませんでした';
@@ -373,27 +340,13 @@ class AppLocalizationsJa extends AppLocalizations {
   String get storageSection => '録音の保存先';
 
   @override
-  String get storageDescription =>
-      '録音は常にアプリ内に保存されます。さらに、端末のフォルダや Google ドライブに、付けた名前のまま対応するサブフォルダへコピーを保存できます。録音の名前を変えたり編集したりするとコピーも更新されますが、録音を削除してもコピーは削除されません。';
-
-  @override
   String get deviceFolder => '端末のフォルダ';
 
   @override
-  String get noFolder => 'どのフォルダにも保存しません';
-
-  @override
-  String get stopSavingToFolder => 'フォルダへの保存をやめる';
+  String get noFolder => 'なし';
 
   @override
   String get chooseAnotherFolder => '別のフォルダを選ぶ';
-
-  @override
-  String get showFolderRecordings => 'フォルダの録音を表示';
-
-  @override
-  String get showFolderRecordingsSubtitle =>
-      'フォルダとサブフォルダ内の音声ファイル（.m4a と .wav）をアプリに追加します';
 
   @override
   String driveAccount(String email, String folder) {
@@ -407,27 +360,11 @@ class AppLocalizationsJa extends AppLocalizations {
   String get driveUnavailable => '利用できません：このバージョンのアプリは Google へのアクセスが設定されていません';
 
   @override
-  String get copyNow => '今すぐコピー';
-
-  @override
-  String get copyNowSubtitle => '不足分や変更分のみコピーします';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count 件の録音をコピーできませんでした',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'フォルダから $count 件の録音を追加できませんでした',
+      other: '$count 件の録音を追加できませんでした',
     );
     return '$_temp0';
   }
@@ -451,4 +388,107 @@ class AppLocalizationsJa extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message：$detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '新しい録音が $count 件あります',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => '録音を再生できませんでした';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return '「$folder」からも削除されます。この操作は取り消せません。';
+  }
+
+  @override
+  String get deleteFromDriveMessage => 'Google ドライブのゴミ箱に移動されます。';
+
+  @override
+  String get syncing => '同期しています…';
+
+  @override
+  String get syncFailed => '一部を同期できませんでした';
+
+  @override
+  String get setupTitle => '録音をどこに保存しますか？';
+
+  @override
+  String get setupMessage => 'あとで設定から変更できます。';
+
+  @override
+  String get setupFolder => 'この端末のフォルダ';
+
+  @override
+  String get setupFolderDescription =>
+      '内部ストレージ、SD カード、iCloud Drive など。すでに入っている録音もアプリに表示されます。';
+
+  @override
+  String get setupDrive => 'Google ドライブ';
+
+  @override
+  String get setupDriveDescription =>
+      'ドライブ内のフォルダに保存します。まだアップロードできない録音はアプリ内に保存されます。';
+
+  @override
+  String get storageFolderDescription =>
+      '録音は選んだフォルダに、付けた名前で対応するサブフォルダに保存され、アプリにはその中のすべての音声（.m4a と .wav）が表示されます。アプリで削除・名前変更・編集した内容はフォルダにも反映されます。';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return '録音は Google ドライブの「$folder」フォルダに保存され、再生や編集のときにダウンロードされます。まだアップロードできていない録音（オフライン時など）はアプリ内に保存されます。端末のフォルダを選ぶと、録音はそこに保存され、ドライブにはコピーが残ります。';
+  }
+
+  @override
+  String get stopUsingFolder => 'このフォルダの使用をやめる';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return '「$folder」の使用をやめますか？';
+  }
+
+  @override
+  String get stopUsingFolderMessage =>
+      '録音はフォルダに残りますが、アプリには表示されなくなります。その後、新しい録音の保存先を選ぶ必要があります。';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      '録音はフォルダに残り、アプリは Google ドライブの録音を使うようになります。新しい録音もそこに保存されます。';
+
+  @override
+  String get stopUsing => '使用をやめる';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      '録音はドライブに残りますが、アプリには表示されなくなります。その後、新しい録音の保存先を選ぶ必要があります。';
+
+  @override
+  String folderInUse(String folder) {
+    return '録音は「$folder」に保存されるようになりました';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件の録音を保存できませんでした',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => 'Google ドライブを読み込めませんでした';
+
+  @override
+  String get syncNow => '今すぐ同期';
+
+  @override
+  String get syncNowSubtitle => '保留中のものを保存し、録音の保存先の変更を確認します';
 }
