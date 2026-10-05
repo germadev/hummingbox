@@ -1429,6 +1429,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing to save: no notes were played'**
   String get pianoNothingPlayed;
+
+  /// No description provided for @stopPlayback.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop playback'**
+  String get stopPlayback;
+
+  /// Interruptor del dock: al terminar una grabación, seguir con la siguiente de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Play one after another'**
+  String get playAll;
+
+  /// Interruptor del dock: al terminar, volver a empezar (la grabación o, con la lista, la lista)
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get repeat;
 }
 
 class _AppLocalizationsDelegate

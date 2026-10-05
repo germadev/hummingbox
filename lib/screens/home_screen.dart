@@ -98,6 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
     audioPath: widget.sync.audioPath,
+    // Con «reproducir lista», sigue con la siguiente de las que se ven.
+    queue: () => _visibleRecordings,
   );
   late final TranscriptionController _transcriptions = TranscriptionController(
     transcriber: widget.transcriber,
@@ -1391,6 +1393,8 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
         countdownSeconds: widget.sync.settings.countdownSeconds,
+        player: _player,
+        onStopPlayback: () => unawaited(_player.stop()),
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
         onCountdownPressed: _startAfterCountdown,
@@ -1444,31 +1448,34 @@ class _HomeScreenState extends State<HomeScreen> {
   int _countIn(String folder) =>
       _recordings.where((recording) => recording.folder == folder).length;
 
+  /// Las grabaciones que se ven, en orden: las de la carpeta abierta o, al
+  /// buscar, de todas las carpetas, primero las que tienen las palabras tal
+  /// cual y después las que tienen alguna parecida.
+  List<Recording> get _visibleRecordings {
+    final query = _query;
+    if (query.isEmpty) {
+      return [
+        for (final recording in _recordings)
+          if (recording.folder == _folder) recording,
+      ];
+    }
+    final matches = {
+      for (final recording in _recordings) recording: query.matchOf(recording),
+    };
+    return [
+      for (final kind in [SearchMatch.exact, SearchMatch.similar])
+        for (final MapEntry(key: recording, value: match) in matches.entries)
+          if (match == kind) recording,
+    ];
+  }
+
   Widget _buildBody(String folder) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    // Al buscar, en todas las carpetas: primero las que tienen las palabras
-    // tal cual y después las que tienen alguna parecida.
     final query = _query;
     final searching = !query.isEmpty;
-    final List<Recording> recordings;
-    if (searching) {
-      final matches = {
-        for (final recording in _recordings)
-          recording: query.matchOf(recording),
-      };
-      recordings = [
-        for (final kind in [SearchMatch.exact, SearchMatch.similar])
-          for (final MapEntry(key: recording, value: match) in matches.entries)
-            if (match == kind) recording,
-      ];
-    } else {
-      recordings = [
-        for (final recording in _recordings)
-          if (recording.folder == folder) recording,
-      ];
-    }
+    final recordings = _visibleRecordings;
     // Al abrir la app o una carpeta (o al terminar de buscar), desde el
     // final, con las más recientes; los resultados, desde el principio.
     final Object shown = searching ? const _SearchResults() : folder;

@@ -219,5 +219,8 @@
   "close": "Schließen",
   "pianoOnly": "Nur Klavier",
   "pianoAndVoice": "Klavier und Stimme",
-  "pianoNothingPlayed": "Nichts zu speichern: Es wurden keine Töne gespielt"
+  "pianoNothingPlayed": "Nichts zu speichern: Es wurden keine Töne gespielt",
+  "stopPlayback": "Wiedergabe beenden",
+  "playAll": "Nacheinander abspielen",
+  "repeat": "Wiederholen"
 }

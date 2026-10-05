@@ -219,5 +219,8 @@
   "close": "Fechar",
   "pianoOnly": "Só piano",
   "pianoAndVoice": "Piano e voz",
-  "pianoNothingPlayed": "Nada para salvar: nenhuma nota foi tocada"
+  "pianoNothingPlayed": "Nada para salvar: nenhuma nota foi tocada",
+  "stopPlayback": "Parar a reprodução",
+  "playAll": "Reproduzir uma após a outra",
+  "repeat": "Repetir"
 }

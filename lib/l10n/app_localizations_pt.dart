@@ -781,4 +781,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get pianoNothingPlayed => 'Nada para salvar: nenhuma nota foi tocada';
+
+  @override
+  String get stopPlayback => 'Parar a reprodução';
+
+  @override
+  String get playAll => 'Reproduzir uma após a outra';
+
+  @override
+  String get repeat => 'Repetir';
 }

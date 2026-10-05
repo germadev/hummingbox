@@ -756,4 +756,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get pianoNothingPlayed => '保存するものがありません：音が弾かれていません';
+
+  @override
+  String get stopPlayback => '再生を停止';
+
+  @override
+  String get playAll => '続けて再生';
+
+  @override
+  String get repeat => 'リピート';
 }

@@ -791,4 +791,13 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get pianoNothingPlayed =>
       'Rien à enregistrer : aucune note n’a été jouée';
+
+  @override
+  String get stopPlayback => 'Arrêter la lecture';
+
+  @override
+  String get playAll => 'Lire à la suite';
+
+  @override
+  String get repeat => 'Répéter';
 }

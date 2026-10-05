@@ -751,4 +751,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get pianoNothingPlayed => '没有可保存的内容：未弹奏任何音符';
+
+  @override
+  String get stopPlayback => '停止播放';
+
+  @override
+  String get playAll => '连续播放';
+
+  @override
+  String get repeat => '重复播放';
 }

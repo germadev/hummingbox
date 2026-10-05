@@ -219,5 +219,8 @@
   "close": "Fermer",
   "pianoOnly": "Piano seul",
   "pianoAndVoice": "Piano et voix",
-  "pianoNothingPlayed": "Rien à enregistrer : aucune note n’a été jouée"
+  "pianoNothingPlayed": "Rien à enregistrer : aucune note n’a été jouée",
+  "stopPlayback": "Arrêter la lecture",
+  "playAll": "Lire à la suite",
+  "repeat": "Répéter"
 }

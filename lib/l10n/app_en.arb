@@ -626,5 +626,14 @@
   "@pianoAndVoice": {
     "description": "En el piano: grabar las notas y la voz con el micrófono"
   },
-  "pianoNothingPlayed": "Nothing to save: no notes were played"
+  "pianoNothingPlayed": "Nothing to save: no notes were played",
+  "stopPlayback": "Stop playback",
+  "playAll": "Play one after another",
+  "@playAll": {
+    "description": "Interruptor del dock: al terminar una grabación, seguir con la siguiente de la lista"
+  },
+  "repeat": "Repeat",
+  "@repeat": {
+    "description": "Interruptor del dock: al terminar, volver a empezar (la grabación o, con la lista, la lista)"
+  }
 }

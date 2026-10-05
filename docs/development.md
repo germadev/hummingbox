@@ -33,7 +33,8 @@ Drive (as destination and as copy, including change detection by MD5
 checksum and `.txt` transcripts; the Drive API is tested with a fake HTTP
 client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
-automatic recording names, the piano's notes and synthesized sound,
+automatic recording names, the piano's notes, synthesized sound and mixing
+with the voice,
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search

@@ -795,4 +795,13 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get pianoNothingPlayed =>
       'Nichts zu speichern: Es wurden keine Töne gespielt';
+
+  @override
+  String get stopPlayback => 'Wiedergabe beenden';
+
+  @override
+  String get playAll => 'Nacheinander abspielen';
+
+  @override
+  String get repeat => 'Wiederholen';
 }

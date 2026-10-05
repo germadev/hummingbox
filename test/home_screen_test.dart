@@ -11,6 +11,7 @@ import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
+import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
@@ -2143,6 +2144,59 @@ void main() {
     expect(find.text('Formato'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Carpeta del dispositivo'), 200);
     expect(find.text('Carpeta del dispositivo'), findsOneWidget);
+  });
+
+  group('dock mientras se reproduce', () {
+    testWidgets('parar en el centro, lista a la izquierda y repetir a la '
+        'derecha; con la lista sigue con la de debajo', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Primera', createdAt: DateTime(2026, 9, 1)),
+        sample('b', 'Segunda', createdAt: DateTime(2026, 9, 2)),
+      ]);
+      await pumpApp(tester);
+      expect(find.byKey(const Key('stop-playback-button')), findsNothing);
+
+      await tester.tap(find.byTooltip('Reproducir').first);
+      await tester.pumpAndSettle();
+
+      expect(record(), findsNothing);
+      final stop = tester.getCenter(
+        find.byKey(const Key('stop-playback-button')),
+      );
+      final list = tester.getCenter(find.byKey(const Key('playlist-button')));
+      final loop = tester.getCenter(find.byKey(const Key('loop-button')));
+      expect(list.dx, lessThan(stop.dx));
+      expect(loop.dx, greaterThan(stop.dx));
+
+      await tester.tap(find.byTooltip('Reproducir una detrás de otra'));
+      await tester.pump();
+      player.statusController.add(PlaybackStatus.completed);
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'play /fake/b.m4a @0');
+
+      await tester.tap(find.byKey(const Key('stop-playback-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'stop');
+      expect(record(), findsOneWidget);
+    });
+
+    testWidgets('repetir vuelve a empezar la misma', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Repetir'));
+      await tester.pump();
+      final button = tester.widget<IconButton>(
+        find.byKey(const Key('loop-button')),
+      );
+      expect(button.isSelected, isTrue);
+      player.statusController.add(PlaybackStatus.completed);
+      await tester.pumpAndSettle();
+
+      expect(player.calls.where((c) => c.startsWith('play')), hasLength(2));
+    });
   });
 
   group('piano', () {

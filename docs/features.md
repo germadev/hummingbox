@@ -74,6 +74,11 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek (also on recordings that are not playing).
+- **Loop and playlist**: while a recording plays (or is paused), the bottom
+  panel shows a button to stop it in the middle, *Play one after another* on
+  the left (when it ends, the next one in the list plays) and *Repeat* on the
+  right (it starts again; with *Play one after another*, the whole list
+  repeats). Both stay on until you turn them off, while the app is open.
 - **Rename**, **share** (with the name you gave it) and **delete**.
 
 ## Folders
@@ -82,8 +87,16 @@ The folder button (top left), or swiping right anywhere on the list, opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, next to the folder button
-(the main folder has no title), the list shows its recordings and **new recordings go there**. Back
-returns to the main folder.
+(the main folder has no title), the list shows its recordings and **new recordings go there**.
+
+## Back button
+
+Back goes from the most specific to the most general: it closes the piano;
+it removes the focus from the search field and then the selection of a
+recording; it closes the search; in a subfolder it returns to the main
+folder, and in the main folder it opens the folders menu. With that menu
+open in the main folder, Back leaves the app. While recording it doesn't
+leave.
 
 ## Piano
 
@@ -100,7 +113,30 @@ to the system's orientation when it closes.
   with the enlarged part highlighted. Tap or swipe on them to move it. The
   position is kept when the piano is closed.
 - The sound is synthesized in the app (no samples). The piano can't be
-  opened while recording, so its sound doesn't interrupt the recording.
+  opened while recording from the main screen.
+
+### Recording from the piano
+
+At the top of the piano choose what to record, **piano only** or **piano and
+voice**, and press *Record*; the button shows the time and stops the
+recording. Closing the piano (or Back) while recording stops and saves it.
+The recording goes to the open folder, like any other.
+
+- The app keeps when each key was pressed and released, so the recording
+  keeps the rhythm you played.
+- **Piano only**: no microphone. When you stop, the audio is generated from
+  the notes (in the format and quality of the settings) and lasts until the
+  last note fades out. If no key was played, nothing is saved.
+- **Piano and voice**: the microphone records as usual and, when you stop,
+  the notes are mixed on top, timed with the recorder so they match the
+  voice. With headphones the piano isn't picked up by the microphone; with
+  the speaker it is also heard faintly in the voice.
+- In the list, the notes are drawn like in a MIDI editor (piano roll): each
+  one at the height of its key, from when it was pressed until it was
+  released, over the voice's waveform (or alone, for piano only), on the
+  same timeline. They work as the progress bar too.
+- Trimming in the editor keeps the notes in place. Piano-only recordings
+  aren't transcribed.
 
 ## Search
 
@@ -127,8 +163,9 @@ less or different, or two letters swapped), and up to 3 extra letters at the
 end. Words of 3 letters or less, words with digits and Chinese or Japanese
 text are only searched as typed. Recordings that have the words as typed come
 first. Results highlight what was found (similar words too), show the part
-of the transcript where it appears and each recording's subfolder. The X or
-Back closes the search.
+of the transcript where it appears and each recording's subfolder. The X
+closes the search; Back first removes the focus from the field and then
+closes it.
 
 ## Editing
 

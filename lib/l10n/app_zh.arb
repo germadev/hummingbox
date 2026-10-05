@@ -219,5 +219,8 @@
   "close": "关闭",
   "pianoOnly": "仅钢琴",
   "pianoAndVoice": "钢琴和人声",
-  "pianoNothingPlayed": "没有可保存的内容：未弹奏任何音符"
+  "pianoNothingPlayed": "没有可保存的内容：未弹奏任何音符",
+  "stopPlayback": "停止播放",
+  "playAll": "连续播放",
+  "repeat": "重复播放"
 }

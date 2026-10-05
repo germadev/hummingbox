@@ -219,5 +219,8 @@
   "close": "閉じる",
   "pianoOnly": "ピアノのみ",
   "pianoAndVoice": "ピアノと声",
-  "pianoNothingPlayed": "保存するものがありません：音が弾かれていません"
+  "pianoNothingPlayed": "保存するものがありません：音が弾かれていません",
+  "stopPlayback": "再生を停止",
+  "playAll": "続けて再生",
+  "repeat": "リピート"
 }

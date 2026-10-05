@@ -5,14 +5,19 @@ import 'package:flutter/foundation.dart';
 import '../models/recording.dart';
 import '../services/audio_player_service.dart';
 
-/// Reproduce las grabaciones de una en una.
+/// Reproduce las grabaciones de una en una. Al terminar una, puede volver a
+/// empezarla ([loop]) o seguir con la siguiente de la lista ([playlist]); con
+/// las dos, al acabar la lista vuelve a la primera.
 class PlayerController extends ChangeNotifier {
   /// [audioPath] da la ruta local del audio de cada grabación (ver
-  /// `StorageSync.audioPath`); por defecto, la de dentro de la app.
+  /// `StorageSync.audioPath`); por defecto, la de dentro de la app. [queue]
+  /// da las grabaciones de la lista, en orden, para seguir con la siguiente.
   PlayerController({
     required this._player,
     Future<String> Function(Recording recording)? audioPath,
-  }) : _audioPath = audioPath ?? _localPath {
+    List<Recording> Function()? queue,
+  }) : _audioPath = audioPath ?? _localPath,
+       _queue = queue ?? _noQueue {
     _subscriptions = [
       _player.statusChanges.listen(_onStatus),
       _player.positionChanges.listen(_onPosition),
@@ -22,6 +27,9 @@ class PlayerController extends ChangeNotifier {
 
   final AudioPlayerService _player;
   final Future<String> Function(Recording recording) _audioPath;
+  final List<Recording> Function() _queue;
+
+  static List<Recording> _noQueue() => const [];
   late final List<StreamSubscription<Object?>> _subscriptions;
   bool _disposed = false;
 
@@ -40,6 +48,36 @@ class PlayerController extends ChangeNotifier {
   Duration get duration => _duration;
 
   bool isCurrent(Recording recording) => recording.id == _currentId;
+
+  /// La grabación cargada, para saber cuál sigue.
+  Recording? _current;
+
+  bool _loop = false;
+
+  /// Si al terminar se vuelve a empezar: la misma grabación o, con
+  /// [playlist], la lista.
+  bool get loop => _loop;
+
+  bool _playlist = false;
+
+  /// Si al terminar una grabación se sigue con la siguiente de la lista.
+  bool get playlist => _playlist;
+
+  void toggleLoop() {
+    _loop = !_loop;
+    _notify();
+  }
+
+  void togglePlaylist() {
+    _playlist = !_playlist;
+    _notify();
+  }
+
+  /// Indica si hay una grabación sonando o en pausa (no parada ni
+  /// terminada).
+  bool get isPlayingOrPaused =>
+      _currentId != null &&
+      (_status == PlaybackStatus.playing || _status == PlaybackStatus.paused);
 
   bool isPlaying(Recording recording) =>
       isCurrent(recording) && _status == PlaybackStatus.playing;
@@ -69,11 +107,17 @@ class PlayerController extends ChangeNotifier {
       }
     }
 
+    _load(recording);
+    await _play(recording);
+  }
+
+  /// Carga [recording] desde el principio.
+  void _load(Recording recording, {Duration position = Duration.zero}) {
     _currentId = recording.id;
-    _position = Duration.zero;
+    _current = recording;
+    _position = position;
     _duration = recording.duration;
     _notify();
-    await _play(recording);
   }
 
   /// Carga [recording] y la reproduce desde [position].
@@ -83,10 +127,7 @@ class PlayerController extends ChangeNotifier {
       if (_status != PlaybackStatus.playing) await toggle(recording);
       return;
     }
-    _currentId = recording.id;
-    _position = position;
-    _duration = recording.duration;
-    _notify();
+    _load(recording, position: position);
     await _play(recording, position: position);
   }
 
@@ -127,6 +168,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> stop() async {
     if (_currentId == null) return;
     _currentId = null;
+    _current = null;
     _loading = false;
     _status = PlaybackStatus.stopped;
     _position = Duration.zero;
@@ -138,6 +180,30 @@ class PlayerController extends ChangeNotifier {
     _status = status;
     if (status == PlaybackStatus.completed) _position = Duration.zero;
     _notify();
+    if (status == PlaybackStatus.completed) {
+      if (_next() case final next?) unawaited(_playNext(next));
+    }
+  }
+
+  /// La que suena al terminar la actual, o `null` si se para.
+  Recording? _next() {
+    final current = _current;
+    if (current == null) return null;
+    if (!_playlist) return _loop ? current : null;
+    final list = _queue();
+    final index = list.indexWhere((r) => r.id == current.id);
+    if (index == -1) return _loop ? current : null;
+    if (index + 1 < list.length) return list[index + 1];
+    return _loop ? list.first : null;
+  }
+
+  Future<void> _playNext(Recording next) async {
+    _load(next);
+    try {
+      await _play(next);
+    } catch (_) {
+      // No se pudo leer (p. ej. sin conexión para descargarla): se para.
+    }
   }
 
   void _onPosition(Duration position) {
