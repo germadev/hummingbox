@@ -655,6 +655,58 @@
   "@instrumentSynth": {
     "description": "Instrumento: sintetizador"
   },
+  "synthWave": "Wave",
+  "@synthWave": {
+    "description": "En el sintetizador: la forma de la onda"
+  },
+  "waveSaw": "Sawtooth",
+  "@waveSaw": {
+    "description": "Onda de sierra"
+  },
+  "waveSquare": "Square",
+  "@waveSquare": {
+    "description": "Onda cuadrada"
+  },
+  "waveTriangle": "Triangle",
+  "@waveTriangle": {
+    "description": "Onda triangular"
+  },
+  "waveSine": "Sine",
+  "@waveSine": {
+    "description": "Onda senoidal"
+  },
+  "synthAttack": "Attack",
+  "@synthAttack": {
+    "description": "Sintetizador: lo que tarda en llegar al máximo al pulsar la tecla"
+  },
+  "synthDecay": "Decay",
+  "@synthDecay": {
+    "description": "Sintetizador: lo que tarda en bajar del máximo al nivel de sostenido"
+  },
+  "synthSustain": "Sustain",
+  "@synthSustain": {
+    "description": "Sintetizador: el nivel mientras se mantiene la tecla"
+  },
+  "synthRelease": "Release",
+  "@synthRelease": {
+    "description": "Sintetizador: lo que tarda en apagarse al soltar la tecla"
+  },
+  "synthBrightness": "Brightness",
+  "@synthBrightness": {
+    "description": "Sintetizador: lo abierto que está el filtro (más o menos brillante)"
+  },
+  "synthResonance": "Resonance",
+  "@synthResonance": {
+    "description": "Sintetizador: lo que resuena el filtro"
+  },
+  "synthDetune": "Detune",
+  "@synthDetune": {
+    "description": "Sintetizador: cuánto se desafinan entre sí sus dos osciladores"
+  },
+  "synthReset": "Default sound",
+  "@synthReset": {
+    "description": "Sintetizador: volver al sonido por defecto"
+  },
   "stopPlayback": "Stop playback",
   "playAll": "Play one after another",
   "@playAll": {

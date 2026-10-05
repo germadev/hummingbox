@@ -11,8 +11,10 @@ import '../l10n/l10n.dart';
 import '../controllers/piano_recorder.dart';
 import '../models/instrument.dart';
 import '../models/recording.dart';
+import '../models/synth_patch.dart';
 import '../services/piano_sound.dart';
 import '../utils/formatters.dart';
+import 'synth_controls.dart';
 
 /// Panel del piano, que se abre deslizando hacia la izquierda: un teclado
 /// de octava y media y, debajo, todas las octavas en pequeño con la parte
@@ -30,6 +32,8 @@ class PianoPanel extends StatefulWidget {
     required this.keyCount,
     required this.instrument,
     required this.onInstrumentChanged,
+    required this.synth,
+    required this.onSynthChanged,
     required this.recorder,
     required this.mode,
     required this.onRecord,
@@ -72,6 +76,12 @@ class PianoPanel extends StatefulWidget {
   final Instrument instrument;
 
   final ValueChanged<Instrument> onInstrumentChanged;
+
+  /// Cómo suena el sintetizador: con él, sus controles están encima de las
+  /// teclas (a la derecha de la pantalla en vertical, con el piano girado).
+  final SynthPatch synth;
+
+  final ValueChanged<SynthPatch> onSynthChanged;
 
   /// Cuartos de vuelta en el sentido de las agujas del reloj con los que se
   /// dibuja con la pantalla en vertical: 1 para verlo girando el móvil hacia
@@ -127,7 +137,10 @@ class _PianoPanelState extends State<PianoPanel> {
   @override
   void didUpdateWidget(PianoPanel old) {
     super.didUpdateWidget(old);
-    if (old.instrument != widget.instrument) _prepare();
+    if (old.instrument != widget.instrument ||
+        (widget.instrument == Instrument.synth && old.synth != widget.synth)) {
+      _prepare();
+    }
   }
 
   @override
@@ -146,9 +159,14 @@ class _PianoPanelState extends State<PianoPanel> {
       whites.length - 1,
     );
     unawaited(
-      widget.sound.prepare([
-        for (var key = whites[firstIndex]; key <= whites[lastIndex]; key++) key,
-      ], widget.instrument),
+      widget.sound.prepare(
+        [
+          for (var key = whites[firstIndex]; key <= whites[lastIndex]; key++)
+            key,
+        ],
+        widget.instrument,
+        synth: widget.synth,
+      ),
     );
   }
 
@@ -157,8 +175,12 @@ class _PianoPanelState extends State<PianoPanel> {
       _lastKey = key;
       _message = null;
     });
-    unawaited(widget.sound.play(key, widget.instrument));
-    widget.recorder.noteOn(key, instrument: widget.instrument);
+    unawaited(widget.sound.play(key, widget.instrument, synth: widget.synth));
+    widget.recorder.noteOn(
+      key,
+      instrument: widget.instrument,
+      synth: widget.synth,
+    );
   }
 
   void _release(int key) {
@@ -327,6 +349,12 @@ class _PianoPanelState extends State<PianoPanel> {
             ],
           ),
         ),
+        if (widget.instrument == Instrument.synth)
+          SynthControls(
+            key: const Key('synth-controls'),
+            patch: widget.synth,
+            onChanged: widget.onSynthChanged,
+          ),
         // Las teclas, siempre de grave (izquierda) a agudo (derecha).
         Expanded(
           child: Directionality(

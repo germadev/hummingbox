@@ -804,6 +804,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get instrumentSynth => 'Synthesizer';
 
   @override
+  String get synthWave => 'Wave';
+
+  @override
+  String get waveSaw => 'Sawtooth';
+
+  @override
+  String get waveSquare => 'Square';
+
+  @override
+  String get waveTriangle => 'Triangle';
+
+  @override
+  String get waveSine => 'Sine';
+
+  @override
+  String get synthAttack => 'Attack';
+
+  @override
+  String get synthDecay => 'Decay';
+
+  @override
+  String get synthSustain => 'Sustain';
+
+  @override
+  String get synthRelease => 'Release';
+
+  @override
+  String get synthBrightness => 'Brightness';
+
+  @override
+  String get synthResonance => 'Resonance';
+
+  @override
+  String get synthDetune => 'Detune';
+
+  @override
+  String get synthReset => 'Default sound';
+
+  @override
   String get stopPlayback => 'Stop playback';
 
   @override

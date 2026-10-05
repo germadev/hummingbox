@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import '../models/instrument.dart';
 import '../models/piano_note.dart';
+import '../models/synth_patch.dart';
 import 'instrument_tone.dart';
 import 'wav.dart';
 
@@ -65,7 +66,7 @@ class PianoMixer {
   PianoMixer(this.format, List<PianoNote> notes, {required this.gain}) {
     // Cada sonido se sintetiza una sola vez (en los sostenidos, cuánto se
     // mantuvo la tecla cambia el sonido).
-    final tones = <(Instrument, int, Duration), Float32List>{};
+    final tones = <(Instrument, int, Duration, SynthPatch?), Float32List>{};
     _notes = [
       for (final note in notes)
         (
@@ -74,11 +75,13 @@ class PianoMixer {
             note.instrument,
             note.key,
             note.instrument.sustained ? note.duration : Duration.zero,
+            note.instrument == Instrument.synth ? note.synth : null,
           )] ??= _scaled(
             instrumentTone(
               note.instrument,
               note.key,
               held: note.duration,
+              synth: note.synth,
               sampleRate: format.sampleRate,
             ),
             toneLevel(note.instrument),

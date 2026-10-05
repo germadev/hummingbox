@@ -2,20 +2,25 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../models/instrument.dart';
+import '../models/synth_patch.dart';
 import 'piano_tone.dart';
 import 'wav.dart';
 
 /// Lo que suena una nota de [instrument] mantenida [held]: los que se apagan
 /// solos, siempre lo mismo; los sostenidos ([Instrument.sustained]), lo que
-/// se mantuvo más lo que tardan en apagarse.
-Duration toneLength(Instrument instrument, Duration held) =>
-    switch (instrument) {
-      Instrument.piano => pianoToneLength,
-      Instrument.guitar => const Duration(milliseconds: 2000),
-      Instrument.marimba => const Duration(milliseconds: 1200),
-      Instrument.organ ||
-      Instrument.synth => _heldOf(held) + _releaseOf(instrument),
-    };
+/// se mantuvo más lo que tardan en apagarse (el sintetizador, según
+/// [synth]).
+Duration toneLength(
+  Instrument instrument,
+  Duration held, {
+  SynthPatch synth = const SynthPatch(),
+}) => switch (instrument) {
+  Instrument.piano => pianoToneLength,
+  Instrument.guitar => const Duration(milliseconds: 2000),
+  Instrument.marimba => const Duration(milliseconds: 1200),
+  Instrument.organ => _heldOf(held) + _organRelease,
+  Instrument.synth => _heldOf(held) + synth.release,
+};
 
 /// Volumen de cada instrumento respecto al piano, para que suenen parecido
 /// de fuertes (los sostenidos suenan más con el mismo pico).
@@ -32,13 +37,11 @@ const _minHeld = Duration(milliseconds: 60);
 
 Duration _heldOf(Duration held) => held < _minHeld ? _minHeld : held;
 
-Duration _releaseOf(Instrument instrument) => switch (instrument) {
-  Instrument.synth => const Duration(milliseconds: 300),
-  _ => const Duration(milliseconds: 80),
-};
+const _organRelease = Duration(milliseconds: 80);
 
 /// Sonido de la tecla [midi] con [instrument], mantenida [held] (solo
-/// cuenta en los sostenidos): muestras entre −1 y 1, con el pico en 1.
+/// cuenta en los sostenidos) y, con el sintetizador, con el sonido de
+/// [synth]: muestras entre −1 y 1, con el pico en 1.
 ///
 /// Todos son sintetizados, sin muestras grabadas: dan la nota con un timbre
 /// que recuerda al instrumento.
@@ -46,9 +49,10 @@ Float32List instrumentTone(
   Instrument instrument,
   int midi, {
   Duration held = Duration.zero,
+  SynthPatch synth = const SynthPatch(),
   int sampleRate = 44100,
 }) {
-  final duration = toneLength(instrument, held);
+  final duration = toneLength(instrument, held, synth: synth);
   final frames = PcmFormat(
     sampleRate: sampleRate,
     channels: 1,
@@ -63,7 +67,7 @@ Float32List instrumentTone(
     Instrument.organ => _organ(midi, sampleRate, frames, heldFrames),
     Instrument.guitar => _guitar(midi, sampleRate, frames),
     Instrument.marimba => _marimba(midi, sampleRate, frames),
-    Instrument.synth => _synth(midi, sampleRate, frames, heldFrames),
+    Instrument.synth => _synth(midi, sampleRate, frames, heldFrames, synth),
   };
   return _normalized(tone);
 }
@@ -74,12 +78,14 @@ Uint8List instrumentToneWav(
   Instrument instrument,
   int midi, {
   Duration held = Duration.zero,
+  SynthPatch synth = const SynthPatch(),
   int sampleRate = 44100,
 }) {
   final tone = instrumentTone(
     instrument,
     midi,
     held: held,
+    synth: synth,
     sampleRate: sampleRate,
   );
   return toneWav(tone, sampleRate: sampleRate, gain: toneLevel(instrument));
@@ -194,22 +200,34 @@ Float32List _marimba(int midi, int sampleRate, int frames) {
   return tone;
 }
 
-/// Sintetizador: dos ondas de sierra un poco desafinadas entre sí, por un
-/// filtro paso bajo que se abre al pulsar y se va cerrando, con una
-/// envolvente de ataque, caída, sostenido y relajación.
-Float32List _synth(int midi, int sampleRate, int frames, int heldFrames) {
+/// Sintetizador: dos osciladores con la onda de [patch], desafinados entre
+/// sí, por un filtro paso bajo que se abre al pulsar y se va cerrando, con
+/// una envolvente de ataque, caída, sostenido y relajación.
+Float32List _synth(
+  int midi,
+  int sampleRate,
+  int frames,
+  int heldFrames,
+  SynthPatch patch,
+) {
   final frequency = PianoKeys.frequency(midi);
-  // ±6 centésimas de semitono: un coro suave.
-  final detune = math.pow(2, 6 / 1200).toDouble();
+  final detune = math.pow(2, patch.detune / 2 / 1200).toDouble();
   final steps = [
     frequency * detune / sampleRate,
     frequency / detune / sampleRate,
   ];
   final phases = [0.0, 0.37];
-  final attack = sampleRate * 0.008;
-  final decay = sampleRate * 0.15;
-  const sustain = 0.75;
+  double framesOf(Duration time) =>
+      math.max(1, sampleRate * time.inMicroseconds / 1e6);
+  final attack = framesOf(patch.attack);
+  final decay = framesOf(patch.decay);
+  final sustain = patch.sustain;
   final release = math.max(1, frames - heldFrames);
+  // El filtro: la frecuencia de corte, en veces la de la nota, se abre al
+  // doble al pulsar y baja a la del brillo; la resonancia, menos
+  // amortiguación (sin llegar a oscilar sola).
+  final cutoffTimes = 1 + patch.brightness * 15;
+  final damping = 2 - 1.8 * patch.resonance;
   final maxCutoff = sampleRate / 7;
 
   final tone = Float32List(frames);
@@ -221,20 +239,19 @@ Float32List _synth(int midi, int sampleRate, int frames, int heldFrames) {
     for (var o = 0; o < 2; o++) {
       final step = steps[o];
       var phase = phases[o];
-      value += 2 * phase - 1 - _polyBlep(phase, step);
+      value += _oscillator(patch.wave, phase, step);
       phase += step;
       if (phase >= 1) phase -= 1;
       phases[o] = phase;
     }
     value /= 2;
 
-    // Filtro de estado variable (Chamberlin) con la frecuencia de corte
-    // bajando desde 12 veces la de la nota hasta 3.
-    final t = i / sampleRate;
-    final cutoff = math.min(maxCutoff, frequency * (3 + 9 * math.exp(-t * 6)));
+    // Filtro de estado variable (Chamberlin).
+    final opening = 1 + math.exp(-i / (attack + decay));
+    final cutoff = math.min(maxCutoff, frequency * cutoffTimes * opening);
     final f = 2 * math.sin(math.pi * cutoff / sampleRate);
     low += f * band;
-    final high = value - low - 1.2 * band;
+    final high = value - low - damping * band;
     band += f * high;
 
     double envelope;
@@ -248,8 +265,22 @@ Float32List _synth(int midi, int sampleRate, int frames, int heldFrames) {
     }
     tone[i] = low * envelope;
   }
+  // Sin chasquido al empezar aunque el ataque sea muy corto.
+  _fadeEdges(tone, sampleRate, attackSeconds: 0.002, releaseSeconds: 0.002);
   return tone;
 }
+
+/// Una muestra de la onda [wave] en la fase [phase] (de 0 a 1), que avanza
+/// [step] por muestra.
+double _oscillator(SynthWave wave, double phase, double step) => switch (wave) {
+  SynthWave.saw => 2 * phase - 1 - _polyBlep(phase, step),
+  SynthWave.square =>
+    (phase < 0.5 ? 1.0 : -1.0) +
+        _polyBlep(phase, step) -
+        _polyBlep((phase + 0.5) % 1, step),
+  SynthWave.triangle => 1 - 4 * (phase - 0.5).abs(),
+  SynthWave.sine => math.sin(2 * math.pi * phase),
+};
 
 /// Corrección PolyBLEP del salto de una onda de sierra, para que no suene
 /// áspera por encima de la frecuencia de Nyquist.

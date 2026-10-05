@@ -11,6 +11,7 @@ import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/synth_patch.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/audio_player_service.dart';
@@ -2655,6 +2656,67 @@ void main() {
       await tester.tap(find.byKey(const Key('piano-button')));
       await tester.pumpAndSettle();
       expect(keys().whiteKeys, PianoPanel.maxKeyCount);
+    });
+
+    testWidgets('con el sintetizador, sus controles encima de las teclas: '
+        'cambian el sonido, que se graba con cada nota y se recuerda', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('synth-controls')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('piano-instrument')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Sintetizador'));
+      await tester.pumpAndSettle();
+      final controls = find.byKey(const Key('synth-controls'));
+      expect(controls, findsOneWidget);
+      expect(
+        tester.getRect(controls).bottom,
+        lessThanOrEqualTo(tester.getRect(keyboard()).top),
+      );
+
+      await tester.tap(find.byTooltip('Cuadrada'));
+      await tester.pumpAndSettle();
+      expect(store.settings.synth.wave, SynthWave.square);
+      expect(piano.preparedSynth?.wave, SynthWave.square);
+
+      // Mientras se arrastra no cambia el sonido; al soltar, sí.
+      final release = find.byKey(const Key('synth-release'));
+      await tester.ensureVisible(release);
+      await tester.pumpAndSettle();
+      final slider = find.descendant(
+        of: release,
+        matching: find.byType(Slider),
+      );
+      final drag = await tester.startGesture(tester.getCenter(slider));
+      await drag.moveBy(const Offset(30, 0));
+      await tester.pump();
+      expect(store.settings.synth.release, const SynthPatch().release);
+      await drag.up();
+      await tester.pumpAndSettle();
+      final changed = store.settings.synth;
+      expect(changed.release, greaterThan(const SynthPatch().release));
+      expect(changed.wave, SynthWave.square);
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      await tester.tapAt(whiteKey(tester, 0));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const Key('piano-stop')));
+      await tester.pumpAndSettle();
+      final note = editor.pianoSaves.single.$1.single;
+      expect(note.instrument, Instrument.synth);
+      expect(note.synth, changed);
+
+      // Vuelve al sonido por defecto.
+      await tester.ensureVisible(find.byKey(const Key('synth-reset')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('synth-reset')));
+      await tester.pumpAndSettle();
+      expect(store.settings.synth, const SynthPatch());
     });
 
     testWidgets('graba solo el piano y lo guarda en la carpeta abierta', (

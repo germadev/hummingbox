@@ -1472,6 +1472,84 @@ abstract class AppLocalizations {
   /// **'Synthesizer'**
   String get instrumentSynth;
 
+  /// En el sintetizador: la forma de la onda
+  ///
+  /// In en, this message translates to:
+  /// **'Wave'**
+  String get synthWave;
+
+  /// Onda de sierra
+  ///
+  /// In en, this message translates to:
+  /// **'Sawtooth'**
+  String get waveSaw;
+
+  /// Onda cuadrada
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get waveSquare;
+
+  /// Onda triangular
+  ///
+  /// In en, this message translates to:
+  /// **'Triangle'**
+  String get waveTriangle;
+
+  /// Onda senoidal
+  ///
+  /// In en, this message translates to:
+  /// **'Sine'**
+  String get waveSine;
+
+  /// Sintetizador: lo que tarda en llegar al máximo al pulsar la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Attack'**
+  String get synthAttack;
+
+  /// Sintetizador: lo que tarda en bajar del máximo al nivel de sostenido
+  ///
+  /// In en, this message translates to:
+  /// **'Decay'**
+  String get synthDecay;
+
+  /// Sintetizador: el nivel mientras se mantiene la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Sustain'**
+  String get synthSustain;
+
+  /// Sintetizador: lo que tarda en apagarse al soltar la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Release'**
+  String get synthRelease;
+
+  /// Sintetizador: lo abierto que está el filtro (más o menos brillante)
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get synthBrightness;
+
+  /// Sintetizador: lo que resuena el filtro
+  ///
+  /// In en, this message translates to:
+  /// **'Resonance'**
+  String get synthResonance;
+
+  /// Sintetizador: cuánto se desafinan entre sí sus dos osciladores
+  ///
+  /// In en, this message translates to:
+  /// **'Detune'**
+  String get synthDetune;
+
+  /// Sintetizador: volver al sonido por defecto
+  ///
+  /// In en, this message translates to:
+  /// **'Default sound'**
+  String get synthReset;
+
   /// No description provided for @stopPlayback.
   ///
   /// In en, this message translates to:

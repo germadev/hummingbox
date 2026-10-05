@@ -1454,6 +1454,8 @@ class _HomeScreenState extends State<HomeScreen> {
           instrument: sync.settings.instrument,
           onInstrumentChanged: (instrument) =>
               unawaited(widget.sync.setInstrument(instrument)),
+          synth: sync.settings.synth,
+          onSynthChanged: (synth) => unawaited(widget.sync.setSynth(synth)),
           recorder: _pianoRecorder,
           mode: _pianoMode,
           target: _pianoTarget,

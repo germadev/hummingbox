@@ -163,7 +163,9 @@ class RecordingEditor {
     try {
       var length = duration;
       for (final note in notes) {
-        final end = note.start + toneLength(note.instrument, note.duration);
+        final end =
+            note.start +
+            toneLength(note.instrument, note.duration, synth: note.synth);
         if (end > length) length = end;
       }
       final wav = p.join(directory.path, 'piano.wav');

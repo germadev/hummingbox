@@ -1,4 +1,5 @@
 import 'instrument.dart';
+import 'synth_patch.dart';
 
 /// Una nota tocada en el piano mientras se grababa: qué tecla, cuándo, desde
 /// el principio de la grabación, y con qué instrumento.
@@ -8,6 +9,7 @@ class PianoNote {
     required this.start,
     required this.duration,
     this.instrument = Instrument.piano,
+    this.synth = const SynthPatch(),
   });
 
   /// Tecla, por su número MIDI (el La4, a 440 Hz, es 69).
@@ -22,6 +24,11 @@ class PianoNote {
   /// Con qué sonó.
   final Instrument instrument;
 
+  /// Cómo sonaba el sintetizador, si sonó con él. Solo sirve para generar
+  /// su sonido al terminar de grabar: no se guarda en los metadatos (el
+  /// sonido ya está en el audio) ni cuenta al comparar notas.
+  final SynthPatch synth;
+
   Duration get end => start + duration;
 
   /// La misma nota [offset] antes (p. ej. al quitar el principio de la
@@ -31,6 +38,7 @@ class PianoNote {
     start: start - offset,
     duration: duration,
     instrument: instrument,
+    synth: synth,
   );
 
   /// En los metadatos, en poco espacio: `[tecla, inicio, duración]`, en
@@ -82,6 +90,7 @@ class PianoNote {
                 start: Duration.zero,
                 duration: note.end - start,
                 instrument: note.instrument,
+                synth: note.synth,
               ),
   ];
 

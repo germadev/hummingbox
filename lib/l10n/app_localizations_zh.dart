@@ -774,6 +774,45 @@ class AppLocalizationsZh extends AppLocalizations {
   String get instrumentSynth => '合成器';
 
   @override
+  String get synthWave => '波形';
+
+  @override
+  String get waveSaw => '锯齿波';
+
+  @override
+  String get waveSquare => '方波';
+
+  @override
+  String get waveTriangle => '三角波';
+
+  @override
+  String get waveSine => '正弦波';
+
+  @override
+  String get synthAttack => '起音';
+
+  @override
+  String get synthDecay => '衰减';
+
+  @override
+  String get synthSustain => '延音';
+
+  @override
+  String get synthRelease => '释音';
+
+  @override
+  String get synthBrightness => '亮度';
+
+  @override
+  String get synthResonance => '共振';
+
+  @override
+  String get synthDetune => '失谐';
+
+  @override
+  String get synthReset => '默认音色';
+
+  @override
   String get stopPlayback => '停止播放';
 
   @override

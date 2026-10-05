@@ -6,6 +6,7 @@ import '../models/instrument.dart';
 import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../models/synth_patch.dart';
 import '../services/recording_editor.dart';
 import 'recorder_controller.dart';
 
@@ -39,8 +40,9 @@ class PianoRecorder extends ChangeNotifier {
   final _stopwatch = Stopwatch();
   final _notes = <PianoNote>[];
 
-  /// Teclas pulsadas, cuándo se pulsaron y con qué instrumento.
-  final _held = <int, (Duration, Instrument)>{};
+  /// Teclas pulsadas, cuándo se pulsaron y con qué instrumento (y sonido
+  /// del sintetizador).
+  final _held = <int, (Duration, Instrument, SynthPatch)>{};
 
   PianoRecordingMode? _mode;
 
@@ -114,22 +116,28 @@ class PianoRecorder extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Se ha pulsado la tecla [key], que suena con [instrument].
-  void noteOn(int key, {Instrument instrument = Instrument.piano}) {
+  /// Se ha pulsado la tecla [key], que suena con [instrument] (y, si es el
+  /// sintetizador, con el sonido de [synth]).
+  void noteOn(
+    int key, {
+    Instrument instrument = Instrument.piano,
+    SynthPatch synth = const SynthPatch(),
+  }) {
     if (!isRecording) return;
     noteOff(key);
-    _held[key] = (elapsed, instrument);
+    _held[key] = (elapsed, instrument, synth);
   }
 
   /// Se ha soltado la tecla [key].
   void noteOff(int key) {
-    if (_held.remove(key) case (final start, final instrument)) {
+    if (_held.remove(key) case (final start, final instrument, final synth)) {
       _notes.add(
         PianoNote(
           key: key,
           start: start,
           duration: elapsed - start,
           instrument: instrument,
+          synth: synth,
         ),
       );
     }

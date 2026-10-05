@@ -10,6 +10,7 @@ import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
+import 'package:voicerecorder/models/synth_patch.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/audio_cache.dart';
@@ -593,14 +594,26 @@ class FakePianoSound implements PianoSound {
   final prepared = <int>{};
   Instrument? preparedInstrument;
 
+  /// El último sonido del sintetizador preparado.
+  SynthPatch? preparedSynth;
+
   @override
-  Future<void> prepare(Iterable<int> keys, Instrument instrument) async {
+  Future<void> prepare(
+    Iterable<int> keys,
+    Instrument instrument, {
+    SynthPatch synth = const SynthPatch(),
+  }) async {
     prepared.addAll(keys);
     preparedInstrument = instrument;
+    preparedSynth = synth;
   }
 
   @override
-  Future<void> play(int key, Instrument instrument) async {
+  Future<void> play(
+    int key,
+    Instrument instrument, {
+    SynthPatch synth = const SynthPatch(),
+  }) async {
     played.add(key);
     instruments.add(instrument);
   }

@@ -779,6 +779,45 @@ class AppLocalizationsJa extends AppLocalizations {
   String get instrumentSynth => 'シンセサイザー';
 
   @override
+  String get synthWave => '波形';
+
+  @override
+  String get waveSaw => 'ノコギリ波';
+
+  @override
+  String get waveSquare => '矩形波';
+
+  @override
+  String get waveTriangle => '三角波';
+
+  @override
+  String get waveSine => 'サイン波';
+
+  @override
+  String get synthAttack => 'アタック';
+
+  @override
+  String get synthDecay => 'ディケイ';
+
+  @override
+  String get synthSustain => 'サステイン';
+
+  @override
+  String get synthRelease => 'リリース';
+
+  @override
+  String get synthBrightness => '明るさ';
+
+  @override
+  String get synthResonance => 'レゾナンス';
+
+  @override
+  String get synthDetune => 'デチューン';
+
+  @override
+  String get synthReset => 'デフォルトの音色';
+
+  @override
   String get stopPlayback => '再生を停止';
 
   @override
