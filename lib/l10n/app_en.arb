@@ -255,9 +255,21 @@
   "aacDescription": "Compressed: small files that play on any device",
   "wavDescription": "Uncompressed: the highest fidelity, but much larger files",
   "quality": "Quality",
+  "qualityMinimum": "Minimum",
+  "@qualityMinimum": {
+    "description": "Calidad de grabación: la más baja (8 kHz), para grabaciones muy largas"
+  },
   "qualityLow": "Low",
   "qualityMedium": "Medium",
   "qualityHigh": "High",
+  "qualityVeryHigh": "Very high",
+  "@qualityVeryHigh": {
+    "description": "Calidad de grabación: muy alta (48 kHz)"
+  },
+  "qualityMaximum": "Maximum",
+  "@qualityMaximum": {
+    "description": "Calidad de grabación: la más alta (48 kHz y, en AAC, la tasa de bits más alta)"
+  },
   "countdown": "Countdown",
   "secondsCount": "{seconds} seconds",
   "@secondsCount": {

@@ -335,6 +335,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quality => 'Quality';
 
   @override
+  String get qualityMinimum => 'Minimum';
+
+  @override
   String get qualityLow => 'Low';
 
   @override
@@ -342,6 +345,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get qualityHigh => 'High';
+
+  @override
+  String get qualityVeryHigh => 'Very high';
+
+  @override
+  String get qualityMaximum => 'Maximum';
 
   @override
   String get countdown => 'Countdown';

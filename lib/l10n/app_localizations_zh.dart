@@ -329,6 +329,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quality => '音质';
 
   @override
+  String get qualityMinimum => '最低';
+
+  @override
   String get qualityLow => '低';
 
   @override
@@ -336,6 +339,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get qualityHigh => '高';
+
+  @override
+  String get qualityVeryHigh => '很高';
+
+  @override
+  String get qualityMaximum => '最高';
 
   @override
   String get countdown => '倒计时';

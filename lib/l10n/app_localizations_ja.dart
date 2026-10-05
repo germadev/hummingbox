@@ -329,6 +329,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get quality => '音質';
 
   @override
+  String get qualityMinimum => '最低';
+
+  @override
   String get qualityLow => '低';
 
   @override
@@ -336,6 +339,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get qualityHigh => '高';
+
+  @override
+  String get qualityVeryHigh => '非常に高い';
+
+  @override
+  String get qualityMaximum => '最高';
 
   @override
   String get countdown => 'カウントダウン';

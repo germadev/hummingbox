@@ -704,6 +704,12 @@ abstract class AppLocalizations {
   /// **'Quality'**
   String get quality;
 
+  /// Calidad de grabación: la más baja (8 kHz), para grabaciones muy largas
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum'**
+  String get qualityMinimum;
+
   /// No description provided for @qualityLow.
   ///
   /// In en, this message translates to:
@@ -721,6 +727,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'High'**
   String get qualityHigh;
+
+  /// Calidad de grabación: muy alta (48 kHz)
+  ///
+  /// In en, this message translates to:
+  /// **'Very high'**
+  String get qualityVeryHigh;
+
+  /// Calidad de grabación: la más alta (48 kHz y, en AAC, la tasa de bits más alta)
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum'**
+  String get qualityMaximum;
 
   /// No description provided for @countdown.
   ///
