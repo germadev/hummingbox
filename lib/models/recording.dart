@@ -221,6 +221,7 @@ class CopyState {
     this.checksum,
     this.modified,
     this.transcript,
+    this.midi,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
@@ -253,6 +254,10 @@ class CopyState {
   /// destino, si se ha guardado o leído.
   final TranscriptFile? transcript;
 
+  /// Archivo `.mid` con las notas del piano, junto al audio en el mismo
+  /// destino, si se ha guardado o leído.
+  final TranscriptFile? midi;
+
   /// El mismo archivo con los datos indicados cambiados.
   CopyState copyWith({
     String? ref,
@@ -268,6 +273,7 @@ class CopyState {
     checksum: checksum ?? this.checksum,
     modified: modified ?? this.modified,
     transcript: transcript,
+    midi: midi,
   );
 
   /// El mismo archivo con [file] como archivo de la transcripción (o sin él,
@@ -281,6 +287,21 @@ class CopyState {
     checksum: checksum,
     modified: modified,
     transcript: file,
+    midi: midi,
+  );
+
+  /// El mismo archivo con [file] como archivo `.mid` de las notas (o sin él,
+  /// si es `null`).
+  CopyState withMidi(TranscriptFile? file) => CopyState(
+    destination: destination,
+    ref: ref,
+    revision: revision,
+    name: name,
+    size: size,
+    checksum: checksum,
+    modified: modified,
+    transcript: transcript,
+    midi: file,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -309,6 +330,7 @@ class CopyState {
           ? DateTime.fromMillisecondsSinceEpoch(modified)
           : null,
       transcript: TranscriptFile.fromJson(json['transcript']),
+      midi: TranscriptFile.fromJson(json['midi']),
     );
   }
 
@@ -321,6 +343,7 @@ class CopyState {
     if (checksum != null) 'md5': checksum,
     if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
     if (transcript != null) 'transcript': transcript!.toJson(),
+    if (midi != null) 'midi': midi!.toJson(),
   };
 
   @override
@@ -334,7 +357,8 @@ class CopyState {
       other.checksum == checksum &&
       other.modified?.millisecondsSinceEpoch ==
           modified?.millisecondsSinceEpoch &&
-      other.transcript == transcript;
+      other.transcript == transcript &&
+      other.midi == midi;
 
   @override
   int get hashCode => Object.hash(
@@ -346,11 +370,13 @@ class CopyState {
     checksum,
     modified?.millisecondsSinceEpoch,
     transcript,
+    midi,
   );
 }
 
-/// Archivo de texto con la transcripción de una grabación, junto a su audio
-/// y con el mismo nombre («Idea.txt» junto a «Idea.m4a»).
+/// Archivo que acompaña al audio de una grabación en el destino, con su
+/// mismo nombre: el `.txt` con la transcripción («Idea.txt» junto a
+/// «Idea.m4a») o el `.mid` con las notas del piano («Idea.mid»).
 class TranscriptFile {
   const TranscriptFile({
     required this.ref,

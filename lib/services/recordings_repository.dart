@@ -464,6 +464,7 @@ class FileRecordingsRepository implements RecordingsRepository {
           checksum: file.checksum,
           modified: file.modified,
           transcript: file.transcript,
+          midi: file.midi,
         ).toJson(),
       };
     });

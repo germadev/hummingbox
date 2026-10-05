@@ -5,6 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/audio/midi.dart';
+import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
@@ -321,6 +323,83 @@ void main() {
       // Con la fecha al día, ya no se vuelve a leer.
       await sync.sync();
       expect(folders.calls.where((c) => c.startsWith('read')), hasLength(1));
+    });
+
+    group('notas del piano en un .mid', () {
+      const notes = [
+        PianoNote(
+          key: 60,
+          start: Duration(milliseconds: 500),
+          duration: Duration(milliseconds: 250),
+        ),
+        PianoNote(
+          key: 64,
+          start: Duration(milliseconds: 1000),
+          duration: Duration(milliseconds: 250),
+        ),
+      ];
+
+      test('se guarda junto al audio, con su nombre, y se renombra y se '
+          'borra con la grabación', () async {
+        final recording = await addRecording(folder: 'Clases');
+        await repository.setNotes(recording, notes);
+
+        await sync.sync();
+
+        expect(writes(), [
+          'write Clases/Grabación 1.m4a',
+          'write Clases/Grabación 1.mid',
+        ]);
+        final file = (await single()).copies['folder']!.midi!;
+        expect(folders.files[file.ref], 'Grabación 1.mid');
+        expect(Midi.decode(folders.contents[file.ref]!), notes);
+
+        // Sin cambios, no se vuelve a escribir.
+        await sync.sync();
+        expect(writes(), hasLength(2));
+
+        await repository.rename(await single(), 'Melodía');
+        await sync.sync();
+        expect(folders.files[file.ref], 'Melodía.mid');
+
+        await sync.delete(await single());
+        expect(folders.files, isEmpty);
+      });
+
+      test(
+        'se leen las de la carpeta y, si se borra fuera, se quitan',
+        () async {
+          folders.addFile(folder.id, 'Idea.m4a');
+          final midi = folders.addFile(
+            folder.id,
+            'Idea.mid',
+            bytes: Midi.encode(notes),
+          );
+          // Un .mid sin audio no es de ninguna grabación.
+          folders.addFile(folder.id, 'Suelto.mid', bytes: Midi.encode(notes));
+
+          await sync.sync();
+          expect((await single()).notes, notes);
+          expect((await single()).copies['folder']!.midi!.name, 'Idea.mid');
+          await sync.sync();
+          expect(writes(), isEmpty);
+
+          folders.files.remove(midi);
+          await sync.sync();
+          expect((await single()).notes, isEmpty);
+          expect((await single()).copies['folder']!.midi, isNull);
+        },
+      );
+
+      test('un .mid que no es MIDI se ignora', () async {
+        folders.addFile(folder.id, 'Idea.m4a');
+        folders.addFile(folder.id, 'Idea.mid', bytes: [1, 2, 3]);
+
+        await sync.sync();
+
+        expect((await single()).notes, isEmpty);
+        expect(sync.errors, isEmpty);
+      });
     });
 
     group('transcripción en un .txt', () {

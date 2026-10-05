@@ -141,6 +141,12 @@ The recording goes to the open folder, like any other.
   same timeline. They work as the progress bar too.
 - Trimming in the editor keeps the notes in place. Piano-only recordings
   aren't transcribed.
+- The notes are also saved as a standard **MIDI file** (`.mid`) next to the
+  audio, with the same name (`Idea.m4a` and `Idea.mid`), in the folder and
+  in Drive. It is renamed and deleted with the recording. A `.mid` found next
+  to an audio file (for example after reinstalling the app, or edited in
+  another app) is read; if it is deleted outside the app, the notes are
+  removed.
 
 ## Search
 

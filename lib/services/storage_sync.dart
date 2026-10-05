@@ -10,6 +10,8 @@ import 'package:http/http.dart' show ClientException;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../audio/midi.dart';
+import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../models/transcription.dart';
@@ -425,11 +427,11 @@ class StorageSync extends ChangeNotifier {
       final stored = current.copies[storage.key];
       if (stored != null && stored.destination == storage.destination) {
         await storage.delete(stored.ref);
-        if (stored.transcript case final text?) {
+        for (final file in [stored.transcript, stored.midi].nonNulls) {
           try {
-            await storage.delete(text.ref);
+            await storage.delete(file.ref);
           } catch (_) {
-            // El audio ya no está: el texto solo queda huérfano.
+            // El audio ya no está: el .txt o el .mid solo queda huérfano.
           }
         }
       }
@@ -650,10 +652,15 @@ class StorageSync extends ChangeNotifier {
       for (final file in listed)
         if (RecordingFormat.fromPath(file.entry.name) != null) file,
     ];
-    // Las transcripciones, junto a su audio y con el mismo nombre.
+    // Las transcripciones y las notas del piano, junto a su audio y con el
+    // mismo nombre.
     final texts = [
       for (final file in listed)
         if (_isTextFile(file.entry.name)) file,
+    ];
+    final midis = [
+      for (final file in listed)
+        if (_isMidiFile(file.entry.name)) file,
     ];
     if (_disposed || !_isCurrent(storage, () => _storage)) return;
     if (!listEquals(subfolders, _storageFolders)) {
@@ -779,6 +786,7 @@ class StorageSync extends ChangeNotifier {
     }
 
     changed += await _reconcileTranscripts(storage, files, texts);
+    changed += await _reconcileMidis(storage, files, midis);
 
     if ((added > 0 || changed > 0) && !_disposed) _changes.add(added);
     if (failed > 0) throw _ImportFailure(failed, lastError);
@@ -786,6 +794,166 @@ class StorageSync extends ChangeNotifier {
 
   static bool _isTextFile(String name) =>
       p.extension(name).toLowerCase() == '.txt';
+
+  static bool _isMidiFile(String name) =>
+      const {'.mid', '.midi'}.contains(p.extension(name).toLowerCase());
+
+  /// Compara las notas del piano de las grabaciones guardadas en [storage]
+  /// con los `.mid` que hay junto a su audio: lee los que la app no tiene o
+  /// se cambiaron fuera y quita las notas si se borraron allí. Los que faltan
+  /// en el destino se guardan después (ver [_saveMidi]). Devuelve cuántas
+  /// han cambiado.
+  Future<int> _reconcileMidis(
+    SyncTarget storage,
+    List<_StoredFile> audio,
+    List<_StoredFile> midis,
+  ) async {
+    final audioByRef = {for (final file in audio) file.entry.ref: file};
+    final midiByRef = {for (final file in midis) file.entry.ref: file};
+    final midiByPair = {for (final file in midis) _pairKey(file): file};
+    final key = storage.key;
+    var changed = 0;
+    for (final recording in await repository.loadAll()) {
+      if (_disposed || !_isCurrent(storage, () => _storage)) break;
+      final stored = recording.copies[key];
+      if (stored == null || stored.destination != storage.destination) {
+        continue;
+      }
+      final audioFile = audioByRef[stored.ref];
+      if (audioFile == null) continue;
+      final linked = stored.midi;
+      final midi =
+          (linked == null ? null : midiByRef[linked.ref]) ??
+          midiByPair[_pairKey(audioFile)];
+      try {
+        if (midi == null) {
+          if (linked == null) continue;
+          // Se borró fuera de la app: también las notas.
+          final updated = await repository.setCopy(
+            recording,
+            key,
+            stored.withMidi(null),
+          );
+          if (recording.notes.isNotEmpty) {
+            await repository.setNotes(updated, const []);
+            changed++;
+          }
+          continue;
+        }
+        final entry = midi.entry;
+        if (linked != null && !_textChanged(linked, entry)) {
+          final current = linked.copyWith(
+            ref: entry.ref,
+            name: entry.name,
+            size: entry.size,
+            checksum: entry.checksum,
+            modified: entry.modified,
+          );
+          if (current != linked) {
+            await repository.setCopy(recording, key, stored.withMidi(current));
+          }
+          continue;
+        }
+        // Es nuevo o ha cambiado: se lee.
+        final bytes = await _readText(storage, entry.ref);
+        final checksum = md5.convert(bytes).toString();
+        final notes = Midi.decode(bytes);
+        final saved = await repository.setCopy(
+          recording,
+          key,
+          stored.withMidi(
+            TranscriptFile(
+              ref: entry.ref,
+              name: entry.name,
+              size: bytes.length,
+              checksum: checksum,
+              modified: entry.modified,
+            ),
+          ),
+        );
+        // Si la app las cambió sin guardarlas todavía, ganan las de la app,
+        // que se guardarán encima.
+        final changedInApp =
+            recording.notes.isNotEmpty &&
+            _checksumOfMidi(recording.notes) != linked?.checksum;
+        if (changedInApp || listEquals(notes, recording.notes)) continue;
+        await repository.setNotes(saved, notes);
+        changed++;
+      } catch (_) {
+        // No es un MIDI válido o no se pudo leer: se vuelve a intentar en la
+        // siguiente pasada.
+      }
+    }
+    return changed;
+  }
+
+  static String _checksumOfMidi(List<PianoNote> notes) =>
+      md5.convert(Midi.encode(notes)).toString();
+
+  /// Guarda en [target], junto al audio y con su nombre, un `.mid` con las
+  /// notas del piano de [recording]: lo crea, lo actualiza o lo renombra si
+  /// hace falta, y lo borra si ya no tiene notas. Devuelve la grabación con
+  /// el estado del archivo.
+  Future<Recording> _saveMidi(Recording recording, SyncTarget target) async {
+    final stored = recording.copies[target.key];
+    if (stored == null || stored.destination != target.destination) {
+      return recording;
+    }
+    final linked = stored.midi;
+    if (recording.notes.isEmpty) {
+      if (linked == null) return recording;
+      await target.delete(linked.ref);
+      return repository.setCopy(recording, target.key, stored.withMidi(null));
+    }
+
+    final name = midiFileNameFor(recording);
+    final bytes = Midi.encode(recording.notes);
+    final checksum = md5.convert(bytes).toString();
+    if (linked != null && linked.checksum == checksum) {
+      if (linked.name == name) return recording;
+      final renamed = await target.rename(linked.ref, name);
+      if (renamed != null) {
+        return repository.setCopy(
+          recording,
+          target.key,
+          stored.withMidi(linked.copyWith(ref: renamed, name: name)),
+        );
+      }
+      // Ya no existe: se vuelve a crear.
+    }
+
+    final source = await _temporaryText();
+    try {
+      source.writeAsBytesSync(bytes);
+      var ref = await target.upload(
+        source.path,
+        name,
+        subfolder: recording.folder,
+        ref: linked?.ref,
+      );
+      if (linked != null && linked.name != name) {
+        ref = await target.rename(ref, name) ?? ref;
+      }
+      if (_deleted.contains(recording.id)) {
+        await target.delete(ref);
+        return recording;
+      }
+      return await repository.setCopy(
+        recording,
+        target.key,
+        stored.withMidi(
+          TranscriptFile(
+            ref: ref,
+            name: name,
+            size: bytes.length,
+            checksum: checksum,
+          ),
+        ),
+      );
+    } finally {
+      _deleteQuietly(source.path);
+    }
+  }
 
   /// Clave de un archivo para emparejar el audio con su `.txt`: subcarpeta y
   /// nombre sin extensión (sin distinguir mayúsculas).
@@ -1232,6 +1400,7 @@ class StorageSync extends ChangeNotifier {
     var saved = await _saveAudio(recording, target, isStorage: isStorage);
     if (saved == null || _deleted.contains(recording.id)) return;
     saved = await _saveTranscript(saved, target);
+    saved = await _saveMidi(saved, target);
     if (isStorage) await _release(saved, target);
   }
 
@@ -1269,6 +1438,7 @@ class StorageSync extends ChangeNotifier {
         checksum: await _md5Of(source),
         // En el mismo destino, el `.txt` sigue siendo el mismo.
         transcript: sameDestination ? stored!.transcript : null,
+        midi: sameDestination ? stored!.midi : null,
       );
     }
 
@@ -1294,6 +1464,7 @@ class StorageSync extends ChangeNotifier {
           checksum: stored.checksum,
           modified: stored.modified,
           transcript: stored.transcript,
+          midi: stored.midi,
         ),
         // Ya no existe: se vuelve a crear.
         null => await upload(),
@@ -1336,6 +1507,11 @@ class StorageSync extends ChangeNotifier {
   /// con la extensión `.txt`.
   static String textFileNameFor(Recording recording) =>
       '${safeFileName(recording.name, fallback: recording.id)}.txt';
+
+  /// Nombre del `.mid` con las notas del piano de una grabación: el de su
+  /// audio con la extensión `.mid`.
+  static String midiFileNameFor(Recording recording) =>
+      '${safeFileName(recording.name, fallback: recording.id)}.mid';
 
   void _notify() {
     if (!_disposed) notifyListeners();
