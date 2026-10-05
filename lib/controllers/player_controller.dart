@@ -185,10 +185,15 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
+  /// Si al terminar sigue con otra o vuelve a empezar (según [loop] y
+  /// [playlist]). Se desactiva mientras se acompaña una grabación al piano,
+  /// que termina con ella.
+  bool autoAdvance = true;
+
   /// La que suena al terminar la actual, o `null` si se para.
   Recording? _next() {
     final current = _current;
-    if (current == null) return null;
+    if (current == null || !autoAdvance) return null;
     if (!_playlist) return _loop ? current : null;
     final list = _queue();
     final index = list.indexWhere((r) => r.id == current.id);

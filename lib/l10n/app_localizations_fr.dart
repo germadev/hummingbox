@@ -806,4 +806,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get detailedView => 'Vue détaillée';
+
+  @override
+  String get addPiano => 'Ajouter du piano';
+
+  @override
+  String pianoOver(String name) {
+    return 'Sur « $name »';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Piano ajouté à « $name »';
+  }
 }

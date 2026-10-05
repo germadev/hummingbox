@@ -771,4 +771,17 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get detailedView => '詳細表示';
+
+  @override
+  String get addPiano => 'ピアノを追加';
+
+  @override
+  String pianoOver(String name) {
+    return '「$name」に合わせて';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return '「$name」にピアノを追加しました';
+  }
 }

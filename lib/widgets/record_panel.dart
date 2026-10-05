@@ -26,6 +26,8 @@ class RecordPanel extends StatefulWidget {
     required this.controller,
     required this.player,
     required this.onStopPlayback,
+    this.onTouched,
+    this.onBackgroundTapped,
     required this.onRecordPressed,
     required this.onCancelPressed,
     required this.onCountdownPressed,
@@ -40,6 +42,13 @@ class RecordPanel extends StatefulWidget {
 
   /// Para la reproducción.
   final VoidCallback onStopPlayback;
+
+  /// Al tocar el panel, en cualquier punto (p. ej. para quitar el foco del
+  /// campo de búsqueda).
+  final VoidCallback? onTouched;
+
+  /// Al tocar el panel fuera de sus botones (como el fondo de la lista).
+  final VoidCallback? onBackgroundTapped;
 
   /// Empieza o detiene la grabación según el estado actual (o, si se está
   /// esperando para empezar, empieza ya).
@@ -174,55 +183,61 @@ class _RecordPanelState extends State<RecordPanel>
       ),
       child: SafeArea(
         top: false,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: _onDragUpdate,
-          onVerticalDragEnd: _onDragEnd,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-            child: ListenableBuilder(
-              listenable: Listenable.merge([
-                widget.controller,
-                widget.player,
-                _expansion,
-              ]),
-              builder: (context, _) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _DragHandle(
-                    visible: !_active,
-                    expanded: _expanded,
-                    onPressed: _toggle,
-                  ),
-                  SizeTransition(
-                    sizeFactor: _expansion,
-                    alignment: Alignment.bottomCenter,
-                    child: FadeTransition(
-                      opacity: _expansion,
-                      // Plegado del todo, el contenido no se pinta ni se
-                      // anuncia, pero se sigue midiendo para el arrastre.
-                      child: Offstage(
-                        offstage: _expansion.value == 0 && !_active,
-                        child: Padding(
-                          key: _infoKey,
-                          padding: const EdgeInsets.only(top: 4, bottom: 20),
-                          child: _RecordingInfo(controller: widget.controller),
+        child: Listener(
+          onPointerDown: (_) => widget.onTouched?.call(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onBackgroundTapped,
+            onVerticalDragUpdate: _onDragUpdate,
+            onVerticalDragEnd: _onDragEnd,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+              child: ListenableBuilder(
+                listenable: Listenable.merge([
+                  widget.controller,
+                  widget.player,
+                  _expansion,
+                ]),
+                builder: (context, _) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _DragHandle(
+                      visible: !_active,
+                      expanded: _expanded,
+                      onPressed: _toggle,
+                    ),
+                    SizeTransition(
+                      sizeFactor: _expansion,
+                      alignment: Alignment.bottomCenter,
+                      child: FadeTransition(
+                        opacity: _expansion,
+                        // Plegado del todo, el contenido no se pinta ni se
+                        // anuncia, pero se sigue midiendo para el arrastre.
+                        child: Offstage(
+                          offstage: _expansion.value == 0 && !_active,
+                          child: Padding(
+                            key: _infoKey,
+                            padding: const EdgeInsets.only(top: 4, bottom: 20),
+                            child: _RecordingInfo(
+                              controller: widget.controller,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  _Controls(
-                    controller: widget.controller,
-                    player: widget.player,
-                    onStopPlayback: widget.onStopPlayback,
-                    expanded: _expanded,
-                    countdownSeconds: widget.countdownSeconds,
-                    onRecordPressed: widget.onRecordPressed,
-                    onCancelPressed: widget.onCancelPressed,
-                    onCountdownPressed: widget.onCountdownPressed,
-                    onVoicePressed: widget.onVoicePressed,
-                  ),
-                ],
+                    _Controls(
+                      controller: widget.controller,
+                      player: widget.player,
+                      onStopPlayback: widget.onStopPlayback,
+                      expanded: _expanded,
+                      countdownSeconds: widget.countdownSeconds,
+                      onRecordPressed: widget.onRecordPressed,
+                      onCancelPressed: widget.onCancelPressed,
+                      onCountdownPressed: widget.onCountdownPressed,
+                      onVoicePressed: widget.onVoicePressed,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

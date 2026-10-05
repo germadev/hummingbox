@@ -224,5 +224,8 @@
   "playAll": "连续播放",
   "repeat": "重复播放",
   "compactView": "紧凑视图",
-  "detailedView": "详细视图"
+  "detailedView": "详细视图",
+  "addPiano": "添加钢琴",
+  "pianoOver": "为“{name}”伴奏",
+  "pianoAdded": "已为“{name}”添加钢琴"
 }

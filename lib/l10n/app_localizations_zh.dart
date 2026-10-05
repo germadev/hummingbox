@@ -766,4 +766,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get detailedView => '详细视图';
+
+  @override
+  String get addPiano => '添加钢琴';
+
+  @override
+  String pianoOver(String name) {
+    return '为“$name”伴奏';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return '已为“$name”添加钢琴';
+  }
 }

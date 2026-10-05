@@ -643,5 +643,27 @@
   "detailedView": "Detailed view",
   "@detailedView": {
     "description": "Botón de la barra: pasar a la vista detallada de la lista"
+  },
+  "addPiano": "Add piano",
+  "@addPiano": {
+    "description": "Opción del menú de una grabación: tocar el piano sobre ella mientras suena"
+  },
+  "pianoOver": "Over “{name}”",
+  "@pianoOver": {
+    "description": "En el piano, la grabación que se acompaña",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pianoAdded": "Piano added to “{name}”",
+  "@pianoAdded": {
+    "description": "Al terminar de acompañar una grabación al piano",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   }
 }

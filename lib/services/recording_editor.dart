@@ -193,9 +193,9 @@ class RecordingEditor {
     }
   }
 
-  /// Añade al audio de [recording] (la voz) las [notes] tocadas en el piano
-  /// mientras se grababa, y las guarda con ella. La onda sigue siendo la de
-  /// la voz.
+  /// Añade al audio de [recording] las [notes] tocadas en el piano mientras
+  /// se grababa (o mientras sonaba, al acompañarla), y las guarda con ella
+  /// junto a las que ya tuviera. La onda sigue siendo la de antes.
   Future<Recording> addPiano(Recording recording, List<PianoNote> notes) async {
     if (notes.isEmpty) return recording;
     final directory = await _createSessionDirectory();
@@ -217,7 +217,11 @@ class RecordingEditor {
         waveform: recording.waveform,
         audio: (await probe(output))?.info ?? recording.audio,
       );
-      return await repository.setNotes(replaced, notes);
+      return await repository.setNotes(
+        replaced,
+        [...recording.notes, ...notes]
+          ..sort((a, b) => a.start.compareTo(b.start)),
+      );
     } finally {
       await deleteQuietly(directory);
     }

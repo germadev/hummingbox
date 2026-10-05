@@ -224,5 +224,8 @@
   "playAll": "Nacheinander abspielen",
   "repeat": "Wiederholen",
   "compactView": "Kompakte Ansicht",
-  "detailedView": "Detaillierte Ansicht"
+  "detailedView": "Detaillierte Ansicht",
+  "addPiano": "Klavier hinzufügen",
+  "pianoOver": "Zu „{name}“",
+  "pianoAdded": "Klavier zu „{name}“ hinzugefügt"
 }

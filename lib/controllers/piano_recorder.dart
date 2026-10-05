@@ -15,6 +15,10 @@ enum PianoRecordingMode {
 
   /// La voz con el micrófono y, encima, las notas.
   pianoAndVoice,
+
+  /// Las notas sobre una grabación que ya existe, mientras suena (ver
+  /// [PianoRecorder.startOver]).
+  accompaniment,
 }
 
 /// Graba lo que se toca en el piano, con el momento en que se pulsa y se
@@ -38,6 +42,9 @@ class PianoRecorder extends ChangeNotifier {
   final _held = <int, Duration>{};
 
   PianoRecordingMode? _mode;
+
+  /// La grabación que se acompaña, con [PianoRecordingMode.accompaniment].
+  Recording? _target;
   RecordingOptions _options = const RecordingOptions();
   String _folder = '';
   bool _saving = false;
@@ -47,6 +54,9 @@ class PianoRecorder extends ChangeNotifier {
   PianoRecordingMode? get mode => _mode;
 
   bool get isRecording => _mode != null;
+
+  /// La grabación que se está acompañando, si se acompaña una.
+  Recording? get target => _target;
 
   /// Indica si se está guardando lo grabado (generando el audio).
   bool get isSaving => _saving;
@@ -83,6 +93,26 @@ class PianoRecorder extends ChangeNotifier {
     return true;
   }
 
+  /// Empieza a grabar notas sobre [target], una grabación que ya existe.
+  /// [play] la empieza a reproducir desde el principio, y las notas cuentan
+  /// desde que empieza a sonar.
+  Future<void> startOver(
+    Recording target, {
+    required Future<void> Function() play,
+  }) async {
+    if (isRecording || _saving) return;
+    await play();
+    _stopwatch
+      ..reset()
+      ..start();
+    _mode = PianoRecordingMode.accompaniment;
+    _target = target;
+    _notes.clear();
+    _held.clear();
+    _ticker = Timer.periodic(_tick, (_) => notifyListeners());
+    notifyListeners();
+  }
+
   /// Se ha pulsado la tecla [key].
   void noteOn(int key) {
     if (!isRecording) return;
@@ -98,8 +128,9 @@ class PianoRecorder extends ChangeNotifier {
   }
 
   /// Termina y guarda la grabación. Devuelve `null` si no hay nada que
-  /// guardar (solo piano sin notas) o no se pudo guardar la voz. Si no se
-  /// puede añadir el piano a la voz, se guarda solo la voz.
+  /// guardar (solo piano o acompañamiento sin notas) o no se pudo guardar la
+  /// voz. Si no se puede añadir el piano a la voz, se guarda solo la voz. Al
+  /// acompañar, devuelve la grabación acompañada con las notas añadidas.
   Future<Recording?> stop() async {
     final mode = _mode;
     if (mode == null) return null;
@@ -108,9 +139,11 @@ class PianoRecorder extends ChangeNotifier {
     }
     final duration = elapsed;
     final notes = [..._notes]..sort((a, b) => a.start.compareTo(b.start));
+    final target = _target;
     _ticker?.cancel();
     _stopwatch.stop();
     _mode = null;
+    _target = null;
     _saving = true;
     notifyListeners();
     try {
@@ -123,6 +156,9 @@ class PianoRecorder extends ChangeNotifier {
             options: _options,
             folder: _folder,
           );
+        case PianoRecordingMode.accompaniment:
+          if (notes.isEmpty || target == null) return null;
+          return await editor.addPiano(target, notes);
         case PianoRecordingMode.pianoAndVoice:
           final recorded = await voice.stop();
           if (recorded == null) return null;

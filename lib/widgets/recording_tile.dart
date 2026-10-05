@@ -10,6 +10,7 @@ import 'waveform_seek_bar.dart';
 
 enum RecordingAction {
   edit,
+  addPiano,
   rename,
   transcribe,
   viewTranscript,
@@ -193,6 +194,13 @@ class RecordingTile extends StatelessWidget {
                           child: ListTile(
                             leading: const Icon(Icons.content_cut),
                             title: Text(l10n.edit),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: RecordingAction.addPiano,
+                          child: ListTile(
+                            leading: const Icon(Icons.piano),
+                            title: Text(l10n.addPiano),
                           ),
                         ),
                         PopupMenuItem(

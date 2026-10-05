@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,7 @@ class PianoPanel extends StatefulWidget {
     required this.mode,
     required this.onRecord,
     required this.onStop,
+    required this.target,
     this.onClose,
   });
 
@@ -37,9 +39,13 @@ class PianoPanel extends StatefulWidget {
   /// Qué se graba al pulsar «Grabar». Se conserva al cerrar el panel.
   final ValueNotifier<PianoRecordingMode> mode;
 
-  /// Al pulsar «Grabar»: devuelve `false` si no se pudo empezar (sin
-  /// permiso del micrófono).
-  final Future<bool> Function(PianoRecordingMode mode) onRecord;
+  /// Al pulsar «Grabar»: devuelve el aviso que se muestra si no se pudo
+  /// empezar (p. ej. sin permiso del micrófono), o `null`.
+  final Future<String?> Function(PianoRecordingMode mode) onRecord;
+
+  /// La grabación sobre la que se toca, si se abrió para acompañarla: al
+  /// grabar suena desde el principio.
+  final ValueListenable<Recording?> target;
 
   /// Al parar la grabación: devuelve lo guardado, si se guardó algo.
   final Future<Recording?> Function() onStop;
@@ -113,9 +119,9 @@ class _PianoPanelState extends State<PianoPanel> {
 
   Future<void> _record(PianoRecordingMode mode) async {
     setState(() => _message = null);
-    final started = await widget.onRecord(mode);
-    if (!mounted || started) return;
-    setState(() => _message = context.l10n.microphonePermission);
+    final error = await widget.onRecord(mode);
+    if (!mounted || error == null) return;
+    setState(() => _message = error);
   }
 
   Future<void> _stop() async {
@@ -125,8 +131,13 @@ class _PianoPanelState extends State<PianoPanel> {
     final l10n = context.l10n;
     setState(
       () => _message = switch (saved) {
+        final saved? when mode == PianoRecordingMode.accompaniment =>
+          l10n.pianoAdded(saved.name),
         final saved? => l10n.savedAs(saved.name),
-        null when mode == PianoRecordingMode.piano => l10n.pianoNothingPlayed,
+        null
+            when mode == PianoRecordingMode.piano ||
+                mode == PianoRecordingMode.accompaniment =>
+          l10n.pianoNothingPlayed,
         null => l10n.saveRecordingFailed,
       },
     );
@@ -169,31 +180,37 @@ class _PianoPanelState extends State<PianoPanel> {
                             color: theme.colorScheme.outline,
                           ),
                         )
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              noteName(lastKey, names),
-                              key: const Key('piano-note'),
-                              style: theme.textTheme.headlineMedium,
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
-                              ' Hz',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: theme.colorScheme.outline,
+                      // Si no cabe (p. ej. con el nombre de la grabación
+                      // que se acompaña), más pequeña.
+                      : FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              Text(
+                                noteName(lastKey, names),
+                                key: const Key('piano-note'),
+                                style: theme.textTheme.headlineMedium,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              Text(
+                                '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
+                                ' Hz',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                 ),
                 const SizedBox(width: 16),
                 _RecordControls(
                   recorder: widget.recorder,
                   mode: widget.mode,
+                  target: widget.target,
                   onRecord: _record,
                   onStop: _stop,
                 ),
@@ -252,12 +269,14 @@ class _RecordControls extends StatelessWidget {
   const _RecordControls({
     required this.recorder,
     required this.mode,
+    required this.target,
     required this.onRecord,
     required this.onStop,
   });
 
   final PianoRecorder recorder;
   final ValueNotifier<PianoRecordingMode> mode;
+  final ValueListenable<Recording?> target;
   final Future<void> Function(PianoRecordingMode mode) onRecord;
   final Future<void> Function() onStop;
 
@@ -266,33 +285,46 @@ class _RecordControls extends StatelessWidget {
     final l10n = context.l10n;
     final colors = Theme.of(context).colorScheme;
     return ListenableBuilder(
-      listenable: Listenable.merge([recorder, mode]),
+      listenable: Listenable.merge([recorder, mode, target]),
       builder: (context, _) {
         final recording = recorder.isRecording;
         final saving = recorder.isSaving;
+        final over = recorder.target ?? target.value;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SegmentedButton<PianoRecordingMode>(
-              key: const Key('piano-mode'),
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(
-                  value: PianoRecordingMode.piano,
-                  icon: const Icon(Icons.piano),
-                  tooltip: l10n.pianoOnly,
+            // Al acompañar una grabación, sobre cuál; si no, qué se graba.
+            if (over != null)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220),
+                child: Text(
+                  l10n.pianoOver(over.name),
+                  key: const Key('piano-target'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                ButtonSegment(
-                  value: PianoRecordingMode.pianoAndVoice,
-                  icon: const Icon(Icons.mic),
-                  tooltip: l10n.pianoAndVoice,
-                ),
-              ],
-              selected: {mode.value},
-              onSelectionChanged: recording || saving
-                  ? null
-                  : (selected) => mode.value = selected.single,
-            ),
+              )
+            else
+              SegmentedButton<PianoRecordingMode>(
+                key: const Key('piano-mode'),
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: PianoRecordingMode.piano,
+                    icon: const Icon(Icons.piano),
+                    tooltip: l10n.pianoOnly,
+                  ),
+                  ButtonSegment(
+                    value: PianoRecordingMode.pianoAndVoice,
+                    icon: const Icon(Icons.mic),
+                    tooltip: l10n.pianoAndVoice,
+                  ),
+                ],
+                selected: {mode.value},
+                onSelectionChanged: recording || saving
+                    ? null
+                    : (selected) => mode.value = selected.single,
+              ),
             const SizedBox(width: 8),
             if (saving)
               const Padding(

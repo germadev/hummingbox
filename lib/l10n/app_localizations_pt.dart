@@ -796,4 +796,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get detailedView => 'Visualização detalhada';
+
+  @override
+  String get addPiano => 'Adicionar piano';
+
+  @override
+  String pianoOver(String name) {
+    return 'Sobre “$name”';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Piano adicionado a “$name”';
+  }
 }

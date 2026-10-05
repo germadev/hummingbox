@@ -141,6 +141,13 @@ The recording goes to the open folder, like any other.
   same timeline. They work as the progress bar too.
 - Trimming in the editor keeps the notes in place. Piano-only recordings
   aren't transcribed.
+- **Adding piano to a recording**: *Add piano* in a recording's menu opens
+  the piano over it (the top shows which one). *Record* plays it from the
+  beginning and records what you play in time with it; it stops when the
+  recording ends, with the stop button or when closing the piano. The notes
+  are mixed into its audio and added to the ones it already had, so you can
+  add several layers. While accompanying, *Play one after another* and
+  *Repeat* don't move on.
 - The notes are also saved as a standard **MIDI file** (`.mid`) next to the
   audio, with the same name (`Idea.m4a` and `Idea.mid`), in the folder and
   in Drive. It is renamed and deleted with the recording. A `.mid` found next
@@ -163,7 +170,8 @@ field already has the focus, pulling shows the keyboard again (for example
 after hiding it with Back on Android). Tapping the list's background (outside
 the recordings) takes the focus away from the field and hides the keyboard
 (with nothing typed, the search closes), and deselects the recording unless
-it is playing.
+it is playing. Touching the bottom panel also takes the focus away from the
+field, and tapping it outside its buttons works like the list's background.
 
 It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.

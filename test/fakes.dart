@@ -561,7 +561,11 @@ class FakeRecordingEditor extends RecordingEditor {
   @override
   Future<Recording> addPiano(Recording recording, List<PianoNote> notes) async {
     pianoAdded[recording.id] = notes;
-    return repository.setNotes(recording, notes);
+    return repository.setNotes(
+      recording,
+      [...recording.notes, ...notes]
+        ..sort((a, b) => a.start.compareTo(b.start)),
+    );
   }
 
   /// Ediciones con las que se ha generado la escucha previa.

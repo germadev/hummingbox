@@ -1728,6 +1728,37 @@ void main() {
       expect(tester.testTextInput.isVisible, isFalse);
     });
 
+    testWidgets(
+      'tocar el dock quita el foco del campo y, fuera de los botones, '
+      'la selección',
+      (tester) async {
+        repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+        await pumpApp(tester);
+        await tester.tap(find.byTooltip('Buscar'));
+        await tester.pumpAndSettle();
+        await tester.enterText(searchField(), 'entre');
+        await tester.pumpAndSettle();
+        expect(searchFocused(tester), isTrue);
+
+        // Una zona vacía del dock, a la izquierda.
+        final dock = tester.getRect(find.byType(RecordPanel));
+        final empty = Offset(dock.left + 10, dock.center.dy);
+        await tester.tapAt(empty);
+        await tester.pumpAndSettle();
+        expect(searchFocused(tester), isFalse);
+        expect(searchField(), findsOneWidget);
+
+        // Con una grabación en pausa, también se deselecciona.
+        await tester.tap(find.byTooltip('Reproducir'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Pausar'));
+        await tester.pumpAndSettle();
+        await tester.tapAt(empty);
+        await tester.pumpAndSettle();
+        expect(player.calls.last, 'stop');
+      },
+    );
+
     testWidgets('tocar el fondo deselecciona la grabación, salvo si suena', (
       tester,
     ) async {
@@ -2539,6 +2570,48 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Transcribir'), findsNothing);
       expect(find.text('Compartir'), findsOneWidget);
+    });
+
+    testWidgets('desde una grabación, «Añadir piano» toca sobre ella mientras '
+        'suena y al terminar se añade', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Entrevista', createdAt: DateTime(2026, 9, 1)),
+        sample('b', 'Otra', createdAt: DateTime(2026, 9, 2)),
+      ]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Más opciones').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Añadir piano'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sobre «Entrevista»'), findsOneWidget);
+      expect(find.byKey(const Key('piano-mode')), findsNothing);
+
+      // Aunque esté activada la lista, al terminar no sigue con otra.
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      expect(player.calls.last, 'play /fake/a.m4a @0');
+      expect(recorder.calls, isEmpty);
+      await tester.tapAt(whiteKey(tester, 4));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      player.statusController.add(PlaybackStatus.completed);
+      await tester.pumpAndSettle();
+
+      final saved = repository.byId('a');
+      expect(saved.notes.single.key, 55);
+      expect(editor.pianoAdded['a'], saved.notes);
+      expect(repository.recordings, hasLength(2));
+      expect(find.text('Piano añadido a «Entrevista»'), findsWidgets);
+      expect(player.calls.where((c) => c.startsWith('play')), hasLength(1));
+
+      // Al cerrarlo, el piano vuelve a grabar como siempre.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('piano-target')), findsNothing);
+      expect(find.byKey(const Key('piano-mode')), findsOneWidget);
     });
 
     testWidgets('mientras se graba no se abre', (tester) async {

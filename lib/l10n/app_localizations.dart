@@ -1459,6 +1459,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detailed view'**
   String get detailedView;
+
+  /// Opción del menú de una grabación: tocar el piano sobre ella mientras suena
+  ///
+  /// In en, this message translates to:
+  /// **'Add piano'**
+  String get addPiano;
+
+  /// En el piano, la grabación que se acompaña
+  ///
+  /// In en, this message translates to:
+  /// **'Over “{name}”'**
+  String pianoOver(String name);
+
+  /// Al terminar de acompañar una grabación al piano
+  ///
+  /// In en, this message translates to:
+  /// **'Piano added to “{name}”'**
+  String pianoAdded(String name);
 }
 
 class _AppLocalizationsDelegate

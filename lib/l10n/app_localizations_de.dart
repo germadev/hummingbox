@@ -810,4 +810,17 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get detailedView => 'Detaillierte Ansicht';
+
+  @override
+  String get addPiano => 'Klavier hinzufügen';
+
+  @override
+  String pianoOver(String name) {
+    return 'Zu „$name“';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Klavier zu „$name“ hinzugefügt';
+  }
 }

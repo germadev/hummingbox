@@ -288,6 +288,16 @@ void main() {
       expect(samples.skip(505).take(100), anyElement(isNot(1000)));
     });
 
+    test('al añadir piano otra vez, se suman a las que tenía', () async {
+      final editor = newEditor();
+      final first = await editor.addPiano(recording, [notes[1]]);
+
+      final second = await editor.addPiano(first, [notes[0]]);
+
+      expect(second.notes, notes);
+      expect(second.revision, 2);
+    });
+
     test(
       'al recortar, las notas que quedan van desde el nuevo principio',
       () async {

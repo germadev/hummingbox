@@ -113,4 +113,40 @@ void main() {
     piano.noteOff(60);
     expect(await piano.stop(), isNull);
   });
+
+  test('acompañando: las notas cuentan desde que empieza a sonar y se '
+      'añaden a la grabación', () async {
+    final target = (await repository.add(
+      path: '/fake/a.m4a',
+      duration: const Duration(seconds: 5),
+      name: 'Tema',
+    ))!;
+    var played = false;
+    await piano.startOver(target, play: () async => played = true);
+    expect(played, isTrue);
+    expect(piano.mode, PianoRecordingMode.accompaniment);
+    expect(piano.target, target);
+    expect(recorder.calls, isEmpty);
+
+    await wait(30);
+    piano.noteOn(62);
+    piano.noteOff(62);
+    final saved = await piano.stop();
+
+    expect(saved!.id, target.id);
+    expect(saved.notes.single.key, 62);
+    expect(saved.notes.single.start.inMilliseconds, greaterThanOrEqualTo(30));
+    expect(editor.pianoAdded[target.id], saved.notes);
+    expect(piano.target, isNull);
+  });
+
+  test('acompañando sin tocar nada, no cambia la grabación', () async {
+    final target = (await repository.add(
+      path: '/fake/a.m4a',
+      duration: const Duration(seconds: 5),
+    ))!;
+    await piano.startOver(target, play: () async {});
+    expect(await piano.stop(), isNull);
+    expect(editor.pianoAdded, isEmpty);
+  });
 }

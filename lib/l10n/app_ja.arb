@@ -224,5 +224,8 @@
   "playAll": "続けて再生",
   "repeat": "リピート",
   "compactView": "コンパクト表示",
-  "detailedView": "詳細表示"
+  "detailedView": "詳細表示",
+  "addPiano": "ピアノを追加",
+  "pianoOver": "「{name}」に合わせて",
+  "pianoAdded": "「{name}」にピアノを追加しました"
 }

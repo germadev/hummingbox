@@ -224,5 +224,8 @@
   "playAll": "Reproduzir uma após a outra",
   "repeat": "Repetir",
   "compactView": "Visualização compacta",
-  "detailedView": "Visualização detalhada"
+  "detailedView": "Visualização detalhada",
+  "addPiano": "Adicionar piano",
+  "pianoOver": "Sobre “{name}”",
+  "pianoAdded": "Piano adicionado a “{name}”"
 }

@@ -95,6 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Qué se graba desde el piano: se conserva al cerrarlo.
   final _pianoMode = ValueNotifier(PianoRecordingMode.piano);
 
+  /// La grabación a la que se va a añadir piano, si se ha abierto el piano
+  /// para acompañarla (hasta que se cierra).
+  final _pianoTarget = ValueNotifier<Recording?>(null);
+
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
     audioPath: widget.sync.audioPath,
@@ -169,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _lifecycle = AppLifecycleListener(onResume: _onResume);
     _changes = widget.sync.changes.listen(_onStorageChanged);
     _recorder.addListener(_updateScreen);
+    _player.addListener(_onPlayerChangedWhileAccompanying);
     _recorder.addListener(_pauseAutoTranscription);
     widget.sync.addListener(_updateScreen);
     widget.sync.addListener(_onSettingsChanged);
@@ -188,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _pull.dispose();
     _pianoFirstKey.dispose();
     _pianoMode.dispose();
+    _pianoTarget.dispose();
     _pianoRecorder.dispose();
     _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
@@ -485,38 +491,89 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!opened && _pianoRecorder.isRecording) {
       unawaited(_stopPianoRecording());
     }
+    if (!opened) _pianoTarget.value = null;
   }
 
-  /// Empieza a grabar desde el piano. Con voz, para la reproducción (el
-  /// micrófono la grabaría). Devuelve `false` si falta el permiso del
-  /// micrófono.
-  Future<bool> _startPianoRecording(PianoRecordingMode mode) async {
+  /// Abre el piano para tocar sobre [recording] mientras suena.
+  void _openPianoOver(Recording recording) {
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToPlay);
+      return;
+    }
+    _pianoTarget.value = recording;
+    _scaffoldKey.currentState?.openEndDrawer();
+  }
+
+  /// Mientras se acompaña una grabación, al terminar de sonar (o si se para)
+  /// se guarda lo tocado.
+  void _onPlayerChangedWhileAccompanying() {
+    final target = _pianoRecorder.target;
+    if (target == null || _pianoRecorder.isSaving) return;
+    if (!_player.isPlayingOrPaused || !_player.isCurrent(target)) {
+      unawaited(_stopPianoRecording());
+    }
+  }
+
+  /// Empieza a grabar desde el piano: sobre la grabación que se acompaña, si
+  /// se abrió para eso, o según [mode]. Con voz, para la reproducción (el
+  /// micrófono la grabaría). Devuelve el aviso que se muestra en el piano si
+  /// no se puede empezar.
+  Future<String?> _startPianoRecording(PianoRecordingMode mode) async {
+    final l10n = context.l10n;
+    if (_pianoTarget.value case final target?) {
+      // Suena desde el principio, sin seguir con otra al terminar.
+      try {
+        await _pianoRecorder.startOver(
+          _latest(target),
+          play: () async {
+            _player.autoAdvance = false;
+            await _player.stop();
+            await _player.playFrom(_latest(target), Duration.zero);
+          },
+        );
+      } catch (_) {
+        _player.autoAdvance = true;
+        return l10n.playFailed;
+      }
+      return null;
+    }
     if (mode == PianoRecordingMode.pianoAndVoice) await _player.stop();
     try {
-      return await _pianoRecorder.start(
+      final started = await _pianoRecorder.start(
         mode,
         options: widget.sync.settings.recording,
         folder: _folder,
       );
+      return started ? null : l10n.microphonePermission;
     } catch (_) {
-      _showMessage((l10n) => l10n.startRecordingFailed);
-      return true;
+      return l10n.startRecordingFailed;
     }
   }
 
   /// Termina la grabación del piano y la añade a la lista.
   Future<Recording?> _stopPianoRecording() async {
+    final accompanying = _pianoRecorder.target != null;
     Recording? recording;
     try {
+      if (accompanying) {
+        // Se para antes de cambiar su audio.
+        _player.autoAdvance = true;
+        await _player.stop();
+      }
       recording = await _pianoRecorder.stop();
     } catch (_) {
       recording = null;
     }
     if (!mounted || recording == null) return null;
     final saved = recording;
-    setState(() => _recordings = [..._recordings, saved]);
-    _scrollToEnd(animate: true);
-    _showMessage((l10n) => l10n.savedAs(saved.name));
+    if (_recordings.any((r) => r.id == saved.id)) {
+      _replaceRecording(saved);
+      _showMessage((l10n) => l10n.pianoAdded(saved.name));
+    } else {
+      setState(() => _recordings = [..._recordings, saved]);
+      _scrollToEnd(animate: true);
+      _showMessage((l10n) => l10n.savedAs(saved.name));
+    }
     _syncStorage();
     unawaited(_transcribeMissing());
     return saved;
@@ -662,6 +719,8 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (action) {
       case RecordingAction.edit:
         await _edit(recording);
+      case RecordingAction.addPiano:
+        _openPianoOver(recording);
       case RecordingAction.rename:
         await _rename(recording);
       case RecordingAction.transcribe:
@@ -1381,6 +1440,7 @@ class _HomeScreenState extends State<HomeScreen> {
           firstKey: _pianoFirstKey,
           recorder: _pianoRecorder,
           mode: _pianoMode,
+          target: _pianoTarget,
           onRecord: _startPianoRecording,
           onStop: _stopPianoRecording,
           onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
@@ -1409,6 +1469,10 @@ class _HomeScreenState extends State<HomeScreen> {
         countdownSeconds: widget.sync.settings.countdownSeconds,
         player: _player,
         onStopPlayback: () => unawaited(_player.stop()),
+        // Como el fondo de la lista: quita el foco del campo de búsqueda y,
+        // fuera de los botones, la selección.
+        onTouched: _searchFocus.unfocus,
+        onBackgroundTapped: _onBackgroundTapped,
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
         onCountdownPressed: _startAfterCountdown,
