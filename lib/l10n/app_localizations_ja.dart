@@ -747,4 +747,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get close => '閉じる';
+
+  @override
+  String get pianoOnly => 'ピアノのみ';
+
+  @override
+  String get pianoAndVoice => 'ピアノと声';
+
+  @override
+  String get pianoNothingPlayed => '保存するものがありません：音が弾かれていません';
 }

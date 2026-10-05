@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../controllers/piano_recorder.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../controllers/transcription_controller.dart';
@@ -84,6 +85,16 @@ class _HomeScreenState extends State<HomeScreen> {
     probe: widget.editor.probe,
     trimStart: widget.editor.trimStart,
   );
+
+  /// Graba desde el piano (con la misma grabadora, si es con voz).
+  late final PianoRecorder _pianoRecorder = PianoRecorder(
+    voice: _recorder,
+    editor: widget.editor,
+  );
+
+  /// Qué se graba desde el piano: se conserva al cerrarlo.
+  final _pianoMode = ValueNotifier(PianoRecordingMode.piano);
+
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
     audioPath: widget.sync.audioPath,
@@ -174,6 +185,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocus.dispose();
     _pull.dispose();
     _pianoFirstKey.dispose();
+    _pianoMode.dispose();
+    _pianoRecorder.dispose();
     _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
     widget.sync.removeListener(_onSettingsChanged);
@@ -466,6 +479,45 @@ class _HomeScreenState extends State<HomeScreen> {
         opened ? PianoPanel.landscape : const [],
       ),
     );
+    // Al cerrarlo mientras se graba, se guarda lo grabado.
+    if (!opened && _pianoRecorder.isRecording) {
+      unawaited(_stopPianoRecording());
+    }
+  }
+
+  /// Empieza a grabar desde el piano. Con voz, para la reproducción (el
+  /// micrófono la grabaría). Devuelve `false` si falta el permiso del
+  /// micrófono.
+  Future<bool> _startPianoRecording(PianoRecordingMode mode) async {
+    if (mode == PianoRecordingMode.pianoAndVoice) await _player.stop();
+    try {
+      return await _pianoRecorder.start(
+        mode,
+        options: widget.sync.settings.recording,
+        folder: _folder,
+      );
+    } catch (_) {
+      _showMessage((l10n) => l10n.startRecordingFailed);
+      return true;
+    }
+  }
+
+  /// Termina la grabación del piano y la añade a la lista.
+  Future<Recording?> _stopPianoRecording() async {
+    Recording? recording;
+    try {
+      recording = await _pianoRecorder.stop();
+    } catch (_) {
+      recording = null;
+    }
+    if (!mounted || recording == null) return null;
+    final saved = recording;
+    setState(() => _recordings = [..._recordings, saved]);
+    _scrollToEnd(animate: true);
+    _showMessage((l10n) => l10n.savedAs(saved.name));
+    _syncStorage();
+    unawaited(_transcribeMissing());
+    return saved;
   }
 
   Future<void> _createFolder() async {
@@ -1311,6 +1363,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: PianoPanel(
           sound: widget.piano,
           firstKey: _pianoFirstKey,
+          recorder: _pianoRecorder,
+          mode: _pianoMode,
+          onRecord: _startPianoRecording,
+          onStop: _stopPianoRecording,
           onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
         ),
       ),

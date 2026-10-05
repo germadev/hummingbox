@@ -742,4 +742,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get close => '关闭';
+
+  @override
+  String get pianoOnly => '仅钢琴';
+
+  @override
+  String get pianoAndVoice => '钢琴和人声';
+
+  @override
+  String get pianoNothingPlayed => '没有可保存的内容：未弹奏任何音符';
 }

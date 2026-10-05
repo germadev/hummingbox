@@ -192,31 +192,34 @@ class RecordingTile extends StatelessWidget {
                             title: Text(l10n.rename),
                           ),
                         ),
-                        if (recording.transcript == null)
-                          PopupMenuItem(
-                            value: RecordingAction.transcribe,
-                            // Si va en segundo plano, se adelanta.
-                            enabled: !transcriptions.isRequested(recording),
-                            child: ListTile(
-                              leading: const Icon(Icons.notes),
-                              title: Text(l10n.transcribe),
+                        // Solo el piano: no hay voz que transcribir.
+                        if (recording.hasVoice) ...[
+                          if (recording.transcript == null)
+                            PopupMenuItem(
+                              value: RecordingAction.transcribe,
+                              // Si va en segundo plano, se adelanta.
+                              enabled: !transcriptions.isRequested(recording),
+                              child: ListTile(
+                                leading: const Icon(Icons.notes),
+                                title: Text(l10n.transcribe),
+                              ),
+                            )
+                          else
+                            PopupMenuItem(
+                              value: RecordingAction.viewTranscript,
+                              child: ListTile(
+                                leading: const Icon(Icons.subject),
+                                title: Text(l10n.viewTranscript),
+                              ),
                             ),
-                          )
-                        else
                           PopupMenuItem(
-                            value: RecordingAction.viewTranscript,
+                            value: RecordingAction.transcribeInLanguage,
                             child: ListTile(
-                              leading: const Icon(Icons.subject),
-                              title: Text(l10n.viewTranscript),
+                              leading: const Icon(Icons.translate),
+                              title: Text(l10n.transcribeInLanguage),
                             ),
                           ),
-                        PopupMenuItem(
-                          value: RecordingAction.transcribeInLanguage,
-                          child: ListTile(
-                            leading: const Icon(Icons.translate),
-                            title: Text(l10n.transcribeInLanguage),
-                          ),
-                        ),
+                        ],
                         PopupMenuItem(
                           value: RecordingAction.share,
                           child: ListTile(
@@ -244,6 +247,8 @@ class RecordingTile extends StatelessWidget {
                         ? player.duration
                         : recording.duration,
                     position: isCurrent ? player.position : null,
+                    notes: recording.notes,
+                    showWaveform: recording.hasVoice,
                     onSeek: onSeek,
                   ),
                 ),

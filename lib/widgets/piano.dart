@@ -6,7 +6,10 @@ import 'package:flutter/services.dart';
 
 import '../audio/piano_tone.dart';
 import '../l10n/l10n.dart';
+import '../controllers/piano_recorder.dart';
+import '../models/recording.dart';
 import '../services/piano_sound.dart';
+import '../utils/formatters.dart';
 
 /// Panel del piano, que se abre deslizando hacia la izquierda: un teclado
 /// de octava y media y, debajo, todas las octavas en pequeño con la parte
@@ -19,10 +22,27 @@ class PianoPanel extends StatefulWidget {
     super.key,
     required this.sound,
     required this.firstKey,
+    required this.recorder,
+    required this.mode,
+    required this.onRecord,
+    required this.onStop,
     this.onClose,
   });
 
   final PianoSound sound;
+
+  /// Graba lo que se toca (y la voz, si se elige).
+  final PianoRecorder recorder;
+
+  /// Qué se graba al pulsar «Grabar». Se conserva al cerrar el panel.
+  final ValueNotifier<PianoRecordingMode> mode;
+
+  /// Al pulsar «Grabar»: devuelve `false` si no se pudo empezar (sin
+  /// permiso del micrófono).
+  final Future<bool> Function(PianoRecordingMode mode) onRecord;
+
+  /// Al parar la grabación: devuelve lo guardado, si se guardó algo.
+  final Future<Recording?> Function() onStop;
 
   /// Primera tecla blanca de la parte ampliada (su posición en
   /// [PianoKeys.whiteKeys]). Se conserva al cerrar el panel.
@@ -54,6 +74,10 @@ class _PianoPanelState extends State<PianoPanel> {
   /// La última tecla tocada, para mostrar su nota.
   int? _lastKey;
 
+  /// Aviso sobre la grabación (p. ej. que se ha guardado), en lugar de la
+  /// nota, hasta tocar otra tecla.
+  String? _message;
+
   @override
   void initState() {
     super.initState();
@@ -79,8 +103,33 @@ class _PianoPanelState extends State<PianoPanel> {
   }
 
   void _play(int key) {
-    setState(() => _lastKey = key);
+    setState(() {
+      _lastKey = key;
+      _message = null;
+    });
     unawaited(widget.sound.play(key));
+    widget.recorder.noteOn(key);
+  }
+
+  Future<void> _record(PianoRecordingMode mode) async {
+    setState(() => _message = null);
+    final started = await widget.onRecord(mode);
+    if (!mounted || started) return;
+    setState(() => _message = context.l10n.microphonePermission);
+  }
+
+  Future<void> _stop() async {
+    final mode = widget.recorder.mode;
+    final saved = await widget.onStop();
+    if (!mounted) return;
+    final l10n = context.l10n;
+    setState(
+      () => _message = switch (saved) {
+        final saved? => l10n.savedAs(saved.name),
+        null when mode == PianoRecordingMode.piano => l10n.pianoNothingPlayed,
+        null => l10n.saveRecordingFailed,
+      },
+    );
   }
 
   @override
@@ -101,7 +150,16 @@ class _PianoPanelState extends State<PianoPanel> {
                 Text(l10n.piano, style: theme.textTheme.titleLarge),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: lastKey == null
+                  child: _message != null
+                      ? Text(
+                          _message!,
+                          key: const Key('piano-message'),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        )
+                      : lastKey == null
                       ? Text(
                           l10n.pianoHint,
                           textAlign: TextAlign.center,
@@ -133,6 +191,13 @@ class _PianoPanelState extends State<PianoPanel> {
                         ),
                 ),
                 const SizedBox(width: 16),
+                _RecordControls(
+                  recorder: widget.recorder,
+                  mode: widget.mode,
+                  onRecord: _record,
+                  onStop: _stop,
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   tooltip: l10n.close,
                   icon: const Icon(Icons.close),
@@ -156,6 +221,7 @@ class _PianoPanelState extends State<PianoPanel> {
                         whiteKeys: PianoPanel.visibleWhiteKeys,
                         names: names,
                         onPressed: _play,
+                        onReleased: widget.recorder.noteOff,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -176,6 +242,92 @@ class _PianoPanelState extends State<PianoPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Qué grabar (solo el piano o también la voz) y el botón para grabar o,
+/// mientras se graba, para parar con el tiempo grabado.
+class _RecordControls extends StatelessWidget {
+  const _RecordControls({
+    required this.recorder,
+    required this.mode,
+    required this.onRecord,
+    required this.onStop,
+  });
+
+  final PianoRecorder recorder;
+  final ValueNotifier<PianoRecordingMode> mode;
+  final Future<void> Function(PianoRecordingMode mode) onRecord;
+  final Future<void> Function() onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = Theme.of(context).colorScheme;
+    return ListenableBuilder(
+      listenable: Listenable.merge([recorder, mode]),
+      builder: (context, _) {
+        final recording = recorder.isRecording;
+        final saving = recorder.isSaving;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SegmentedButton<PianoRecordingMode>(
+              key: const Key('piano-mode'),
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: PianoRecordingMode.piano,
+                  icon: const Icon(Icons.piano),
+                  tooltip: l10n.pianoOnly,
+                ),
+                ButtonSegment(
+                  value: PianoRecordingMode.pianoAndVoice,
+                  icon: const Icon(Icons.mic),
+                  tooltip: l10n.pianoAndVoice,
+                ),
+              ],
+              selected: {mode.value},
+              onSelectionChanged: recording || saving
+                  ? null
+                  : (selected) => mode.value = selected.single,
+            ),
+            const SizedBox(width: 8),
+            if (saving)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              )
+            else if (recording)
+              FilledButton.icon(
+                key: const Key('piano-stop'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.error,
+                  foregroundColor: colors.onError,
+                ),
+                onPressed: onStop,
+                icon: const Icon(Icons.stop),
+                label: Text(
+                  formatDuration(recorder.elapsed),
+                  style: const TextStyle(
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              )
+            else
+              FilledButton.icon(
+                key: const Key('piano-record'),
+                onPressed: () => onRecord(mode.value),
+                icon: const Icon(Icons.fiber_manual_record),
+                label: Text(l10n.record),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -206,6 +358,7 @@ class PianoKeyboard extends StatefulWidget {
     required this.whiteKeys,
     required this.names,
     required this.onPressed,
+    this.onReleased,
   });
 
   final int firstKey;
@@ -214,6 +367,10 @@ class PianoKeyboard extends StatefulWidget {
 
   /// Al pulsar una tecla (o llegar a ella deslizando el dedo).
   final ValueChanged<int> onPressed;
+
+  /// Al soltar una tecla (o salir de ella deslizando el dedo), si no la
+  /// sigue pulsando otro dedo.
+  final ValueChanged<int>? onReleased;
 
   /// Alto de las negras respecto al de las blancas.
   static const blackHeight = 0.6;
@@ -258,7 +415,8 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
     final size = context.size;
     if (size == null) return;
     final key = _keyAt(position, size);
-    if (key == _pointers[pointer]) return;
+    final previous = _pointers[pointer];
+    if (key == previous) return;
     setState(() {
       if (key == null) {
         _pointers.remove(pointer);
@@ -266,12 +424,21 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
         _pointers[pointer] = key;
       }
     });
+    _releaseIfFree(previous);
     if (key != null) widget.onPressed(key);
   }
 
   void _release(int pointer) {
-    if (_pointers.containsKey(pointer)) {
-      setState(() => _pointers.remove(pointer));
+    if (!_pointers.containsKey(pointer)) return;
+    final key = _pointers[pointer];
+    setState(() => _pointers.remove(pointer));
+    _releaseIfFree(key);
+  }
+
+  /// Avisa de que se ha soltado [key], si ya no la pulsa ningún dedo.
+  void _releaseIfFree(int? key) {
+    if (key != null && !_pointers.containsValue(key)) {
+      widget.onReleased?.call(key);
     }
   }
 

@@ -216,5 +216,8 @@
   "piano": "Pianoforte",
   "pianoHint": "Tocca un tasto per sentirne la nota.\nScorri sulla tastiera piccola per spostarti.",
   "noteNames": "Do Re Mi Fa Sol La Si",
-  "close": "Chiudi"
+  "close": "Chiudi",
+  "pianoOnly": "Solo pianoforte",
+  "pianoAndVoice": "Pianoforte e voce",
+  "pianoNothingPlayed": "Niente da salvare: non è stata suonata nessuna nota"
 }

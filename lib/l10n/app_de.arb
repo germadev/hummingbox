@@ -216,5 +216,8 @@
   "piano": "Klavier",
   "pianoHint": "Tippe auf eine Taste, um ihren Ton zu hören.\nWische über die kleine Tastatur, um dich darauf zu bewegen.",
   "noteNames": "C D E F G A H",
-  "close": "Schließen"
+  "close": "Schließen",
+  "pianoOnly": "Nur Klavier",
+  "pianoAndVoice": "Klavier und Stimme",
+  "pianoNothingPlayed": "Nichts zu speichern: Es wurden keine Töne gespielt"
 }

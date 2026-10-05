@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/audio/levels.dart';
+import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
@@ -223,5 +224,95 @@ void main() {
 
     await expectLater(newEditor().open(recording), throwsA(anything));
     expect(Directory(p.join(temp.path, 'editor')).listSync(), isEmpty);
+  });
+
+  group('piano', () {
+    const notes = [
+      PianoNote(
+        key: 60,
+        start: Duration(milliseconds: 500),
+        duration: Duration(milliseconds: 300),
+      ),
+      PianoNote(
+        key: 64,
+        start: Duration(milliseconds: 1500),
+        duration: Duration(milliseconds: 300),
+      ),
+    ];
+
+    /// Índice de la primera muestra que no es silencio.
+    int firstSound(List<int> samples) =>
+        samples.indexWhere((s) => s.abs() > 50);
+
+    test('guarda solo el piano: cada nota suena cuando se tocó', () async {
+      final editor = newEditor();
+      final saved = await editor.savePiano(
+        notes: notes,
+        duration: const Duration(seconds: 2),
+        options: const RecordingOptions(format: RecordingFormat.wav),
+        folder: 'Ideas',
+      );
+
+      expect(saved.hasVoice, isFalse);
+      expect(saved.notes, notes);
+      expect(saved.folder, 'Ideas');
+      expect(saved.format, RecordingFormat.wav);
+      // Dura hasta que se apaga la última nota.
+      expect(saved.duration, const Duration(milliseconds: 3100));
+
+      final samples = await readSamples(saved.path);
+      final rate = const RecordingOptions(format: RecordingFormat.wav)
+          .sampleRate;
+      expect(firstSound(samples), closeTo(rate * 0.5, rate * 0.01));
+      // Entre que empieza la primera y la segunda pasa un segundo, como al
+      // tocarlas.
+      final second = firstSound(samples.sublist(rate * 1495 ~/ 1000));
+      expect(second, lessThan(rate * 0.02));
+    });
+
+    test('añade el piano a la voz y conserva la onda de la voz', () async {
+      final editor = newEditor();
+      final voice = await repository.setDetails(recording, waveform: [0.5]);
+
+      final mixed = await editor.addPiano(voice, notes);
+
+      expect(mixed.notes, notes);
+      expect(mixed.hasVoice, isTrue);
+      expect(mixed.revision, 1);
+      expect(mixed.waveform, [0.5]);
+      expect(mixed.duration, const Duration(seconds: 4));
+      final samples = await readSamples(mixed.path);
+      expect(samples, hasLength(4000));
+      // Antes de la primera nota, solo la voz.
+      expect(samples.take(500), everyElement(1000));
+      expect(samples.skip(505).take(100), anyElement(isNot(1000)));
+    });
+
+    test(
+      'al recortar, las notas que quedan van desde el nuevo principio',
+      () async {
+        final editor = newEditor();
+        final withNotes = await repository.setNotes(recording, notes);
+        final session = await editor.open(withNotes);
+
+        final edited = await editor.save(
+          session,
+          const AudioEdit(
+            start: Duration(milliseconds: 1000),
+            end: Duration(seconds: 4),
+          ),
+          asCopy: false,
+        );
+        await editor.close(session);
+
+        expect(edited.notes, [
+          const PianoNote(
+            key: 64,
+            start: Duration(milliseconds: 500),
+            duration: Duration(milliseconds: 300),
+          ),
+        ]);
+      },
+    );
   });
 }

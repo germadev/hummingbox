@@ -216,5 +216,8 @@
   "piano": "ピアノ",
   "pianoHint": "鍵盤をタップすると音が鳴ります。\n小さな鍵盤をスワイプすると移動できます。",
   "noteNames": "C D E F G A B",
-  "close": "閉じる"
+  "close": "閉じる",
+  "pianoOnly": "ピアノのみ",
+  "pianoAndVoice": "ピアノと声",
+  "pianoNothingPlayed": "保存するものがありません：音が弾かれていません"
 }

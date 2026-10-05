@@ -30,6 +30,25 @@ class AudioplayersPianoSound implements PianoSound {
   /// antigua).
   static const voices = 6;
 
+  /// Se puede tocar mientras se graba la voz (en iOS, la sesión de audio
+  /// es de grabar y reproducir) y junto a otra reproducción (sin quitarle el
+  /// foco de audio en Android).
+  static final _context = AudioContext(
+    android: const AudioContextAndroid(
+      contentType: AndroidContentType.music,
+      usageType: AndroidUsageType.media,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playAndRecord,
+      options: const {
+        AVAudioSessionOptions.defaultToSpeaker,
+        AVAudioSessionOptions.mixWithOthers,
+        AVAudioSessionOptions.allowBluetoothA2DP,
+      },
+    ),
+  );
+
   final Future<Directory> Function() _directoryProvider;
   final _files = <int, Future<String>>{};
   final _players = <AudioPlayer>[];
@@ -54,6 +73,9 @@ class AudioplayersPianoSound implements PianoSound {
       try {
         // Suena antes al tocar (en Android); si no se puede, en el normal.
         await player.setPlayerMode(PlayerMode.lowLatency);
+      } catch (_) {}
+      try {
+        await player.setAudioContext(_context);
       } catch (_) {}
       await player.setReleaseMode(ReleaseMode.stop);
       _players.add(player);

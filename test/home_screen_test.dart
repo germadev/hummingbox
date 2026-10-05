@@ -5,13 +5,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:voicerecorder/app.dart';
+import 'package:voicerecorder/controllers/piano_recorder.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
+import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
+import 'package:voicerecorder/widgets/waveform_seek_bar.dart';
 import 'package:voicerecorder/widgets/piano.dart';
 
 import 'fakes.dart';
@@ -2265,6 +2268,157 @@ void main() {
       expect(keyboard(), findsNothing);
       expect(find.text('Entrevista'), findsOneWidget);
       expect(orientations.last, isEmpty);
+    });
+
+    testWidgets('graba solo el piano y lo guarda en la carpeta abierta', (
+      tester,
+    ) async {
+      store.settings = const AppSettings(
+        folder: testFolder,
+        openFolder: 'Ideas',
+        transcription: manual,
+      );
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      expect(find.byKey(const Key('piano-stop')), findsOneWidget);
+      // Mientras se graba no se cambia qué se graba.
+      final modes = tester.widget<SegmentedButton<PianoRecordingMode>>(
+        find.byKey(const Key('piano-mode')),
+      );
+      expect(modes.onSelectionChanged, isNull);
+
+      await tester.tapAt(whiteKey(tester, 0));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tapAt(whiteKey(tester, 2));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(const Key('piano-stop')));
+      await tester.pumpAndSettle();
+
+      final saved = repository.recordings.single;
+      expect(saved.hasVoice, isFalse);
+      expect(saved.folder, 'Ideas');
+      expect(saved.notes.map((n) => n.key), [48, 52]);
+      expect(recorder.calls, isEmpty);
+      expect(find.text('Guardada como «${saved.name}»'), findsWidgets);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text(saved.name), findsOneWidget);
+    });
+
+    testWidgets('sin tocar nada no guarda, y lo dice', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('piano-stop')));
+      await tester.pumpAndSettle();
+
+      expect(repository.recordings, isEmpty);
+      expect(
+        find.text('No hay nada que guardar: no se ha tocado ninguna nota'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('con voz graba con el micrófono, y al cerrar el piano se '
+        'guarda', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Piano y voz'));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      expect(recorder.calls, ['hasPermission', 'start']);
+      await tester.tapAt(whiteKey(tester, 5));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(recorder.calls.last, 'stop');
+      final saved = repository.recordings.single;
+      expect(saved.hasVoice, isTrue);
+      expect(saved.notes.single.key, 57);
+      expect(editor.pianoAdded[saved.id], saved.notes);
+      expect(find.text(saved.name), findsOneWidget);
+
+      // Se recuerda qué se graba.
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      final modes = tester.widget<SegmentedButton<PianoRecordingMode>>(
+        find.byKey(const Key('piano-mode')),
+      );
+      expect(modes.selected, {PianoRecordingMode.pianoAndVoice});
+    });
+
+    testWidgets('con voz y sin permiso del micrófono, lo dice', (tester) async {
+      recorder.permissionGranted = false;
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Piano y voz'));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('piano-record')), findsOneWidget);
+      expect(
+        find.text(
+          'Permite el acceso al micrófono en los ajustes para poder grabar',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('las grabaciones con piano muestran sus notas, y las de solo '
+        'piano no se transcriben', (tester) async {
+      const notes = [
+        PianoNote(
+          key: 60,
+          start: Duration(seconds: 1),
+          duration: Duration(milliseconds: 500),
+        ),
+      ];
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'p',
+          path: '/fake/p.m4a',
+          name: 'Solo piano',
+          createdAt: DateTime(2026, 9, 28),
+          duration: const Duration(seconds: 4),
+          notes: notes,
+          hasVoice: false,
+        ),
+      ]);
+      store.settings = const AppSettings(folder: testFolder);
+      await pumpApp(tester);
+
+      final paint = tester.widget<CustomPaint>(
+        find
+            .descendant(
+              of: find.byKey(const Key('waveform-p')),
+              matching: find.byType(CustomPaint),
+            )
+            .first,
+      );
+      expect(paint.painter, isNull);
+      expect((paint.foregroundPainter! as PianoRollPainter).notes, notes);
+      // Sin voz no se transcribe, ni sola ni desde el menú.
+      expect(transcriber.calls, isEmpty);
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('Transcribir'), findsNothing);
+      expect(find.text('Compartir'), findsOneWidget);
     });
 
     testWidgets('mientras se graba no se abre', (tester) async {

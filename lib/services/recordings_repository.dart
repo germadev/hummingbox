@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../models/transcription.dart';
@@ -28,6 +29,9 @@ abstract interface class RecordingsRepository {
   /// la fecha y la hora («2026-10-05 14.32», ver [Recording.provisionalName]),
   /// y con fecha [createdAt] o, si no se indica, la actual.
   ///
+  /// [notes] son las notas del piano tocadas mientras se grababa y
+  /// [hasVoice], si se grabó también la voz (ver [Recording.notes]).
+  ///
   /// Si [copies] no está vacío, el audio puede no estar en [path]: la
   /// grabación está guardada fuera de la app (en la carpeta del dispositivo o
   /// en Google Drive). Si no, devuelve `null` si el archivo no existe.
@@ -40,6 +44,8 @@ abstract interface class RecordingsRepository {
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
     String folder = '',
+    List<PianoNote> notes = const [],
+    bool hasVoice = true,
   });
 
   /// Cambia el nombre de [recording] (ya no es provisional).
@@ -81,6 +87,9 @@ abstract interface class RecordingsRepository {
     Transcript? transcript, {
     bool keepExisting = false,
   });
+
+  /// Sustituye las notas del piano de [recording] (p. ej. al recortarla).
+  Future<Recording> setNotes(Recording recording, List<PianoNote> notes);
 
   /// Guarda el idioma en que se transcribe [recording] (ver
   /// [Recording.transcriptionLanguage]); `null` para usar el de las opciones.
@@ -256,6 +265,8 @@ class FileRecordingsRepository implements RecordingsRepository {
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
     String folder = '',
+    List<PianoNote> notes = const [],
+    bool hasVoice = true,
   }) async {
     if (copies.isEmpty && !await File(path).exists()) return null;
 
@@ -279,6 +290,8 @@ class FileRecordingsRepository implements RecordingsRepository {
         copies: copies,
         folder: folder,
         provisionalName: name == null,
+        notes: notes,
+        hasVoice: hasVoice,
       );
       index[recording.id] = recording.toMetadata();
       await _writeIndex(directory, index);
@@ -371,6 +384,17 @@ class FileRecordingsRepository implements RecordingsRepository {
         metadata.remove('provisionalName');
       }),
     );
+  }
+
+  @override
+  Future<Recording> setNotes(Recording recording, List<PianoNote> notes) {
+    return _update(recording, (metadata) {
+      if (notes.isEmpty) {
+        metadata.remove('notes');
+      } else {
+        metadata['notes'] = [for (final note in notes) note.toJson()];
+      }
+    });
   }
 
   @override

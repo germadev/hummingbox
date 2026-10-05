@@ -617,5 +617,14 @@
   "@noteNames": {
     "description": "Nombres de las siete notas naturales, de Do a Si, separados por espacios (solfeo o letras, según el idioma; en alemán, H para el Si)"
   },
-  "close": "Close"
+  "close": "Close",
+  "pianoOnly": "Piano only",
+  "@pianoOnly": {
+    "description": "En el piano: grabar solo las notas"
+  },
+  "pianoAndVoice": "Piano and voice",
+  "@pianoAndVoice": {
+    "description": "En el piano: grabar las notas y la voz con el micrófono"
+  },
+  "pianoNothingPlayed": "Nothing to save: no notes were played"
 }

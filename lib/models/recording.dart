@@ -1,5 +1,6 @@
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import 'piano_note.dart';
 import 'recording_options.dart';
 import 'transcription.dart';
 
@@ -21,6 +22,8 @@ class Recording {
     this.noAutoTranscript,
     this.transcriptionLanguage,
     this.provisionalName = false,
+    this.notes = const [],
+    this.hasVoice = true,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -52,6 +55,8 @@ class Recording {
       noAutoTranscript: json['noAutoTranscript'] as int?,
       transcriptionLanguage: json['transcriptionLanguage'] as String?,
       provisionalName: json['provisionalName'] == true,
+      notes: PianoNote.listFromJson(json['notes']),
+      hasVoice: json['voice'] != false,
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -116,10 +121,18 @@ class Recording {
   /// no.
   final bool provisionalName;
 
-  /// Indica si se debe transcribir automáticamente: no tiene transcripción
-  /// y no se ha quedado sin ella a propósito (ver [noAutoTranscript]).
+  /// Notas tocadas en el piano mientras se grababa, en orden. Su sonido está
+  /// en el audio; aquí están para dibujarlas.
+  final List<PianoNote> notes;
+
+  /// Indica si se grabó la voz (con el micrófono). Si no, es solo el piano.
+  final bool hasVoice;
+
+  /// Indica si se debe transcribir automáticamente: tiene voz, no tiene
+  /// transcripción y no se ha quedado sin ella a propósito (ver
+  /// [noAutoTranscript]).
   bool get needsTranscript =>
-      transcript == null && noAutoTranscript != revision;
+      hasVoice && transcript == null && noAutoTranscript != revision;
 
   /// Indica si la transcripción es de otra versión del audio (si se editó o
   /// se cambió fuera de la app después de transcribirla).
@@ -156,6 +169,8 @@ class Recording {
     if (transcriptionLanguage != null)
       'transcriptionLanguage': transcriptionLanguage,
     if (provisionalName) 'provisionalName': true,
+    if (notes.isNotEmpty) 'notes': [for (final note in notes) note.toJson()],
+    if (!hasVoice) 'voice': false,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -171,6 +186,7 @@ class Recording {
     AudioInfo? audio,
     Transcript? Function()? transcript,
     bool? provisionalName,
+    List<PianoNote>? notes,
   }) {
     return Recording(
       id: id,
@@ -187,6 +203,8 @@ class Recording {
       noAutoTranscript: noAutoTranscript,
       transcriptionLanguage: transcriptionLanguage,
       provisionalName: provisionalName ?? this.provisionalName,
+      notes: notes ?? this.notes,
+      hasVoice: hasVoice,
     );
   }
 }

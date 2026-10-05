@@ -216,5 +216,8 @@
   "piano": "Piano",
   "pianoHint": "Touchez une touche pour entendre sa note.\nFaites glisser le doigt sur le petit clavier pour vous y déplacer.",
   "noteNames": "Do Ré Mi Fa Sol La Si",
-  "close": "Fermer"
+  "close": "Fermer",
+  "pianoOnly": "Piano seul",
+  "pianoAndVoice": "Piano et voix",
+  "pianoNothingPlayed": "Rien à enregistrer : aucune note n’a été jouée"
 }

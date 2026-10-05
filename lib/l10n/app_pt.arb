@@ -216,5 +216,8 @@
   "piano": "Piano",
   "pianoHint": "Toque em uma tecla para ouvir a nota.\nDeslize sobre o teclado pequeno para se mover por ele.",
   "noteNames": "Dó Ré Mi Fá Sol Lá Si",
-  "close": "Fechar"
+  "close": "Fechar",
+  "pianoOnly": "Só piano",
+  "pianoAndVoice": "Piano e voz",
+  "pianoNothingPlayed": "Nada para salvar: nenhuma nota foi tocada"
 }

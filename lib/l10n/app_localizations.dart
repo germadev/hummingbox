@@ -1411,6 +1411,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Close'**
   String get close;
+
+  /// En el piano: grabar solo las notas
+  ///
+  /// In en, this message translates to:
+  /// **'Piano only'**
+  String get pianoOnly;
+
+  /// En el piano: grabar las notas y la voz con el micrófono
+  ///
+  /// In en, this message translates to:
+  /// **'Piano and voice'**
+  String get pianoAndVoice;
+
+  /// No description provided for @pianoNothingPlayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to save: no notes were played'**
+  String get pianoNothingPlayed;
 }
 
 class _AppLocalizationsDelegate

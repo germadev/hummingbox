@@ -772,4 +772,14 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get close => 'Cerrar';
+
+  @override
+  String get pianoOnly => 'Solo piano';
+
+  @override
+  String get pianoAndVoice => 'Piano y voz';
+
+  @override
+  String get pianoNothingPlayed =>
+      'No hay nada que guardar: no se ha tocado ninguna nota';
 }

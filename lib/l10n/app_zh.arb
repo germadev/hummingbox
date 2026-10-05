@@ -216,5 +216,8 @@
   "piano": "钢琴",
   "pianoHint": "点按琴键即可听到音符。\n在小键盘上滑动可移动位置。",
   "noteNames": "C D E F G A B",
-  "close": "关闭"
+  "close": "关闭",
+  "pianoOnly": "仅钢琴",
+  "pianoAndVoice": "钢琴和人声",
+  "pianoNothingPlayed": "没有可保存的内容：未弹奏任何音符"
 }

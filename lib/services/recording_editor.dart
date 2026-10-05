@@ -7,7 +7,10 @@ import 'package:path_provider/path_provider.dart';
 import '../audio/audio_edit.dart';
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import '../audio/piano_mix.dart';
+import '../audio/piano_tone.dart';
 import '../audio/wav.dart';
+import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../utils/files.dart';
@@ -115,15 +118,19 @@ class RecordingEditor {
         );
     }
     final audio = (await probe(output))?.info;
+    // Las notas del piano que quedan, desde el nuevo principio.
+    final notes = PianoNote.between(recording.notes, edit.start, edit.end);
 
     if (!asCopy) {
-      return repository.replaceAudio(
+      final replaced = await repository.replaceAudio(
         recording,
         sourcePath: output,
         duration: result.duration,
         waveform: result.levels,
         audio: audio,
       );
+      if (recording.notes.isEmpty) return replaced;
+      return repository.setNotes(replaced, notes);
     }
 
     final path = await repository.createRecordingPath(format: format);
@@ -135,9 +142,106 @@ class RecordingEditor {
       name: copyName ?? '${recording.name}$copySuffix',
       audio: audio,
       folder: recording.folder,
+      notes: notes,
+      hasVoice: recording.hasVoice,
     );
     if (copy == null) throw StateError('No se pudo registrar la copia');
     return copy;
+  }
+
+  /// Guarda como grabación nueva de la subcarpeta [folder] las [notes]
+  /// tocadas en el piano (sin voz) durante [duration], con el formato y la
+  /// calidad de [options]. Si la última nota suena más allá, dura hasta que
+  /// se apaga.
+  Future<Recording> savePiano({
+    required List<PianoNote> notes,
+    required Duration duration,
+    required RecordingOptions options,
+    String folder = '',
+  }) async {
+    final directory = await _createSessionDirectory();
+    try {
+      var length = duration;
+      for (final note in notes) {
+        final end = note.start + pianoToneLength;
+        if (end > length) length = end;
+      }
+      final wav = p.join(directory.path, 'piano.wav');
+      await _renderPiano(wav, notes, length, options.sampleRate);
+      final analysis = await _analyze(wav, waveformResolution);
+      final output = await _encode(
+        wav,
+        options.format,
+        options.bitRate,
+        directory,
+      );
+      final path = await repository.createRecordingPath(format: options.format);
+      await moveFile(output, path);
+      final recording = await repository.add(
+        path: path,
+        duration: analysis.duration,
+        waveform: analysis.levels,
+        audio: (await probe(path))?.info,
+        folder: folder,
+        notes: notes,
+        hasVoice: false,
+      );
+      if (recording == null) throw StateError('No se pudo registrar');
+      return recording;
+    } finally {
+      await deleteQuietly(directory);
+    }
+  }
+
+  /// Añade al audio de [recording] (la voz) las [notes] tocadas en el piano
+  /// mientras se grababa, y las guarda con ella. La onda sigue siendo la de
+  /// la voz.
+  Future<Recording> addPiano(Recording recording, List<PianoNote> notes) async {
+    if (notes.isEmpty) return recording;
+    final directory = await _createSessionDirectory();
+    try {
+      final source = p.join(directory.path, 'voice.wav');
+      await _decode(await _audioPath(recording), source);
+      final mixed = p.join(directory.path, 'mixed.wav');
+      await _mixPiano(source, mixed, notes);
+      final output = await _encode(
+        mixed,
+        recording.format,
+        await _bitRateOf(recording),
+        directory,
+      );
+      final replaced = await repository.replaceAudio(
+        recording,
+        sourcePath: output,
+        duration: recording.duration,
+        waveform: recording.waveform,
+        audio: (await probe(output))?.info ?? recording.audio,
+      );
+      return await repository.setNotes(replaced, notes);
+    } finally {
+      await deleteQuietly(directory);
+    }
+  }
+
+  /// El WAV de [wav] en [format]: tal cual o codificado en AAC con
+  /// [bitRate].
+  Future<String> _encode(
+    String wav,
+    RecordingFormat format,
+    int bitRate,
+    Directory directory,
+  ) async {
+    switch (format) {
+      case RecordingFormat.wav:
+        return wav;
+      case RecordingFormat.aac:
+        final output = p.join(
+          directory.path,
+          '${p.basenameWithoutExtension(wav)}.m4a',
+        );
+        await codec.encodeToM4a(wav, output, bitRate: bitRate);
+        return output;
+    }
   }
 
   Future<void> close(EditSession session) => deleteQuietly(session.directory);
@@ -230,6 +334,30 @@ class RecordingEditor {
     return _analyzeInIsolate(path, buckets);
   }
 
+  Future<void> _renderPiano(
+    String output,
+    List<PianoNote> notes,
+    Duration duration,
+    int sampleRate,
+  ) {
+    if (!useIsolates) {
+      return renderPianoWav(
+        output: output,
+        notes: notes,
+        duration: duration,
+        sampleRate: sampleRate,
+      );
+    }
+    return _renderPianoInIsolate(output, notes, duration, sampleRate);
+  }
+
+  Future<void> _mixPiano(String input, String output, List<PianoNote> notes) {
+    if (!useIsolates) {
+      return mixPianoIntoWav(input: input, output: output, notes: notes);
+    }
+    return _mixPianoInIsolate(input, output, notes);
+  }
+
   Future<WavAnalysis> _process(String input, String output, AudioEdit edit) {
     if (!useIsolates) {
       return processWav(input: input, output: output, edit: edit);
@@ -241,6 +369,28 @@ class RecordingEditor {
   // capturen sus argumentos.
   static Future<WavAnalysis> _analyzeInIsolate(String path, int buckets) =>
       Isolate.run(() => analyzeWav(path, buckets: buckets));
+
+  static Future<void> _renderPianoInIsolate(
+    String output,
+    List<PianoNote> notes,
+    Duration duration,
+    int sampleRate,
+  ) => Isolate.run(
+    () => renderPianoWav(
+      output: output,
+      notes: notes,
+      duration: duration,
+      sampleRate: sampleRate,
+    ),
+  );
+
+  static Future<void> _mixPianoInIsolate(
+    String input,
+    String output,
+    List<PianoNote> notes,
+  ) => Isolate.run(
+    () => mixPianoIntoWav(input: input, output: output, notes: notes),
+  );
 
   static Future<WavAnalysis> _processInIsolate(
     String input,

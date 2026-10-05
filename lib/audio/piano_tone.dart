@@ -30,18 +30,23 @@ abstract final class PianoKeys {
       whiteKeys.lastIndexWhere((white) => white <= midi);
 }
 
-/// Sonido de una tecla de piano: un WAV mono de 16 bits.
+/// Lo que suena cada tecla: al tocarla y en las grabaciones.
+const pianoToneLength = Duration(milliseconds: 1600);
+
+/// Sonido de una tecla de piano: muestras entre −1 y 1, con el pico en 1.
 ///
 /// Es sintetizado: unos cuantos armónicos que se apagan antes cuanto más
 /// agudos son, con un ataque rápido. No suena como un piano de verdad, pero
 /// sirve para dar la nota.
-Uint8List pianoToneWav(
+Float32List pianoTone(
   int midi, {
   int sampleRate = 44100,
-  Duration duration = const Duration(milliseconds: 1600),
+  Duration duration = pianoToneLength,
 }) {
-  final format = PcmFormat(sampleRate: sampleRate, channels: 1);
-  final frames = format.framesIn(duration);
+  final frames = PcmFormat(
+    sampleRate: sampleRate,
+    channels: 1,
+  ).framesIn(duration);
   final frequency = PianoKeys.frequency(midi);
   // Las notas agudas se apagan antes, como en un piano.
   final decay = 1.6 + frequency / 400;
@@ -58,7 +63,7 @@ Uint8List pianoToneWav(
       ),
   ];
 
-  final levels = Float64List(frames);
+  final tone = Float32List(frames);
   var peak = 0.0;
   for (var i = 0; i < frames; i++) {
     final t = i / sampleRate;
@@ -70,14 +75,28 @@ Uint8List pianoToneWav(
         math.min(1.0, i / attackFrames) *
         math.min(1.0, (frames - 1 - i) / releaseFrames);
     value *= envelope;
-    levels[i] = value;
+    tone[i] = value;
     peak = math.max(peak, value.abs());
   }
+  if (peak > 0) {
+    for (var i = 0; i < frames; i++) {
+      tone[i] /= peak;
+    }
+  }
+  return tone;
+}
 
-  final samples = Int16List(frames);
-  final gain = peak == 0 ? 0 : 0.7 * 32767 / peak;
-  for (var i = 0; i < frames; i++) {
-    samples[i] = (levels[i] * gain).round();
+/// Sonido de una tecla de piano ([pianoTone]) como WAV mono de 16 bits.
+Uint8List pianoToneWav(
+  int midi, {
+  int sampleRate = 44100,
+  Duration duration = pianoToneLength,
+}) {
+  final format = PcmFormat(sampleRate: sampleRate, channels: 1);
+  final tone = pianoTone(midi, sampleRate: sampleRate, duration: duration);
+  final samples = Int16List(tone.length);
+  for (var i = 0; i < tone.length; i++) {
+    samples[i] = (tone[i] * 0.7 * 32767).round();
   }
   final data = samples.buffer.asUint8List();
   return Uint8List.fromList([...wavHeader(format, data.length), ...data]);
