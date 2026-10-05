@@ -62,7 +62,11 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 ## Recordings list
 
 - Sorted from oldest to newest: new recordings appear at the bottom, and the
-  list scrolls to the end when the app opens and when one is added.
+  list scrolls to the end when the app opens and when one is added. A
+  recording you have just made (with the microphone, the piano or as an
+  edited copy) is shown selected, with its transcript, without playing;
+  tap it to play it from the start. There is room below the last one for the
+  message saying it was saved, so the message doesn't cover it.
 - **Compact or detailed view**: the button to the left of Settings switches
   the list between the detailed view and a compact one (one line with the
   date and duration, and the waveform only on the selected recording). The

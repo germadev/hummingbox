@@ -444,6 +444,43 @@ void main() {
     });
   });
 
+  testWidgets('la grabación nueva sale seleccionada, sin sonar, y el aviso '
+      'no la tapa', (tester) async {
+    repository = InMemoryRecordingsRepository([
+      for (var i = 0; i < 20; i++)
+        sample('r$i', 'Toma $i', createdAt: DateTime(2020, 1, 1 + i)),
+    ]);
+    await pumpApp(tester);
+
+    await tester.tap(record());
+    await pumpAnimations(tester);
+    await tester.tap(record());
+    await tester.pumpAndSettle();
+
+    final saved = repository.recordings.last;
+    final tile = find.byKey(ValueKey(saved.id));
+    final snackBar = find.byType(SnackBar);
+    expect(snackBar, findsOneWidget);
+    expect(
+      tester.getRect(tile).bottom,
+      lessThanOrEqualTo(tester.getRect(snackBar).top),
+    );
+    // Seleccionada (como al escucharla), pero sin sonar.
+    final card = tester.widget<Card>(
+      find.descendant(of: tile, matching: find.byType(Card)),
+    );
+    final colors = Theme.of(tester.element(tile)).colorScheme;
+    expect(card.color, colors.secondaryContainer);
+    expect(player.calls.where((c) => c.startsWith('play')), isEmpty);
+
+    // Al tocarla, suena desde el principio.
+    await tester.tap(
+      find.descendant(of: tile, matching: find.byTooltip('Reproducir')),
+    );
+    await tester.pump();
+    expect(player.calls.last, 'play ${saved.path} @0');
+  });
+
   group('menú inicial', () {
     setUp(
       () => store = InMemorySettingsStore(

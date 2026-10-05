@@ -582,8 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _replaceRecording(saved);
       _showMessage((l10n) => l10n.pianoAdded(saved.name));
     } else {
-      setState(() => _recordings = [..._recordings, saved]);
-      _scrollToEnd(animate: true);
+      _addNew(saved);
       _showMessage((l10n) => l10n.savedAs(saved.name));
     }
     _syncStorage();
@@ -666,11 +665,18 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final saved = recording;
-    setState(() => _recordings = [..._recordings, saved]);
-    _scrollToEnd(animate: true);
+    _addNew(saved);
     _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncStorage();
     unawaited(_transcribeMissing());
+  }
+
+  /// Añade a la lista una grabación que se acaba de hacer: al final,
+  /// seleccionada (con su transcripción a la vista) y bajando hasta ella.
+  void _addNew(Recording recording) {
+    setState(() => _recordings = [..._recordings, recording]);
+    _player.select(recording);
+    _scrollToEnd(animate: true);
   }
 
   Future<void> _confirmCancel() async {
@@ -767,12 +773,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (result == null || !mounted) return;
     final edited = result.recording;
-    setState(() {
-      _recordings = result.isCopy
-          ? [..._recordings, edited]
-          : [for (final r in _recordings) r.id == edited.id ? edited : r];
-    });
-    if (result.isCopy) _scrollToEnd(animate: true);
+    if (result.isCopy) {
+      _addNew(edited);
+    } else {
+      setState(() {
+        _recordings = [
+          for (final r in _recordings) r.id == edited.id ? edited : r,
+        ];
+      });
+    }
     _showMessage(
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
@@ -1601,6 +1610,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Margen bajo la última grabación: cabe un aviso de dos líneas.
+  static const _listBottomPadding = 88.0;
+
   Widget _buildList(
     List<Recording> recordings,
     Object shown,
@@ -1612,7 +1624,9 @@ class _HomeScreenState extends State<HomeScreen> {
       controller: _scroll,
       // También con pocas grabaciones, para poder tirar hacia abajo.
       physics: _PullToSearch.physics,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      // Abajo, sitio para los avisos (p. ej. «Guardada como…»), que salen
+      // encima del panel de grabar: la última grabación queda por encima.
+      padding: const EdgeInsets.only(top: 8, bottom: _listBottomPadding),
       itemCount: recordings.length,
       itemBuilder: (context, index) {
         final recording = recordings[index];

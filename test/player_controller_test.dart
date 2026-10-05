@@ -54,6 +54,23 @@ void main() {
     expect(player.calls, ['play /a.m4a @0', 'pause', 'resume']);
   });
 
+  test('selecciona sin reproducir, salvo que otra esté sonando', () async {
+    controller.select(first);
+    expect(controller.isCurrent(first), isTrue);
+    expect(controller.status, PlaybackStatus.stopped);
+    expect(player.calls, isEmpty);
+
+    // Al tocarla, desde el principio.
+    await controller.toggle(first);
+    await flush();
+    expect(controller.isPlaying(first), isTrue);
+    expect(player.calls, ['play /a.m4a @0']);
+
+    // Mientras suena, no se cambia.
+    controller.select(second);
+    expect(controller.isPlaying(first), isTrue);
+  });
+
   test('cambia de grabación', () async {
     await controller.toggle(first);
     await controller.toggle(second);
