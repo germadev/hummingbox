@@ -95,6 +95,9 @@ class RecordingTile extends StatelessWidget {
             (transcript != null &&
                 search != null &&
                 search.findMatchesIn(transcript.text).isNotEmpty);
+        final cardColor = isCurrent
+            ? theme.colorScheme.secondaryContainer
+            : theme.colorScheme.surfaceContainerLow;
         final showProgress =
             transcriptions.isRequested(recording) ||
             (isCurrent && transcriptions.isTranscribing(recording));
@@ -105,9 +108,7 @@ class RecordingTile extends StatelessWidget {
           onTap: () {},
           excludeFromSemantics: true,
           child: Card.filled(
-            color: isCurrent
-                ? theme.colorScheme.secondaryContainer
-                : theme.colorScheme.surfaceContainerLow,
+            color: cardColor,
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             clipBehavior: Clip.antiAlias,
             child: Column(
@@ -116,22 +117,30 @@ class RecordingTile extends StatelessWidget {
                   contentPadding: const EdgeInsets.only(left: 12, right: 4),
                   isThreeLine: !compact,
                   onTap: onTogglePlay,
-                  leading: IconButton.filled(
-                    // ListTile tiñe los iconos de `leading`; se fija el color
-                    // para que contraste con el fondo del botón.
-                    color: theme.colorScheme.onPrimary,
-                    tooltip: isPlaying ? l10n.pause : l10n.play,
-                    // Mientras se lee el audio (p. ej. de Google Drive).
-                    icon: player.isLoading(recording)
-                        ? SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              color: theme.colorScheme.onPrimary,
-                            ),
-                          )
-                        : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                    onPressed: onTogglePlay,
+                  // En la vista compacta no se ven las notas del piano hasta
+                  // seleccionarla: un piano pequeño, a la izquierda del
+                  // botón, indica que las tiene.
+                  leading: _WithNotesIcon(
+                    show: compact && recording.notes.isNotEmpty,
+                    ringColor: cardColor,
+                    key: Key('notes-icon-${recording.id}'),
+                    child: IconButton.filled(
+                      // ListTile tiñe los iconos de `leading`; se fija el color
+                      // para que contraste con el fondo del botón.
+                      color: theme.colorScheme.onPrimary,
+                      tooltip: isPlaying ? l10n.pause : l10n.play,
+                      // Mientras se lee el audio (p. ej. de Google Drive).
+                      icon: player.isLoading(recording)
+                          ? SizedBox.square(
+                              dimension: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: theme.colorScheme.onPrimary,
+                              ),
+                            )
+                          : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                      onPressed: onTogglePlay,
+                    ),
                   ),
                   // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
                   title: Builder(
@@ -398,6 +407,60 @@ class _TranscriptionProgress extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// [child] (el botón de reproducir) con, si [show], un piano pequeño en su
+/// borde izquierdo: la grabación tiene notas del piano (y su `.mid`).
+class _WithNotesIcon extends StatelessWidget {
+  const _WithNotesIcon({
+    super.key,
+    required this.show,
+    required this.ringColor,
+    required this.child,
+  });
+
+  final bool show;
+
+  /// El de la tarjeta, alrededor del piano: lo separa del botón.
+  final Color ringColor;
+  final Widget child;
+
+  static const size = 20.0;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!show) return child;
+    final colors = Theme.of(context).colorScheme;
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: AlignmentDirectional.centerStart,
+      children: [
+        child,
+        PositionedDirectional(
+          start: -size / 2,
+          child: IgnorePointer(
+            child: Semantics(
+              label: context.l10n.piano,
+              child: Container(
+                width: size,
+                height: size,
+                decoration: BoxDecoration(
+                  color: colors.tertiaryContainer,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ringColor, width: 2),
+                ),
+                child: Icon(
+                  Icons.piano,
+                  size: 12,
+                  color: colors.onTertiaryContainer,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

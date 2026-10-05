@@ -91,12 +91,18 @@ Uint8List pianoToneWav(
   int midi, {
   int sampleRate = 44100,
   Duration duration = pianoToneLength,
-}) {
+}) => toneWav(
+  pianoTone(midi, sampleRate: sampleRate, duration: duration),
+  sampleRate: sampleRate,
+);
+
+/// [tone] (con el pico en 1) como WAV mono de 16 bits, a [gain] del
+/// volumen con el que suena el piano.
+Uint8List toneWav(Float32List tone, {int sampleRate = 44100, double gain = 1}) {
   final format = PcmFormat(sampleRate: sampleRate, channels: 1);
-  final tone = pianoTone(midi, sampleRate: sampleRate, duration: duration);
   final samples = Int16List(tone.length);
   for (var i = 0; i < tone.length; i++) {
-    samples[i] = (tone[i] * 0.7 * 32767).round();
+    samples[i] = (tone[i] * gain * 0.7 * 32767).round();
   }
   final data = samples.buffer.asUint8List();
   return Uint8List.fromList([...wavHeader(format, data.length), ...data]);

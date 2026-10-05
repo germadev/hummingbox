@@ -25,8 +25,9 @@ enum RecordingFormat {
   }
 }
 
-/// Calidad de las grabaciones: cuanto más alta, más ocupan.
-enum RecordingQuality { low, medium, high }
+/// Calidad de las grabaciones, de la más baja a la más alta: cuanto más
+/// alta, más ocupan.
+enum RecordingQuality { minimum, low, medium, high, veryHigh, maximum }
 
 /// Formato y calidad con los que se graban las grabaciones nuevas.
 class RecordingOptions {
@@ -43,17 +44,22 @@ class RecordingOptions {
 
   /// Frecuencia de muestreo en hercios.
   int get sampleRate => switch (quality) {
+    RecordingQuality.minimum => 8000,
     RecordingQuality.low => 16000,
     RecordingQuality.medium => 22050,
     RecordingQuality.high => 44100,
+    RecordingQuality.veryHigh || RecordingQuality.maximum => 48000,
   };
 
   /// Tasa de bits por segundo. En WAV es la del audio sin comprimir.
   int get bitRate => switch (format) {
     RecordingFormat.aac => switch (quality) {
+      RecordingQuality.minimum => 16000,
       RecordingQuality.low => 32000,
       RecordingQuality.medium => 64000,
       RecordingQuality.high => 128000,
+      RecordingQuality.veryHigh => 192000,
+      RecordingQuality.maximum => 256000,
     },
     RecordingFormat.wav => sampleRate * channels * 16,
   };

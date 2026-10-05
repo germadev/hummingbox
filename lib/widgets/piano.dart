@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -8,26 +9,37 @@ import 'package:flutter/services.dart';
 import '../audio/piano_tone.dart';
 import '../l10n/l10n.dart';
 import '../controllers/piano_recorder.dart';
+import '../models/instrument.dart';
 import '../models/recording.dart';
+import '../models/synth_patch.dart';
 import '../services/piano_sound.dart';
 import '../utils/formatters.dart';
+import 'synth_controls.dart';
 
 /// Panel del piano, que se abre deslizando hacia la izquierda: un teclado
 /// de octava y media y, debajo, todas las octavas en pequeño con la parte
 /// ampliada destacada. Deslizando sobre ellas se cambia la parte ampliada.
 ///
-/// Está pensado para verse en horizontal (ver [landscape]), con las teclas
-/// ocupando todo el alto que queda.
+/// Se ve siempre en horizontal, con las teclas ocupando todo el alto que
+/// queda. Si la pantalla está en vertical, se dibuja girado ([portraitTurns])
+/// para verlo en horizontal girando el móvil, sin que la pantalla gire (ver
+/// [orientationsFor]): así se ve igual mientras se desliza para abrirlo.
 class PianoPanel extends StatefulWidget {
   const PianoPanel({
     super.key,
     required this.sound,
     required this.firstKey,
+    required this.keyCount,
+    required this.instrument,
+    required this.onInstrumentChanged,
+    required this.synth,
+    required this.onSynthChanged,
     required this.recorder,
     required this.mode,
     required this.onRecord,
     required this.onStop,
     required this.target,
+    required this.portraitTurns,
     this.onClose,
   });
 
@@ -50,27 +62,56 @@ class PianoPanel extends StatefulWidget {
   /// Al parar la grabación: devuelve lo guardado, si se guardó algo.
   final Future<Recording?> Function() onStop;
 
-  /// Primera tecla blanca de la parte ampliada (su posición en
-  /// [PianoKeys.whiteKeys]). Se conserva al cerrar el panel.
-  final ValueNotifier<int> firstKey;
+  /// Dónde empieza la parte ampliada, en teclas blancas desde la primera de
+  /// [PianoKeys.whiteKeys]: puede empezar a mitad de una tecla (se mueve sin
+  /// saltos). Se conserva al cerrar el panel.
+  final ValueNotifier<double> firstKey;
+
+  /// Teclas blancas que caben en la parte ampliada (no tienen por qué ser
+  /// enteras): se cambian pellizcando sobre las octavas. Se conservan al
+  /// cerrar el panel.
+  final ValueNotifier<double> keyCount;
+
+  /// Con qué suenan las teclas.
+  final Instrument instrument;
+
+  final ValueChanged<Instrument> onInstrumentChanged;
+
+  /// Cómo suena el sintetizador: con él, sus controles están encima de las
+  /// teclas (a la derecha de la pantalla en vertical, con el piano girado).
+  final SynthPatch synth;
+
+  final ValueChanged<SynthPatch> onSynthChanged;
+
+  /// Cuartos de vuelta en el sentido de las agujas del reloj con los que se
+  /// dibuja con la pantalla en vertical: 1 para verlo girando el móvil hacia
+  /// la izquierda y 3 hacia la derecha. Se conserva al cerrar el panel.
+  final ValueNotifier<int> portraitTurns;
 
   final VoidCallback? onClose;
 
-  /// Teclas blancas de la parte ampliada: octava y media.
-  static const visibleWhiteKeys = 11;
+  /// Teclas blancas de la parte ampliada al abrirlo por primera vez: octava
+  /// y media.
+  static const initialKeyCount = 11.0;
 
-  /// Primera tecla blanca más alta posible.
-  static int get lastFirstKey => PianoKeys.whiteKeys.length - visibleWhiteKeys;
+  /// Teclas blancas que se pueden ver, como poco y como mucho.
+  static const minKeyCount = 5.0;
+  static const maxKeyCount = 29.0;
 
-  /// Orientaciones de la pantalla mientras está abierto: siempre en
-  /// horizontal.
-  static const landscape = [
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ];
+  /// Orientaciones de la pantalla mientras está abierto, si se abrió en
+  /// [orientation]: la misma, para que no gire al girar el móvil. En
+  /// vertical, el piano ya está girado (ver [portraitTurns]).
+  static List<DeviceOrientation> orientationsFor(Orientation orientation) =>
+      switch (orientation) {
+        Orientation.portrait => const [DeviceOrientation.portraitUp],
+        Orientation.landscape => const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+      };
 
   /// Al abrirlo por primera vez: desde el Do3, en la tesitura de la voz.
-  static final initialFirstKey = PianoKeys.whiteKeys.indexOf(48);
+  static final initialFirstKey = PianoKeys.whiteKeys.indexOf(48).toDouble();
 
   @override
   State<PianoPanel> createState() => _PianoPanelState();
@@ -84,27 +125,48 @@ class _PianoPanelState extends State<PianoPanel> {
   /// nota, hasta tocar otra tecla.
   String? _message;
 
+  late final _view = Listenable.merge([widget.firstKey, widget.keyCount]);
+
   @override
   void initState() {
     super.initState();
-    widget.firstKey.addListener(_prepare);
+    _view.addListener(_prepare);
     _prepare();
   }
 
   @override
+  void didUpdateWidget(PianoPanel old) {
+    super.didUpdateWidget(old);
+    if (old.instrument != widget.instrument ||
+        (widget.instrument == Instrument.synth && old.synth != widget.synth)) {
+      _prepare();
+    }
+  }
+
+  @override
   void dispose() {
-    widget.firstKey.removeListener(_prepare);
+    _view.removeListener(_prepare);
     super.dispose();
   }
 
   /// Prepara el sonido de las teclas a la vista.
   void _prepare() {
     final whites = PianoKeys.whiteKeys;
-    final first = whites[widget.firstKey.value];
-    final last =
-        whites[widget.firstKey.value + PianoPanel.visibleWhiteKeys - 1];
+    final first = widget.firstKey.value;
+    final firstIndex = first.floor().clamp(0, whites.length - 1);
+    final lastIndex = ((first + widget.keyCount.value).ceil() - 1).clamp(
+      0,
+      whites.length - 1,
+    );
     unawaited(
-      widget.sound.prepare([for (var key = first; key <= last; key++) key]),
+      widget.sound.prepare(
+        [
+          for (var key = whites[firstIndex]; key <= whites[lastIndex]; key++)
+            key,
+        ],
+        widget.instrument,
+        synth: widget.synth,
+      ),
     );
   }
 
@@ -113,8 +175,17 @@ class _PianoPanelState extends State<PianoPanel> {
       _lastKey = key;
       _message = null;
     });
-    unawaited(widget.sound.play(key));
-    widget.recorder.noteOn(key);
+    unawaited(widget.sound.play(key, widget.instrument, synth: widget.synth));
+    widget.recorder.noteOn(
+      key,
+      instrument: widget.instrument,
+      synth: widget.synth,
+    );
+  }
+
+  void _release(int key) {
+    unawaited(widget.sound.release(key));
+    widget.recorder.noteOff(key);
   }
 
   Future<void> _record(PianoRecordingMode mode) async {
@@ -145,125 +216,248 @@ class _PianoPanelState extends State<PianoPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final portrait = MediaQuery.orientationOf(context) == Orientation.portrait;
+    // Los arrastres horizontales no cierran el panel (solo se cierra con su
+    // botón o con «atrás»): al tocar es fácil arrastrar sin querer.
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        HorizontalDragGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<
+              HorizontalDragGestureRecognizer
+            >(HorizontalDragGestureRecognizer.new, (recognizer) {
+              recognizer.onUpdate = (_) {};
+            }),
+      },
+      child: SafeArea(
+        child: ValueListenableBuilder<int>(
+          valueListenable: widget.portraitTurns,
+          builder: (context, turns, _) {
+            final quarterTurns = portrait ? turns : 0;
+            final media = MediaQuery.of(context);
+            return RotatedBox(
+              key: const Key('piano-rotation'),
+              quarterTurns: quarterTurns,
+              // Dentro, como si la pantalla estuviera en horizontal, y con
+              // los menús y las ayudas girados con el piano.
+              child: MediaQuery(
+                data: quarterTurns.isOdd
+                    ? media.copyWith(size: media.size.flipped)
+                    : media,
+                child: Overlay.wrap(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: _buildPanel(context, rotated: quarterTurns != 0),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context, {required bool rotated}) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final names = noteNames(l10n.noteNames);
     final lastKey = _lastKey;
-    return SafeArea(
-      child: Column(
-        children: [
-          // El título, la nota de la última tecla tocada (o cómo se usa) y
-          // el botón de cerrar, en una línea: el resto es para las teclas.
-          Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 4, 4),
-            child: Row(
-              children: [
-                Text(l10n.piano, style: theme.textTheme.titleLarge),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _message != null
-                      ? Text(
-                          _message!,
-                          key: const Key('piano-message'),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium,
-                        )
-                      : lastKey == null
-                      ? Text(
-                          l10n.pianoHint,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        )
-                      // Si no cabe (p. ej. con el nombre de la grabación
-                      // que se acompaña), más pequeña.
-                      : FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                noteName(lastKey, names),
-                                key: const Key('piano-note'),
-                                style: theme.textTheme.headlineMedium,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
-                                ' Hz',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                            ],
-                          ),
+    return Column(
+      children: [
+        // El título, la nota de la última tecla tocada (o cómo se usa) y
+        // el botón de cerrar, en una línea: el resto es para las teclas.
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 4, 4),
+          child: Row(
+            children: [
+              _InstrumentMenu(
+                instrument: widget.instrument,
+                onChanged: widget.onInstrumentChanged,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _message != null
+                    ? Text(
+                        _message!,
+                        key: const Key('piano-message'),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    : lastKey == null
+                    ? Text(
+                        l10n.pianoHint,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
                         ),
-                ),
-                const SizedBox(width: 16),
-                _RecordControls(
-                  recorder: widget.recorder,
-                  mode: widget.mode,
-                  target: widget.target,
-                  onRecord: _record,
-                  onStop: _stop,
-                ),
-                const SizedBox(width: 4),
+                      )
+                    // Si no cabe (p. ej. con el nombre de la grabación
+                    // que se acompaña), más pequeña.
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              noteName(lastKey, names),
+                              key: const Key('piano-note'),
+                              style: theme.textTheme.headlineMedium,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
+                              ' Hz',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 16),
+              _RecordControls(
+                recorder: widget.recorder,
+                mode: widget.mode,
+                target: widget.target,
+                onRecord: _record,
+                onStop: _stop,
+              ),
+              // Girado, para darle la vuelta si se ve al revés.
+              if (rotated)
                 IconButton(
-                  tooltip: l10n.close,
-                  icon: const Icon(Icons.close),
-                  onPressed: widget.onClose,
-                ),
-              ],
-            ),
+                  key: const Key('piano-turn'),
+                  tooltip: l10n.pianoTurnAround,
+                  icon: const Icon(Icons.screen_rotation),
+                  onPressed: () => widget.portraitTurns.value =
+                      (widget.portraitTurns.value + 2) % 4,
+                )
+              else
+                const SizedBox(width: 4),
+              IconButton(
+                tooltip: l10n.close,
+                icon: const Icon(Icons.close),
+                onPressed: widget.onClose,
+              ),
+            ],
           ),
-          // Las teclas, siempre de grave (izquierda) a agudo (derecha).
-          Expanded(
-            child: Directionality(
-              textDirection: TextDirection.ltr,
-              child: ValueListenableBuilder<int>(
-                valueListenable: widget.firstKey,
-                builder: (context, first, _) => Column(
-                  children: [
-                    Expanded(
-                      child: PianoKeyboard(
-                        key: const Key('piano-keyboard'),
-                        firstKey: first,
-                        whiteKeys: PianoPanel.visibleWhiteKeys,
-                        names: names,
-                        onPressed: _play,
-                        onReleased: widget.recorder.noteOff,
-                      ),
+        ),
+        if (widget.instrument == Instrument.synth)
+          SynthControls(
+            key: const Key('synth-controls'),
+            patch: widget.synth,
+            onChanged: widget.onSynthChanged,
+          ),
+        // Las teclas, siempre de grave (izquierda) a agudo (derecha).
+        Expanded(
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: ListenableBuilder(
+              listenable: _view,
+              builder: (context, _) => Column(
+                children: [
+                  Expanded(
+                    child: PianoKeyboard(
+                      key: const Key('piano-keyboard'),
+                      firstKey: widget.firstKey.value,
+                      whiteKeys: widget.keyCount.value,
+                      names: names,
+                      onPressed: _play,
+                      onReleased: _release,
                     ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: PianoOverview(
-                        key: const Key('piano-overview'),
-                        firstKey: first,
-                        visibleWhiteKeys: PianoPanel.visibleWhiteKeys,
-                        onChanged: (value) => widget.firstKey.value = value,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: PianoOverview(
+                      key: const Key('piano-overview'),
+                      firstKey: widget.firstKey.value,
+                      visibleWhiteKeys: widget.keyCount.value,
+                      minVisibleWhiteKeys: PianoPanel.minKeyCount,
+                      maxVisibleWhiteKeys: PianoPanel.maxKeyCount,
+                      onChanged: (first, count) {
+                        widget.keyCount.value = count;
+                        widget.firstKey.value = first;
+                      },
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Nombre de [instrument] en el idioma de la app.
+String instrumentName(AppLocalizations l10n, Instrument instrument) =>
+    switch (instrument) {
+      Instrument.piano => l10n.instrumentPiano,
+      Instrument.organ => l10n.instrumentOrgan,
+      Instrument.guitar => l10n.instrumentGuitar,
+      Instrument.marimba => l10n.instrumentMarimba,
+      Instrument.synth => l10n.instrumentSynth,
+    };
+
+/// El instrumento con el que suenan las teclas, en lugar del título, y el
+/// menú para cambiarlo.
+class _InstrumentMenu extends StatelessWidget {
+  const _InstrumentMenu({required this.instrument, required this.onChanged});
+
+  final Instrument instrument;
+  final ValueChanged<Instrument> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final theme = Theme.of(context);
+    return MenuAnchor(
+      menuChildren: [
+        for (final option in Instrument.values)
+          MenuItemButton(
+            key: Key('instrument-${option.name}'),
+            leadingIcon: Icon(
+              option == instrument ? Icons.check : null,
+              size: 20,
+            ),
+            onPressed: () => onChanged(option),
+            child: Text(instrumentName(l10n, option)),
+          ),
+      ],
+      builder: (context, controller, _) => Tooltip(
+        message: l10n.instrument,
+        child: TextButton(
+          key: const Key('piano-instrument'),
+          style: TextButton.styleFrom(
+            foregroundColor: theme.colorScheme.onSurface,
+            textStyle: theme.textTheme.titleLarge,
+          ),
+          onPressed: () =>
+              controller.isOpen ? controller.close() : controller.open(),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(instrumentName(l10n, instrument)),
+              const Icon(Icons.arrow_drop_down),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-/// Qué grabar (solo el piano o también la voz) y el botón para grabar o,
+/// Qué grabar (el piano siempre y, si se elige, también la voz) y el botón para grabar o,
 /// mientras se graba, para parar con el tiempo grabado.
 class _RecordControls extends StatelessWidget {
   const _RecordControls({
@@ -305,14 +499,17 @@ class _RecordControls extends StatelessWidget {
                 ),
               )
             else
+              // El piano siempre se graba (está siempre marcado); la voz,
+              // si se marca.
               SegmentedButton<PianoRecordingMode>(
                 key: const Key('piano-mode'),
                 showSelectedIcon: false,
+                multiSelectionEnabled: true,
                 segments: [
                   ButtonSegment(
                     value: PianoRecordingMode.piano,
                     icon: const Icon(Icons.piano),
-                    tooltip: l10n.pianoOnly,
+                    tooltip: l10n.pianoAlwaysRecorded,
                   ),
                   ButtonSegment(
                     value: PianoRecordingMode.pianoAndVoice,
@@ -320,10 +517,17 @@ class _RecordControls extends StatelessWidget {
                     tooltip: l10n.pianoAndVoice,
                   ),
                 ],
-                selected: {mode.value},
+                selected: {
+                  PianoRecordingMode.piano,
+                  if (mode.value == PianoRecordingMode.pianoAndVoice)
+                    PianoRecordingMode.pianoAndVoice,
+                },
                 onSelectionChanged: recording || saving
                     ? null
-                    : (selected) => mode.value = selected.single,
+                    : (selected) => mode.value =
+                          selected.contains(PianoRecordingMode.pianoAndVoice)
+                          ? PianoRecordingMode.pianoAndVoice
+                          : PianoRecordingMode.piano,
               ),
             const SizedBox(width: 8),
             if (saving)
@@ -380,9 +584,10 @@ String noteName(int key, List<String> names) {
   return '${names[naturals[pitchClass]]}$sharp${PianoKeys.octave(key)}';
 }
 
-/// Teclado ampliado: [whiteKeys] teclas blancas desde la de posición
-/// [firstKey] (en [PianoKeys.whiteKeys]), con sus negras. Se pueden tocar
-/// varias a la vez y deslizar el dedo de una a otra.
+/// Teclado ampliado: [whiteKeys] teclas blancas desde la posición
+/// [firstKey] (en teclas blancas desde la primera de [PianoKeys.whiteKeys];
+/// las de los extremos pueden verse cortadas), con sus negras. Se pueden
+/// tocar varias a la vez y deslizar el dedo de una a otra.
 class PianoKeyboard extends StatefulWidget {
   const PianoKeyboard({
     super.key,
@@ -393,8 +598,8 @@ class PianoKeyboard extends StatefulWidget {
     this.onReleased,
   });
 
-  final int firstKey;
-  final int whiteKeys;
+  final double firstKey;
+  final double whiteKeys;
   final List<String> names;
 
   /// Al pulsar una tecla (o llegar a ella deslizando el dedo).
@@ -434,8 +639,8 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
         if (rect.contains(position)) return key;
       }
     }
-    final index = widget.firstKey + position.dx ~/ whiteWidth;
-    return index < PianoKeys.whiteKeys.length
+    final index = (widget.firstKey + position.dx / whiteWidth).floor();
+    return index >= 0 && index < PianoKeys.whiteKeys.length
         ? PianoKeys.whiteKeys[index]
         : null;
   }
@@ -510,20 +715,30 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
   }
 }
 
-/// Las teclas negras entre las [whiteKeys] blancas desde la de posición
-/// [firstKey], con su rectángulo en un teclado de tamaño [size]. La que
-/// quedaría cortada en el borde derecho no se muestra.
-List<(int, Rect)> blackKeyRects(Size size, int firstKey, int whiteKeys) {
+/// Las teclas negras que se ven en un teclado de tamaño [size] con
+/// [whiteKeys] blancas desde la posición [firstKey], con su rectángulo (las
+/// de los extremos, cortadas).
+List<(int, Rect)> blackKeyRects(Size size, double firstKey, double whiteKeys) {
   final whiteWidth = size.width / whiteKeys;
   final width = whiteWidth * PianoKeyboard.blackWidth;
   final height = size.height * PianoKeyboard.blackHeight;
+  final whites = PianoKeys.whiteKeys;
   return [
-    for (var i = 0; i < whiteKeys - 1; i++)
-      if (firstKey + i + 1 < PianoKeys.whiteKeys.length &&
-          PianoKeys.isBlack(PianoKeys.whiteKeys[firstKey + i] + 1))
+    // Cada negra, entre la blanca de índice i y la siguiente.
+    for (
+      var i = math.max(0, firstKey.floor() - 1);
+      i < math.min(whites.length - 1, (firstKey + whiteKeys).ceil());
+      i++
+    )
+      if (PianoKeys.isBlack(whites[i] + 1))
         (
-          PianoKeys.whiteKeys[firstKey + i] + 1,
-          Rect.fromLTWH((i + 1) * whiteWidth - width / 2, 0, width, height),
+          whites[i] + 1,
+          Rect.fromLTWH(
+            (i + 1 - firstKey) * whiteWidth - width / 2,
+            0,
+            width,
+            height,
+          ),
         ),
   ];
 }
@@ -539,8 +754,8 @@ class _KeyboardPainter extends CustomPainter {
     required this.labelColor,
   });
 
-  final int firstKey;
-  final int whiteKeys;
+  final double firstKey;
+  final double whiteKeys;
   final List<String> names;
   final Set<int> pressed;
   final Color pressedColor;
@@ -549,18 +764,24 @@ class _KeyboardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Las teclas de los extremos, cortadas.
+    canvas.clipRect(Offset.zero & size);
     final whiteWidth = size.width / whiteKeys;
     final radius = const Radius.circular(6);
     final border = Paint()
       ..color = outline
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    for (var i = 0; i < whiteKeys; i++) {
-      final index = firstKey + i;
-      if (index >= PianoKeys.whiteKeys.length) break;
-      final key = PianoKeys.whiteKeys[index];
+    final whites = PianoKeys.whiteKeys;
+    for (
+      var index = math.max(0, firstKey.floor());
+      index < math.min(whites.length, (firstKey + whiteKeys).ceil());
+      index++
+    ) {
+      final key = whites[index];
+      final left = (index - firstKey) * whiteWidth;
       final rect = RRect.fromRectAndCorners(
-        Rect.fromLTWH(i * whiteWidth + 1, 0, whiteWidth - 2, size.height),
+        Rect.fromLTWH(left + 1, 0, whiteWidth - 2, size.height),
         bottomLeft: radius,
         bottomRight: radius,
       );
@@ -590,7 +811,7 @@ class _KeyboardPainter extends CustomPainter {
       text.paint(
         canvas,
         Offset(
-          i * whiteWidth + (whiteWidth - text.width) / 2,
+          left + (whiteWidth - text.width) / 2,
           size.height - text.height - 8,
         ),
       );
@@ -630,28 +851,91 @@ class _KeyboardPainter extends CustomPainter {
 
 /// Todas las teclas en pequeño, ocupando todo el ancho, con la parte
 /// ampliada ([visibleWhiteKeys] blancas desde [firstKey]) destacada. Al
-/// tocar o deslizar el dedo, la parte ampliada pasa a estar centrada en él.
-class PianoOverview extends StatelessWidget {
+/// tocar o deslizar el dedo, la parte ampliada pasa a estar centrada en él;
+/// pellizcando con dos dedos se amplía o se reduce (entre
+/// [minVisibleWhiteKeys] y [maxVisibleWhiteKeys] teclas blancas).
+class PianoOverview extends StatefulWidget {
   const PianoOverview({
     super.key,
     required this.firstKey,
     required this.visibleWhiteKeys,
     required this.onChanged,
+    this.minVisibleWhiteKeys = 1,
+    this.maxVisibleWhiteKeys = 52,
   });
 
-  final int firstKey;
-  final int visibleWhiteKeys;
-  final ValueChanged<int> onChanged;
+  final double firstKey;
+  final double visibleWhiteKeys;
+  final double minVisibleWhiteKeys;
+  final double maxVisibleWhiteKeys;
+
+  /// Con dónde empieza ahora la parte ampliada y cuántas teclas blancas
+  /// caben.
+  final void Function(double firstKey, double visibleWhiteKeys) onChanged;
 
   static const height = 52.0;
 
-  void _moveTo(double x, double width) {
-    final whiteWidth = width / PianoKeys.whiteKeys.length;
-    final first = (x / whiteWidth - visibleWhiteKeys / 2).round().clamp(
-      0,
-      PianoKeys.whiteKeys.length - visibleWhiteKeys,
+  @override
+  State<PianoOverview> createState() => _PianoOverviewState();
+}
+
+class _PianoOverviewState extends State<PianoOverview> {
+  /// Dónde está cada dedo.
+  final _pointers = <int, Offset>{};
+
+  /// Al empezar a pellizcar: la distancia entre los dos dedos y las teclas
+  /// que se veían.
+  (double, double)? _pinch;
+
+  bool get _pinching => _pointers.length > 1;
+
+  /// Centra en [x] la parte ampliada, de [count] teclas blancas: sin
+  /// saltos de tecla en tecla.
+  void _moveTo(double x, double width, [double? count]) {
+    final whites = PianoKeys.whiteKeys.length;
+    final double visible = (count ?? widget.visibleWhiteKeys).clamp(
+      widget.minVisibleWhiteKeys,
+      math.min(widget.maxVisibleWhiteKeys, whites.toDouble()),
     );
-    if (first != firstKey) onChanged(first);
+    final whiteWidth = width / whites;
+    final double first = (x / whiteWidth - visible / 2).clamp(
+      0.0,
+      whites - visible,
+    );
+    if (first != widget.firstKey || visible != widget.visibleWhiteKeys) {
+      widget.onChanged(first, visible);
+    }
+  }
+
+  /// Los dos primeros dedos: su distancia y su punto medio.
+  (double, Offset) _span() {
+    final [a, b, ...] = _pointers.values.toList();
+    return ((a - b).distance, (a + b) / 2);
+  }
+
+  void _pointerDown(PointerDownEvent event) {
+    _pointers[event.pointer] = event.localPosition;
+    if (_pointers.length == 2) {
+      _pinch = (_span().$1, widget.visibleWhiteKeys);
+    }
+  }
+
+  void _pointerMove(PointerMoveEvent event, double width) {
+    if (!_pointers.containsKey(event.pointer)) return;
+    _pointers[event.pointer] = event.localPosition;
+    final pinch = _pinch;
+    if (!_pinching || pinch == null) return;
+    // Separando los dedos se ven menos teclas (más grandes) y juntándolos,
+    // más.
+    final (distance, center) = _span();
+    final (startDistance, startCount) = pinch;
+    if (distance <= 0 || startDistance <= 0) return;
+    _moveTo(center.dx, width, startCount * startDistance / distance);
+  }
+
+  void _pointerUp(int pointer) {
+    _pointers.remove(pointer);
+    if (_pointers.length < 2) _pinch = null;
   }
 
   @override
@@ -660,21 +944,32 @@ class PianoOverview extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) => _moveTo(details.localPosition.dx, width),
-          onHorizontalDragStart: (details) =>
-              _moveTo(details.localPosition.dx, width),
-          onHorizontalDragUpdate: (details) =>
-              _moveTo(details.localPosition.dx, width),
-          child: CustomPaint(
-            size: Size(width, height),
-            painter: _OverviewPainter(
-              firstKey: firstKey,
-              visibleWhiteKeys: visibleWhiteKeys,
-              highlight: colors.primary,
-              outline: colors.outlineVariant,
-              labelColor: colors.outline,
+        // El pellizco, con los dedos directamente (las teclas pequeñas son
+        // demasiado bajas para un reconocedor de escala); con un dedo, se
+        // mueve.
+        return Listener(
+          onPointerDown: _pointerDown,
+          onPointerMove: (event) => _pointerMove(event, width),
+          onPointerUp: (event) => _pointerUp(event.pointer),
+          onPointerCancel: (event) => _pointerUp(event.pointer),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (details) => _moveTo(details.localPosition.dx, width),
+            onHorizontalDragStart: (details) {
+              if (!_pinching) _moveTo(details.localPosition.dx, width);
+            },
+            onHorizontalDragUpdate: (details) {
+              if (!_pinching) _moveTo(details.localPosition.dx, width);
+            },
+            child: CustomPaint(
+              size: Size(width, PianoOverview.height),
+              painter: _OverviewPainter(
+                firstKey: widget.firstKey,
+                visibleWhiteKeys: widget.visibleWhiteKeys,
+                highlight: colors.primary,
+                outline: colors.outlineVariant,
+                labelColor: colors.outline,
+              ),
             ),
           ),
         );
@@ -692,8 +987,8 @@ class _OverviewPainter extends CustomPainter {
     required this.labelColor,
   });
 
-  final int firstKey;
-  final int visibleWhiteKeys;
+  final double firstKey;
+  final double visibleWhiteKeys;
   final Color highlight;
   final Color outline;
   final Color labelColor;
@@ -733,7 +1028,7 @@ class _OverviewPainter extends CustomPainter {
       final black = whites[i] + 1;
       if (!PianoKeys.isBlack(black) || black > PianoKeys.highest) continue;
       final width = whiteWidth * PianoKeyboard.blackWidth;
-      final inside = i + 1 > firstKey && i + 1 < firstKey + visibleWhiteKeys;
+      final inside = i + 1 >= firstKey && i + 1 <= firstKey + visibleWhiteKeys;
       canvas.drawRect(
         Rect.fromLTWH(
           (i + 1) * whiteWidth - width / 2,

@@ -335,6 +335,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get quality => 'Quality';
 
   @override
+  String get qualityMinimum => 'Minimum';
+
+  @override
   String get qualityLow => 'Low';
 
   @override
@@ -342,6 +345,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get qualityHigh => 'High';
+
+  @override
+  String get qualityVeryHigh => 'Very high';
+
+  @override
+  String get qualityMaximum => 'Maximum';
 
   @override
   String get countdown => 'Countdown';
@@ -774,13 +783,73 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
-  String get pianoOnly => 'Piano only';
+  String get pianoAlwaysRecorded => 'The piano is always recorded';
 
   @override
   String get pianoAndVoice => 'Piano and voice';
 
   @override
   String get pianoNothingPlayed => 'Nothing to save: no notes were played';
+
+  @override
+  String get pianoTurnAround => 'Turn around';
+
+  @override
+  String get instrument => 'Instrument';
+
+  @override
+  String get instrumentPiano => 'Piano';
+
+  @override
+  String get instrumentOrgan => 'Organ';
+
+  @override
+  String get instrumentGuitar => 'Guitar';
+
+  @override
+  String get instrumentMarimba => 'Marimba';
+
+  @override
+  String get instrumentSynth => 'Synthesizer';
+
+  @override
+  String get synthWave => 'Wave';
+
+  @override
+  String get waveSaw => 'Sawtooth';
+
+  @override
+  String get waveSquare => 'Square';
+
+  @override
+  String get waveTriangle => 'Triangle';
+
+  @override
+  String get waveSine => 'Sine';
+
+  @override
+  String get synthAttack => 'Attack';
+
+  @override
+  String get synthDecay => 'Decay';
+
+  @override
+  String get synthSustain => 'Sustain';
+
+  @override
+  String get synthRelease => 'Release';
+
+  @override
+  String get synthBrightness => 'Brightness';
+
+  @override
+  String get synthResonance => 'Resonance';
+
+  @override
+  String get synthDetune => 'Detune';
+
+  @override
+  String get synthReset => 'Default sound';
 
   @override
   String get stopPlayback => 'Stop playback';

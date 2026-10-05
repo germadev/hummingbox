@@ -329,6 +329,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get quality => '音质';
 
   @override
+  String get qualityMinimum => '最低';
+
+  @override
   String get qualityLow => '低';
 
   @override
@@ -336,6 +339,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get qualityHigh => '高';
+
+  @override
+  String get qualityVeryHigh => '很高';
+
+  @override
+  String get qualityMaximum => '最高';
 
   @override
   String get countdown => '倒计时';
@@ -744,13 +753,73 @@ class AppLocalizationsZh extends AppLocalizations {
   String get close => '关闭';
 
   @override
-  String get pianoOnly => '仅钢琴';
+  String get pianoAlwaysRecorded => '始终录制钢琴';
 
   @override
   String get pianoAndVoice => '钢琴和人声';
 
   @override
   String get pianoNothingPlayed => '没有可保存的内容：未弹奏任何音符';
+
+  @override
+  String get pianoTurnAround => '翻转';
+
+  @override
+  String get instrument => '乐器';
+
+  @override
+  String get instrumentPiano => '钢琴';
+
+  @override
+  String get instrumentOrgan => '风琴';
+
+  @override
+  String get instrumentGuitar => '吉他';
+
+  @override
+  String get instrumentMarimba => '马林巴';
+
+  @override
+  String get instrumentSynth => '合成器';
+
+  @override
+  String get synthWave => '波形';
+
+  @override
+  String get waveSaw => '锯齿波';
+
+  @override
+  String get waveSquare => '方波';
+
+  @override
+  String get waveTriangle => '三角波';
+
+  @override
+  String get waveSine => '正弦波';
+
+  @override
+  String get synthAttack => '起音';
+
+  @override
+  String get synthDecay => '衰减';
+
+  @override
+  String get synthSustain => '延音';
+
+  @override
+  String get synthRelease => '释音';
+
+  @override
+  String get synthBrightness => '亮度';
+
+  @override
+  String get synthResonance => '共振';
+
+  @override
+  String get synthDetune => '失谐';
+
+  @override
+  String get synthReset => '默认音色';
 
   @override
   String get stopPlayback => '停止播放';

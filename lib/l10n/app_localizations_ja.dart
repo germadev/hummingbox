@@ -329,6 +329,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get quality => '音質';
 
   @override
+  String get qualityMinimum => '最低';
+
+  @override
   String get qualityLow => '低';
 
   @override
@@ -336,6 +339,12 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get qualityHigh => '高';
+
+  @override
+  String get qualityVeryHigh => '非常に高い';
+
+  @override
+  String get qualityMaximum => '最高';
 
   @override
   String get countdown => 'カウントダウン';
@@ -749,13 +758,73 @@ class AppLocalizationsJa extends AppLocalizations {
   String get close => '閉じる';
 
   @override
-  String get pianoOnly => 'ピアノのみ';
+  String get pianoAlwaysRecorded => 'ピアノは常に録音されます';
 
   @override
   String get pianoAndVoice => 'ピアノと声';
 
   @override
   String get pianoNothingPlayed => '保存するものがありません：音が弾かれていません';
+
+  @override
+  String get pianoTurnAround => '上下を反転';
+
+  @override
+  String get instrument => '楽器';
+
+  @override
+  String get instrumentPiano => 'ピアノ';
+
+  @override
+  String get instrumentOrgan => 'オルガン';
+
+  @override
+  String get instrumentGuitar => 'ギター';
+
+  @override
+  String get instrumentMarimba => 'マリンバ';
+
+  @override
+  String get instrumentSynth => 'シンセサイザー';
+
+  @override
+  String get synthWave => '波形';
+
+  @override
+  String get waveSaw => 'ノコギリ波';
+
+  @override
+  String get waveSquare => '矩形波';
+
+  @override
+  String get waveTriangle => '三角波';
+
+  @override
+  String get waveSine => 'サイン波';
+
+  @override
+  String get synthAttack => 'アタック';
+
+  @override
+  String get synthDecay => 'ディケイ';
+
+  @override
+  String get synthSustain => 'サステイン';
+
+  @override
+  String get synthRelease => 'リリース';
+
+  @override
+  String get synthBrightness => '明るさ';
+
+  @override
+  String get synthResonance => 'レゾナンス';
+
+  @override
+  String get synthDetune => 'デチューン';
+
+  @override
+  String get synthReset => 'デフォルトの音色';
 
   @override
   String get stopPlayback => '再生を停止';

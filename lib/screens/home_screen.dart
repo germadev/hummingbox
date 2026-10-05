@@ -129,6 +129,13 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Parte ampliada del piano: se conserva al cerrarlo.
   final _pianoFirstKey = ValueNotifier(PianoPanel.initialFirstKey);
 
+  /// Teclas blancas de la parte ampliada: se conservan al cerrarlo.
+  final _pianoKeyCount = ValueNotifier(PianoPanel.initialKeyCount);
+
+  /// Cómo se gira el piano con la pantalla en vertical: se conserva al
+  /// cerrarlo.
+  final _pianoPortraitTurns = ValueNotifier(1);
+
   /// Todas las grabaciones, de todas las carpetas, de la más antigua a la
   /// más reciente.
   List<Recording> _recordings = const [];
@@ -192,6 +199,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocus.dispose();
     _pull.dispose();
     _pianoFirstKey.dispose();
+    _pianoKeyCount.dispose();
+    _pianoPortraitTurns.dispose();
     _pianoMode.dispose();
     _pianoTarget.dispose();
     _pianoRecorder.dispose();
@@ -478,13 +487,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _pianoOpen = false;
 
-  /// El piano se ve siempre en horizontal: al abrirlo la pantalla gira y al
+  /// Mientras el piano está abierto, la pantalla no gira (en vertical, el
+  /// piano se dibuja girado para verlo en horizontal girando el móvil); al
   /// cerrarlo vuelve a girar como diga el sistema.
   void _onPianoChanged(bool opened) {
     _pianoOpen = opened;
     unawaited(
       SystemChrome.setPreferredOrientations(
-        opened ? PianoPanel.landscape : const [],
+        opened
+            ? PianoPanel.orientationsFor(MediaQuery.orientationOf(context))
+            : const [],
       ),
     );
     // Al cerrarlo mientras se graba, se guarda lo grabado.
@@ -570,8 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _replaceRecording(saved);
       _showMessage((l10n) => l10n.pianoAdded(saved.name));
     } else {
-      setState(() => _recordings = [..._recordings, saved]);
-      _scrollToEnd(animate: true);
+      _addNew(saved);
       _showMessage((l10n) => l10n.savedAs(saved.name));
     }
     _syncStorage();
@@ -654,11 +665,18 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final saved = recording;
-    setState(() => _recordings = [..._recordings, saved]);
-    _scrollToEnd(animate: true);
+    _addNew(saved);
     _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncStorage();
     unawaited(_transcribeMissing());
+  }
+
+  /// Añade a la lista una grabación que se acaba de hacer: al final,
+  /// seleccionada (con su transcripción a la vista) y bajando hasta ella.
+  void _addNew(Recording recording) {
+    setState(() => _recordings = [..._recordings, recording]);
+    _player.select(recording);
+    _scrollToEnd(animate: true);
   }
 
   Future<void> _confirmCancel() async {
@@ -755,12 +773,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (result == null || !mounted) return;
     final edited = result.recording;
-    setState(() {
-      _recordings = result.isCopy
-          ? [..._recordings, edited]
-          : [for (final r in _recordings) r.id == edited.id ? edited : r];
-    });
-    if (result.isCopy) _scrollToEnd(animate: true);
+    if (result.isCopy) {
+      _addNew(edited);
+    } else {
+      setState(() {
+        _recordings = [
+          for (final r in _recordings) r.id == edited.id ? edited : r,
+        ];
+      });
+    }
     _showMessage(
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
@@ -1372,17 +1393,6 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
-          // Abre el piano (mientras se graba, no: su sonido podría cortar la
-          // grabación).
-          if (!searching)
-            IconButton(
-              key: const Key('piano-button'),
-              tooltip: context.l10n.piano,
-              icon: const Icon(Icons.piano),
-              onPressed: _recorder.isBusy
-                  ? null
-                  : () => _scaffoldKey.currentState?.openEndDrawer(),
-            ),
           // Vista compacta o detallada de la lista, donde al buscar está la
           // X del campo. Muestra la vista a la que cambia.
           if (!searching)
@@ -1423,6 +1433,11 @@ class _HomeScreenState extends State<HomeScreen> {
         selected: folder,
         onSelected: _openFolder,
         onCreate: _createFolder,
+        // Mientras se graba no se abre el piano: su sonido podría cortar la
+        // grabación. Al abrirlo se cierra este menú.
+        onOpenPiano: _recorder.isBusy
+            ? null
+            : () => _scaffoldKey.currentState?.openEndDrawer(),
       ),
       onDrawerChanged: (opened) {
         if (opened) _syncStorage();
@@ -1438,9 +1453,16 @@ class _HomeScreenState extends State<HomeScreen> {
         child: PianoPanel(
           sound: widget.piano,
           firstKey: _pianoFirstKey,
+          keyCount: _pianoKeyCount,
+          instrument: sync.settings.instrument,
+          onInstrumentChanged: (instrument) =>
+              unawaited(widget.sync.setInstrument(instrument)),
+          synth: sync.settings.synth,
+          onSynthChanged: (synth) => unawaited(widget.sync.setSynth(synth)),
           recorder: _pianoRecorder,
           mode: _pianoMode,
           target: _pianoTarget,
+          portraitTurns: _pianoPortraitTurns,
           onRecord: _startPianoRecording,
           onStop: _stopPianoRecording,
           onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
@@ -1588,6 +1610,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Margen bajo la última grabación: cabe un aviso de dos líneas.
+  static const _listBottomPadding = 88.0;
+
   Widget _buildList(
     List<Recording> recordings,
     Object shown,
@@ -1599,7 +1624,9 @@ class _HomeScreenState extends State<HomeScreen> {
       controller: _scroll,
       // También con pocas grabaciones, para poder tirar hacia abajo.
       physics: _PullToSearch.physics,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      // Abajo, sitio para los avisos (p. ej. «Guardada como…»), que salen
+      // encima del panel de grabar: la última grabación queda por encima.
+      padding: const EdgeInsets.only(top: 8, bottom: _listBottomPadding),
       itemCount: recordings.length,
       itemBuilder: (context, index) {
         final recording = recordings[index];

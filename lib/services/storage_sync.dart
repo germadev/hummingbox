@@ -11,9 +11,11 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../audio/midi.dart';
+import '../models/instrument.dart';
 import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../models/synth_patch.dart';
 import '../models/transcription.dart';
 import '../utils/files.dart';
 import 'audio_cache.dart';
@@ -388,6 +390,14 @@ class StorageSync extends ChangeNotifier {
   /// Elige si la lista es compacta o detallada.
   Future<void> setCompactList(bool compact) =>
       _change((settings) => settings.withCompactList(compact));
+
+  /// Elige con qué suenan las teclas del piano.
+  Future<void> setInstrument(Instrument instrument) =>
+      _change((settings) => settings.withInstrument(instrument));
+
+  /// Cambia cómo suena el sintetizador del piano.
+  Future<void> setSynth(SynthPatch synth) =>
+      _change((settings) => settings.withSynth(synth));
 
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>

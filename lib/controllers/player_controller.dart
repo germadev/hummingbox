@@ -120,6 +120,15 @@ class PlayerController extends ChangeNotifier {
     _notify();
   }
 
+  /// Selecciona [recording] sin reproducirla (se ve seleccionada, con su
+  /// transcripción; al tocarla suena desde el principio), salvo que haya
+  /// otra sonando o en pausa.
+  void select(Recording recording) {
+    if (isPlayingOrPaused) return;
+    _status = PlaybackStatus.stopped;
+    _load(recording);
+  }
+
   /// Carga [recording] y la reproduce desde [position].
   Future<void> playFrom(Recording recording, Duration position) async {
     if (isCurrent(recording)) {

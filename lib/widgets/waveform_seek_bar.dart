@@ -8,8 +8,8 @@ import '../models/piano_note.dart';
 import '../utils/formatters.dart';
 
 /// Onda de una grabación completa que hace de barra de progreso: la parte ya
-/// reproducida se resalta y se puede tocar o arrastrar para saltar a otro
-/// punto.
+/// reproducida se resalta, una línea fina marca por dónde va, y se puede
+/// tocar o arrastrar para saltar a otro punto.
 ///
 /// Si se tocó el piano mientras se grababa, encima de la onda (o sin ella,
 /// si no se grabó la voz) se ven las notas como en un editor MIDI: cada una
@@ -113,31 +113,41 @@ class _WaveformSeekBarState extends State<WaveformSeekBar> {
                 ? widget.height
                 : WaveformSeekBar.pianoRollHeight,
             width: double.infinity,
+            // Por dónde va, encima de todo.
             child: CustomPaint(
-              painter: widget.showWaveform
-                  ? SeekWaveformPainter(
-                      levels: widget.levels,
-                      progress: active ? _fraction : null,
-                      playedColor: colors.primary,
-                      // Con notas, la voz queda detrás.
-                      pendingColor: colors.onSurfaceVariant.withValues(
-                        alpha: switch ((widget.notes.isEmpty, active)) {
-                          (true, true) => 0.35,
-                          (true, false) => 0.5,
-                          (false, _) => 0.25,
-                        },
-                      ),
+              key: const Key('playhead'),
+              foregroundPainter: active
+                  ? PlayheadPainter(
+                      progress: _fraction,
+                      color: colors.onSurface,
                     )
                   : null,
-              foregroundPainter: widget.notes.isEmpty
-                  ? null
-                  : PianoRollPainter(
-                      notes: widget.notes,
-                      duration: widget.duration,
-                      progress: active ? _fraction : null,
-                      playedColor: colors.primary,
-                      pendingColor: colors.tertiary,
-                    ),
+              child: CustomPaint(
+                painter: widget.showWaveform
+                    ? SeekWaveformPainter(
+                        levels: widget.levels,
+                        progress: active ? _fraction : null,
+                        playedColor: colors.primary,
+                        // Con notas, la voz queda detrás.
+                        pendingColor: colors.onSurfaceVariant.withValues(
+                          alpha: switch ((widget.notes.isEmpty, active)) {
+                            (true, true) => 0.35,
+                            (true, false) => 0.5,
+                            (false, _) => 0.25,
+                          },
+                        ),
+                      )
+                    : null,
+                foregroundPainter: widget.notes.isEmpty
+                    ? null
+                    : PianoRollPainter(
+                        notes: widget.notes,
+                        duration: widget.duration,
+                        progress: active ? _fraction : null,
+                        playedColor: colors.primary,
+                        pendingColor: colors.tertiary,
+                      ),
+              ),
             ),
           ),
         );
@@ -193,6 +203,34 @@ class _WaveformSeekBarState extends State<WaveformSeekBar> {
       ),
     );
   }
+}
+
+/// Una línea vertical fina en [progress] (0–1): por dónde va la
+/// reproducción.
+class PlayheadPainter extends CustomPainter {
+  PlayheadPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  static const width = 1.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Sin salirse por los extremos.
+    final x = (size.width * progress).clamp(width / 2, size.width - width / 2);
+    canvas.drawLine(
+      Offset(x, 0),
+      Offset(x, size.height),
+      Paint()
+        ..color = color
+        ..strokeWidth = width,
+    );
+  }
+
+  @override
+  bool shouldRepaint(PlayheadPainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 /// Dibuja la onda en barras que ocupan todo el ancho. Con [progress], las

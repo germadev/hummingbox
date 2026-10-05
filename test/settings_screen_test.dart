@@ -87,6 +87,11 @@ void main() {
     await tester.pumpAndSettle();
     // Cada calidad muestra lo que ocupa con el formato elegido.
     expect(find.text('16 kHz · 16 bits · 1,9 MB por minuto'), findsOneWidget);
+    // De la mínima (8 kHz) a la máxima (48 kHz).
+    expect(find.text('Mínima'), findsOneWidget);
+    expect(find.text('8 kHz · 16 bits · 1 MB por minuto'), findsOneWidget);
+    expect(find.text('Muy alta'), findsOneWidget);
+    expect(find.text('Máxima'), findsOneWidget);
     await tester.tap(find.text('Baja'));
     await tester.pumpAndSettle();
 

@@ -335,6 +335,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get quality => 'Calidad';
 
   @override
+  String get qualityMinimum => 'Mínima';
+
+  @override
   String get qualityLow => 'Baja';
 
   @override
@@ -342,6 +345,12 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get qualityHigh => 'Alta';
+
+  @override
+  String get qualityVeryHigh => 'Muy alta';
+
+  @override
+  String get qualityMaximum => 'Máxima';
 
   @override
   String get countdown => 'Cuenta atrás';
@@ -774,7 +783,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get close => 'Cerrar';
 
   @override
-  String get pianoOnly => 'Solo piano';
+  String get pianoAlwaysRecorded => 'El piano se graba siempre';
 
   @override
   String get pianoAndVoice => 'Piano y voz';
@@ -782,6 +791,66 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get pianoNothingPlayed =>
       'No hay nada que guardar: no se ha tocado ninguna nota';
+
+  @override
+  String get pianoTurnAround => 'Darle la vuelta';
+
+  @override
+  String get instrument => 'Instrumento';
+
+  @override
+  String get instrumentPiano => 'Piano';
+
+  @override
+  String get instrumentOrgan => 'Órgano';
+
+  @override
+  String get instrumentGuitar => 'Guitarra';
+
+  @override
+  String get instrumentMarimba => 'Marimba';
+
+  @override
+  String get instrumentSynth => 'Sintetizador';
+
+  @override
+  String get synthWave => 'Onda';
+
+  @override
+  String get waveSaw => 'Sierra';
+
+  @override
+  String get waveSquare => 'Cuadrada';
+
+  @override
+  String get waveTriangle => 'Triangular';
+
+  @override
+  String get waveSine => 'Senoidal';
+
+  @override
+  String get synthAttack => 'Ataque';
+
+  @override
+  String get synthDecay => 'Caída';
+
+  @override
+  String get synthSustain => 'Sostenido';
+
+  @override
+  String get synthRelease => 'Relajación';
+
+  @override
+  String get synthBrightness => 'Brillo';
+
+  @override
+  String get synthResonance => 'Resonancia';
+
+  @override
+  String get synthDetune => 'Desafinar';
+
+  @override
+  String get synthReset => 'Sonido por defecto';
 
   @override
   String get stopPlayback => 'Parar la reproducción';

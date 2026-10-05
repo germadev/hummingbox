@@ -312,9 +312,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     RecordingQuality quality,
     AppLocalizations l10n,
   ) => switch (quality) {
+    RecordingQuality.minimum => l10n.qualityMinimum,
     RecordingQuality.low => l10n.qualityLow,
     RecordingQuality.medium => l10n.qualityMedium,
     RecordingQuality.high => l10n.qualityHigh,
+    RecordingQuality.veryHigh => l10n.qualityVeryHigh,
+    RecordingQuality.maximum => l10n.qualityMaximum,
   };
 
   /// `44,1 kHz · 128 kbps · 1 MB por minuto` (en español).

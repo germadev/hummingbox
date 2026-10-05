@@ -704,6 +704,12 @@ abstract class AppLocalizations {
   /// **'Quality'**
   String get quality;
 
+  /// Calidad de grabación: la más baja (8 kHz), para grabaciones muy largas
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum'**
+  String get qualityMinimum;
+
   /// No description provided for @qualityLow.
   ///
   /// In en, this message translates to:
@@ -721,6 +727,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'High'**
   String get qualityHigh;
+
+  /// Calidad de grabación: muy alta (48 kHz)
+  ///
+  /// In en, this message translates to:
+  /// **'Very high'**
+  String get qualityVeryHigh;
+
+  /// Calidad de grabación: la más alta (48 kHz y, en AAC, la tasa de bits más alta)
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum'**
+  String get qualityMaximum;
 
   /// No description provided for @countdown.
   ///
@@ -1412,11 +1430,11 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get close;
 
-  /// En el piano: grabar solo las notas
+  /// En el piano: lo que se toca se graba siempre (el botón del piano, siempre marcado, junto al de grabar también la voz)
   ///
   /// In en, this message translates to:
-  /// **'Piano only'**
-  String get pianoOnly;
+  /// **'The piano is always recorded'**
+  String get pianoAlwaysRecorded;
 
   /// En el piano: grabar las notas y la voz con el micrófono
   ///
@@ -1429,6 +1447,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing to save: no notes were played'**
   String get pianoNothingPlayed;
+
+  /// En el piano, girado con la pantalla en vertical: darle media vuelta si se ve al revés
+  ///
+  /// In en, this message translates to:
+  /// **'Turn around'**
+  String get pianoTurnAround;
+
+  /// En el piano: el menú para elegir con qué suenan las teclas
+  ///
+  /// In en, this message translates to:
+  /// **'Instrument'**
+  String get instrument;
+
+  /// Instrumento: piano
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get instrumentPiano;
+
+  /// Instrumento: órgano
+  ///
+  /// In en, this message translates to:
+  /// **'Organ'**
+  String get instrumentOrgan;
+
+  /// Instrumento: guitarra (de cuerdas de nailon)
+  ///
+  /// In en, this message translates to:
+  /// **'Guitar'**
+  String get instrumentGuitar;
+
+  /// Instrumento: marimba
+  ///
+  /// In en, this message translates to:
+  /// **'Marimba'**
+  String get instrumentMarimba;
+
+  /// Instrumento: sintetizador
+  ///
+  /// In en, this message translates to:
+  /// **'Synthesizer'**
+  String get instrumentSynth;
+
+  /// En el sintetizador: la forma de la onda
+  ///
+  /// In en, this message translates to:
+  /// **'Wave'**
+  String get synthWave;
+
+  /// Onda de sierra
+  ///
+  /// In en, this message translates to:
+  /// **'Sawtooth'**
+  String get waveSaw;
+
+  /// Onda cuadrada
+  ///
+  /// In en, this message translates to:
+  /// **'Square'**
+  String get waveSquare;
+
+  /// Onda triangular
+  ///
+  /// In en, this message translates to:
+  /// **'Triangle'**
+  String get waveTriangle;
+
+  /// Onda senoidal
+  ///
+  /// In en, this message translates to:
+  /// **'Sine'**
+  String get waveSine;
+
+  /// Sintetizador: lo que tarda en llegar al máximo al pulsar la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Attack'**
+  String get synthAttack;
+
+  /// Sintetizador: lo que tarda en bajar del máximo al nivel de sostenido
+  ///
+  /// In en, this message translates to:
+  /// **'Decay'**
+  String get synthDecay;
+
+  /// Sintetizador: el nivel mientras se mantiene la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Sustain'**
+  String get synthSustain;
+
+  /// Sintetizador: lo que tarda en apagarse al soltar la tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Release'**
+  String get synthRelease;
+
+  /// Sintetizador: lo abierto que está el filtro (más o menos brillante)
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get synthBrightness;
+
+  /// Sintetizador: lo que resuena el filtro
+  ///
+  /// In en, this message translates to:
+  /// **'Resonance'**
+  String get synthResonance;
+
+  /// Sintetizador: cuánto se desafinan entre sí sus dos osciladores
+  ///
+  /// In en, this message translates to:
+  /// **'Detune'**
+  String get synthDetune;
+
+  /// Sintetizador: volver al sonido por defecto
+  ///
+  /// In en, this message translates to:
+  /// **'Default sound'**
+  String get synthReset;
 
   /// No description provided for @stopPlayback.
   ///

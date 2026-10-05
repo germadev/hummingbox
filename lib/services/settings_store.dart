@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../models/instrument.dart';
 import '../models/recording_options.dart';
+import '../models/synth_patch.dart';
 import '../models/transcription.dart';
 
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
@@ -107,6 +109,8 @@ class AppSettings {
     this.searchSimilarWords = true,
     this.theme = AppTheme.system,
     this.compactList = false,
+    this.instrument = Instrument.piano,
+    this.synth = const SynthPatch(),
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -163,6 +167,12 @@ class AppSettings {
   /// solo mientras está seleccionada.
   final bool compactList;
 
+  /// Con qué suenan las teclas del piano.
+  final Instrument instrument;
+
+  /// Cómo suena el sintetizador del piano.
+  final SynthPatch synth;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -190,6 +200,11 @@ class AppSettings {
 
   AppSettings withCompactList(bool compact) => _copy(compactList: compact);
 
+  AppSettings withInstrument(Instrument instrument) =>
+      _copy(instrument: instrument);
+
+  AppSettings withSynth(SynthPatch synth) => _copy(synth: synth);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -202,6 +217,8 @@ class AppSettings {
     bool? searchSimilarWords,
     AppTheme? theme,
     bool? compactList,
+    Instrument? instrument,
+    SynthPatch? synth,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -214,6 +231,8 @@ class AppSettings {
     searchSimilarWords: searchSimilarWords ?? this.searchSimilarWords,
     theme: theme ?? this.theme,
     compactList: compactList ?? this.compactList,
+    instrument: instrument ?? this.instrument,
+    synth: synth ?? this.synth,
   );
 
   Map<String, dynamic> toJson() => {
@@ -229,6 +248,8 @@ class AppSettings {
     if (!searchSimilarWords) 'searchSimilarWords': false,
     if (theme != AppTheme.system) 'theme': theme.name,
     if (compactList) 'compactList': true,
+    if (instrument != Instrument.piano) 'instrument': instrument.name,
+    if (synth != const SynthPatch()) 'synth': synth.toJson(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -253,6 +274,8 @@ class AppSettings {
       searchSimilarWords: json['searchSimilarWords'] != false,
       theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
       compactList: json['compactList'] == true,
+      instrument: Instrument.byName(json['instrument']) ?? Instrument.piano,
+      synth: SynthPatch.fromJson(json['synth']),
     );
   }
 
@@ -269,7 +292,9 @@ class AppSettings {
       other.transcription == transcription &&
       other.searchSimilarWords == searchSimilarWords &&
       other.theme == theme &&
-      other.compactList == compactList;
+      other.compactList == compactList &&
+      other.instrument == instrument &&
+      other.synth == synth;
 
   @override
   int get hashCode => Object.hash(
@@ -284,6 +309,8 @@ class AppSettings {
     searchSimilarWords,
     theme,
     compactList,
+    instrument,
+    synth,
   );
 }
 
