@@ -374,7 +374,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String countdownSubtitle(int seconds) {
-    return '$seconds segundos antes de começar a gravar com o botão ⏱';
+    return '$seconds segundos antes de começar a gravar com o botão de contagem regressiva';
   }
 
   @override

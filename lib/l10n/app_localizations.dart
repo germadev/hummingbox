@@ -749,7 +749,7 @@ abstract class AppLocalizations {
   /// No description provided for @countdownSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'{seconds} seconds before recording with the ⏱ button'**
+  /// **'{seconds} seconds before recording with the countdown button'**
   String countdownSubtitle(int seconds);
 
   /// Sección de las opciones

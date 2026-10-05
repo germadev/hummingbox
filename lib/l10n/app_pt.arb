@@ -106,7 +106,7 @@
   "qualityHigh": "Alta",
   "countdown": "Contagem regressiva",
   "secondsCount": "{seconds} segundos",
-  "countdownSubtitle": "{seconds} segundos antes de começar a gravar com o botão ⏱",
+  "countdownSubtitle": "{seconds} segundos antes de começar a gravar com o botão de contagem regressiva",
   "recordingSection": "Gravação",
   "formatNote": "Aplica-se às novas gravações. Ao editar, cada gravação mantém seu formato.",
   "storageSection": "Onde as gravações são salvas",

@@ -381,7 +381,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String countdownSubtitle(int seconds) {
-    return '$seconds Sekunden vor der Aufnahme mit der ⏱-Taste';
+    return '$seconds Sekunden vor der Aufnahme mit der Countdown-Taste';
   }
 
   @override

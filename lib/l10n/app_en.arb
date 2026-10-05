@@ -275,7 +275,7 @@
       }
     }
   },
-  "countdownSubtitle": "{seconds} seconds before recording with the ⏱ button",
+  "countdownSubtitle": "{seconds} seconds before recording with the countdown button",
   "@countdownSubtitle": {
     "placeholders": {
       "seconds": {

@@ -373,7 +373,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String countdownSubtitle(int seconds) {
-    return '$seconds seconds before recording with the ⏱ button';
+    return '$seconds seconds before recording with the countdown button';
   }
 
   @override

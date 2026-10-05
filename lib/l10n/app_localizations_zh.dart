@@ -360,7 +360,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String countdownSubtitle(int seconds) {
-    return '使用 ⏱ 按钮时，开始录音前倒计时 $seconds 秒';
+    return '使用倒计时按钮时，开始录音前等待 $seconds 秒';
   }
 
   @override

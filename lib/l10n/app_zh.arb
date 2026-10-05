@@ -106,7 +106,7 @@
   "qualityHigh": "高",
   "countdown": "倒计时",
   "secondsCount": "{seconds} 秒",
-  "countdownSubtitle": "使用 ⏱ 按钮时，开始录音前倒计时 {seconds} 秒",
+  "countdownSubtitle": "使用倒计时按钮时，开始录音前等待 {seconds} 秒",
   "recordingSection": "录音",
   "formatNote": "适用于新的录音。编辑时，每条录音保留原有格式。",
   "storageSection": "录音的保存位置",

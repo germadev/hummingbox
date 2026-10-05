@@ -227,15 +227,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 onTap: _chooseQuality,
               ),
-              ListTile(
-                key: const Key('countdown-option'),
-                leading: const Icon(Icons.timer_outlined),
-                title: Text(l10n.countdown),
-                subtitle: Text(
-                  l10n.countdownSubtitle(settings.countdownSeconds),
-                ),
-                onTap: _chooseCountdown,
-              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
                 child: Text(
@@ -244,6 +235,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
+              ),
+              ListTile(
+                key: const Key('countdown-option'),
+                leading: const Icon(Icons.timer_outlined),
+                title: Text(l10n.countdown),
+                subtitle: Text(
+                  l10n.countdownSubtitle(settings.countdownSeconds),
+                ),
+                onTap: _chooseCountdown,
               ),
               const Divider(),
               _SectionTitle(l10n.storageSection),

@@ -106,7 +106,7 @@
   "qualityHigh": "高",
   "countdown": "カウントダウン",
   "secondsCount": "{seconds} 秒",
-  "countdownSubtitle": "⏱ ボタンで録音を始めるまで {seconds} 秒",
+  "countdownSubtitle": "カウントダウンボタンで録音を始めるまで {seconds} 秒",
   "recordingSection": "録音",
   "formatNote": "新しい録音に適用されます。編集しても各録音の形式は変わりません。",
   "storageSection": "録音の保存先",

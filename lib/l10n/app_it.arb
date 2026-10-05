@@ -106,7 +106,7 @@
   "qualityHigh": "Alta",
   "countdown": "Conto alla rovescia",
   "secondsCount": "{seconds} secondi",
-  "countdownSubtitle": "{seconds} secondi prima di iniziare a registrare con il pulsante ⏱",
+  "countdownSubtitle": "{seconds} secondi prima di iniziare a registrare con il pulsante del conto alla rovescia",
   "recordingSection": "Registrazione",
   "formatNote": "Si applica alle nuove registrazioni. Durante la modifica, ogni registrazione mantiene il suo formato.",
   "storageSection": "Dove vengono salvate le registrazioni",

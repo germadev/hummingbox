@@ -106,7 +106,7 @@
   "qualityHigh": "Hoch",
   "countdown": "Countdown",
   "secondsCount": "{seconds} Sekunden",
-  "countdownSubtitle": "{seconds} Sekunden vor der Aufnahme mit der ⏱-Taste",
+  "countdownSubtitle": "{seconds} Sekunden vor der Aufnahme mit der Countdown-Taste",
   "recordingSection": "Aufnahme",
   "formatNote": "Gilt für neue Aufnahmen. Beim Bearbeiten behält jede Aufnahme ihr Format.",
   "storageSection": "Speicherort der Aufnahmen",

@@ -106,7 +106,7 @@
   "qualityHigh": "Haute",
   "countdown": "Compte à rebours",
   "secondsCount": "{seconds} secondes",
-  "countdownSubtitle": "{seconds} secondes avant d'enregistrer avec le bouton ⏱",
+  "countdownSubtitle": "{seconds} secondes avant d'enregistrer avec le bouton de compte à rebours",
   "recordingSection": "Enregistrement",
   "formatNote": "S'applique aux nouveaux enregistrements. Lors de la modification, chaque enregistrement conserve son format.",
   "storageSection": "Emplacement des enregistrements",

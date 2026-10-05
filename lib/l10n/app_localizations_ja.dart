@@ -360,7 +360,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String countdownSubtitle(int seconds) {
-    return '⏱ ボタンで録音を始めるまで $seconds 秒';
+    return 'カウントダウンボタンで録音を始めるまで $seconds 秒';
   }
 
   @override
