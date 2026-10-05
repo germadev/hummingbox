@@ -688,7 +688,15 @@ class FakeDriveService implements DriveService {
   }
 
   @override
-  Future<DriveSettings?> connect({required String folderName}) async => account;
+  Future<DriveSettings?> connect({required String folderName}) async {
+    final account = this.account;
+    if (account == null) return null;
+    return DriveSettings(
+      email: account.email,
+      folderId: account.folderId,
+      folderName: folderName,
+    );
+  }
 
   @override
   Future<void> disconnect() async => disconnected = true;

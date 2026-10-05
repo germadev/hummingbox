@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => '录音机';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => '取消';

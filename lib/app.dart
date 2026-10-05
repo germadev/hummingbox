@@ -13,10 +13,11 @@ import 'services/settings_store.dart';
 import 'services/storage_sync.dart';
 import 'services/transcriber.dart';
 
-/// Morado del icono (`docs/icono.svg`), del que sale el tema de la app.
-const brandPurple = Color(0xFF5B3FD9);
+/// Morado del icono (el centro del degradado de `docs/icon.svg`), del que
+/// sale el tema de la app.
+const brandPurple = Color(0xFF5C2BD6);
 
-/// Rojo del punto del icono, para los controles de grabación.
+/// Rojo de los controles de grabación.
 const recordRed = Color(0xFFFF4D4D);
 
 class VoiceRecorderApp extends StatelessWidget {

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo del icono adaptable: el degradado del recuadro de docs/icon.svg
+     (#6E3CEE a #4A1ABE), alargado para que esos sean los colores de los
+     72 dp visibles de la capa de 108 dp. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <gradient
+        android:angle="270"
+        android:endColor="#4111B2"
+        android:startColor="#7744FA" />
+</shape>

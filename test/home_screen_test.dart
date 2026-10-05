@@ -1007,7 +1007,7 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester);
-      expect(find.text('Grabadora'), findsNothing);
+      expect(find.text('HummingBox'), findsNothing);
 
       await tester.tap(find.byTooltip('Carpetas'));
       await tester.pumpAndSettle();

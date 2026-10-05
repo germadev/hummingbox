@@ -1,6 +1,6 @@
 #include "Generated.xcconfig"
 
 // Esquema de URL de Google Sign-In. El valor real se define en
-// GoogleSignIn.xcconfig (no se sube al repositorio; ver README).
+// GoogleSignIn.xcconfig (no se sube al repositorio; ver docs/google-drive.md).
 GOOGLE_REVERSED_CLIENT_ID = es.germade.voicerecorder.google-not-configured
 #include? "GoogleSignIn.xcconfig"

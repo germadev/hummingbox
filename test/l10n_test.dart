@@ -90,7 +90,8 @@ void main() {
     ) async {
       await pumpIn(tester, const Locale('en'));
 
-      expect(appTitle(tester), 'Recorder');
+      // Es una marca: no se traduce.
+      expect(appTitle(tester), 'HummingBox');
       expect(find.text('No recordings yet'), findsOneWidget);
       expect(Intl.defaultLocale, 'en');
 
@@ -115,7 +116,7 @@ void main() {
 
       await pumpIn(tester, null);
 
-      expect(appTitle(tester), 'Recorder');
+      expect(find.text('No recordings yet'), findsOneWidget);
     });
 
     testWidgets('sigue el idioma del sistema', (tester) async {
@@ -124,7 +125,7 @@ void main() {
 
       await pumpIn(tester, null);
 
-      expect(appTitle(tester), 'ボイスレコーダー');
+      expect(appTitle(tester), 'HummingBox');
       expect(find.text('まだ録音がありません'), findsOneWidget);
     });
   });

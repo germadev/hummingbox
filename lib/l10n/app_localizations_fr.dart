@@ -10,7 +10,7 @@ class AppLocalizationsFr extends AppLocalizations {
   AppLocalizationsFr([String locale = 'fr']) : super(locale);
 
   @override
-  String get appTitle => 'Enregistreur';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => 'Annuler';

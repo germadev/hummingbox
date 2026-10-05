@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Nombre de la app en el lanzador. Las traducciones están en values-xx. -->
-    <string name="app_name">Recorder</string>
+    <!-- Nombre de la app en el lanzador: una marca, igual en todos los idiomas. -->
+    <string name="app_name">HummingBox</string>
 </resources>

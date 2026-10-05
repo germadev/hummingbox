@@ -10,7 +10,7 @@ class AppLocalizationsPt extends AppLocalizations {
   AppLocalizationsPt([String locale = 'pt']) : super(locale);
 
   @override
-  String get appTitle => 'Gravador';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => 'Cancelar';

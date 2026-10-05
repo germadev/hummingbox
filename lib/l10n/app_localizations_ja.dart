@@ -10,7 +10,7 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get appTitle => 'ボイスレコーダー';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => 'キャンセル';

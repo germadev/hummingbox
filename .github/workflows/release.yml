@@ -130,15 +130,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > "$RUNNER_TEMP/notes.md" <<EOF
-          ### Descargas
+          ### Downloads
 
-          - **voicerecorder-$VERSION.apk**: Android 7.0 o superior.
-          - **voicerecorder-$VERSION.ipa**: iOS 15 o superior. Va sin firmar:
-            hay que firmarla (p. ej. con AltStore o Sideloadly) para instalarla.
+          - **hummingbox-$VERSION.apk**: Android 7.0 or later.
+          - **hummingbox-$VERSION.ipa**: iOS 15 or later. It is unsigned:
+            sign it while installing it, e.g. with Sideloadly (see
+            [docs/install.md](https://github.com/$GITHUB_REPOSITORY/blob/main/docs/install.md)).
           EOF
 
           gh release create "$TAG" dist/* \
             --verify-tag \
-            --title "Grabadora $VERSION" \
+            --title "HummingBox $VERSION" \
             --notes-file "$RUNNER_TEMP/notes.md" \
             --generate-notes

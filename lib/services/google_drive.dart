@@ -36,7 +36,7 @@ class DriveException implements Exception {
 /// Abstraído para poder sustituirlo en los tests.
 abstract interface class DriveService {
   /// Indica si la app tiene configurado el acceso a Google en esta
-  /// plataforma (ver README → «Google Drive»).
+  /// plataforma (ver docs/google-drive.md).
   bool get isAvailable;
 
   /// Inicia sesión, pide permiso para crear archivos en Drive y prepara la

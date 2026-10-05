@@ -275,6 +275,7 @@ void main() {
     expect(store.settings.folder, isNull);
     expect(store.settings.storage, StorageKind.drive);
     expect(find.text('Ninguna'), findsOneWidget);
+    // Una conexión de antes conserva el nombre de la carpeta.
     expect(find.textContaining('carpeta «Grabadora» de tu Google'), findsOne);
   });
 
@@ -305,7 +306,7 @@ void main() {
 
     await tester.tap(find.byKey(const Key('drive-option')));
     await tester.pumpAndSettle();
-    expect(find.text('ana@example.com · carpeta «Grabadora»'), findsOneWidget);
+    expect(find.text('ana@example.com · carpeta «HummingBox»'), findsOneWidget);
     expect(store.settings.drive!.folderId, 'folder1');
 
     await tester.tap(find.byKey(const Key('drive-option')));

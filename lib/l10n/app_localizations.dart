@@ -110,10 +110,10 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
-  /// Nombre de la app (también el de su carpeta en Google Drive)
+  /// Nombre de la app, una marca que no se traduce (también el de su carpeta en Google Drive)
   ///
   /// In en, this message translates to:
-  /// **'Recorder'**
+  /// **'HummingBox'**
   String get appTitle;
 
   /// Botón para cancelar
