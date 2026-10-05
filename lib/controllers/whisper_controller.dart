@@ -73,8 +73,11 @@ class WhisperController extends ChangeNotifier {
         .install(model)
         .listen(
           (progress) {
+            // Llega un aviso por cada bloque descargado: solo se redibuja
+            // cuando cambia el porcentaje.
+            final changed = _percent(progress) != _percent(_progress);
             _progress = progress;
-            _notify();
+            if (changed) _notify();
           },
           onDone: () {
             _installed = model;
@@ -88,6 +91,9 @@ class WhisperController extends ChangeNotifier {
         );
     return done.future;
   }
+
+  static int? _percent(double? progress) =>
+      progress == null ? null : (progress * 100).floor();
 
   /// Detiene la descarga en curso. Lo descargado se conserva y la próxima
   /// descarga sigue desde ahí.
