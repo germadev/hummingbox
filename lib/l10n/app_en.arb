@@ -1,0 +1,351 @@
+{
+  "@@locale": "en",
+  "appTitle": "Recorder",
+  "@appTitle": {
+    "description": "Nombre de la app (también el de su carpeta en Google Drive)"
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Botón para cancelar"
+  },
+  "save": "Save",
+  "@save": {
+    "description": "Botón para guardar"
+  },
+  "delete": "Delete",
+  "@delete": {
+    "description": "Eliminar una grabación"
+  },
+  "discard": "Discard",
+  "@discard": {
+    "description": "Descartar lo grabado o los cambios"
+  },
+  "create": "Create",
+  "@create": {
+    "description": "Crear una carpeta"
+  },
+  "nameLabel": "Name",
+  "@nameLabel": {
+    "description": "Etiqueta del campo de nombre"
+  },
+  "defaultRecordingName": "Recording",
+  "@defaultRecordingName": {
+    "description": "Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»)"
+  },
+  "editedCopyName": "{name} (edited)",
+  "@editedCopyName": {
+    "description": "Nombre de la copia de una grabación editada",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "loadRecordingsFailed": "Couldn't load the recordings",
+  "importedFromFolder": "{count, plural, =1{1 recording added from the folder} other{{count} recordings added from the folder}}",
+  "@importedFromFolder": {
+    "description": "Grabaciones añadidas desde la carpeta del dispositivo",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "newFolder": "New folder",
+  "invalidFolderName": "That name can't be used for a folder",
+  "microphonePermission": "Allow microphone access in settings to record",
+  "startRecordingFailed": "Couldn't start recording",
+  "saveRecordingFailed": "Couldn't save the recording",
+  "savedAs": "Saved as “{name}”",
+  "@savedAs": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "discardRecordingTitle": "Discard the recording?",
+  "discardRecordingMessage": "The audio recorded so far will be lost.",
+  "stopToPlay": "Stop recording to play",
+  "stopToEdit": "Stop recording to edit",
+  "stopToLeave": "Stop recording before leaving",
+  "changesSaved": "Changes saved",
+  "renameFailed": "Couldn't rename the recording",
+  "shareFailed": "Couldn't share the recording",
+  "deleteTitle": "Delete “{name}”?",
+  "@deleteTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteMessage": "This can't be undone.",
+  "recordingDeleted": "Recording deleted",
+  "deleteFailed": "Couldn't delete the recording",
+  "settings": "Settings",
+  "@settings": {
+    "description": "Pantalla de opciones"
+  },
+  "rootFolder": "Recordings",
+  "@rootFolder": {
+    "description": "Carpeta principal en el menú lateral, si no hay carpeta del dispositivo"
+  },
+  "savingCopies": "Saving copies…",
+  "copiesFailed": "Some copies couldn't be saved",
+  "emptyFolderTitle": "This folder is empty",
+  "emptyFolderHint": "Tap the red button to record in it.",
+  "noRecordingsTitle": "No recordings yet",
+  "noRecordingsHint": "Tap the red button to start recording.",
+  "folders": "Folders",
+  "@folders": {
+    "description": "Título del menú lateral"
+  },
+  "play": "Play",
+  "pause": "Pause",
+  "rename": "Rename",
+  "moreOptions": "More options",
+  "edit": "Edit",
+  "share": "Share",
+  "dateToday": "Today, {time}",
+  "@dateToday": {
+    "description": "Fecha de una grabación de hoy",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "dateYesterday": "Yesterday, {time}",
+  "@dateYesterday": {
+    "description": "Fecha de una grabación de ayer",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "dateOther": "{date}, {time}",
+  "@dateOther": {
+    "description": "Fecha de una grabación anterior",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "stereo": "stereo",
+  "channels": "{count} channels",
+  "@channels": {
+    "description": "Número de canales de audio (más de dos)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bitDepth": "{bits}-bit",
+  "@bitDepth": {
+    "description": "Bits por muestra de un WAV",
+    "placeholders": {
+      "bits": {
+        "type": "int"
+      }
+    }
+  },
+  "perMinute": "{size} per minute",
+  "@perMinute": {
+    "description": "Lo que ocupa un minuto de grabación",
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "renameRecording": "Rename recording",
+  "@renameRecording": {
+    "description": "Título del diálogo de renombrar"
+  },
+  "hideRecordPanel": "Hide the recording panel",
+  "showRecordPanel": "Show the recording panel",
+  "countdownStatus": "Recording starts in…",
+  "@countdownStatus": {
+    "description": "Encima del número de la cuenta atrás"
+  },
+  "waitingForVoice": "Waiting for you to speak…",
+  "readyToRecord": "Ready to record",
+  "recordingStatus": "Recording",
+  "pausedStatus": "Paused",
+  "countdownButton": "Record after a {seconds}-second countdown",
+  "@countdownButton": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "resume": "Resume",
+  "voiceButton": "Record when you start speaking",
+  "stopAndSave": "Stop and save",
+  "startNow": "Start now",
+  "record": "Record",
+  "previewFailed": "Couldn't prepare the preview",
+  "editSaveFailed": "Couldn't save the edit",
+  "discardChangesTitle": "Discard changes?",
+  "discardChangesMessage": "Changes you haven't saved will be lost.",
+  "editRecording": "Edit recording",
+  "reset": "Reset",
+  "@reset": {
+    "description": "Deshacer todos los cambios del editor"
+  },
+  "saving": "Saving…",
+  "saveCopy": "Save copy",
+  "openAudioFailed": "Couldn't open the audio to edit it.",
+  "preparingAudio": "Preparing audio…",
+  "trimStartLabel": "Start",
+  "@trimStartLabel": {
+    "description": "Inicio de la selección"
+  },
+  "durationLabel": "Duration",
+  "trimEndLabel": "End",
+  "@trimEndLabel": {
+    "description": "Fin de la selección"
+  },
+  "playSelection": "Play selection",
+  "volume": "Volume",
+  "normalize": "Normalize",
+  "clippingWarning": "The loudest parts will clip",
+  "fadeIn": "Fade in",
+  "fadeOut": "Fade out",
+  "trimStartHandle": "Trim start",
+  "@trimStartHandle": {
+    "description": "Asa del inicio del recorte (accesibilidad)"
+  },
+  "trimEndHandle": "Trim end",
+  "@trimEndHandle": {
+    "description": "Asa del fin del recorte (accesibilidad)"
+  },
+  "playbackPosition": "Playback position",
+  "@playbackPosition": {
+    "description": "Onda como barra de progreso (accesibilidad)"
+  },
+  "importTitle": "Add the folder's recordings?",
+  "importMessage": "“{folder}” has {count, plural, =1{1 audio file} other{{count} audio files}} ({size}) that aren't in the app. If you add them, they'll appear in the list and be copied into the app.",
+  "@importMessage": {
+    "description": "Al elegir una carpeta con audios que la app no tiene",
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "add": "Add",
+  "dontAdd": "Don't add",
+  "folderFailed": "Couldn't use that folder",
+  "copiesKept": "The copies already in the folder are kept",
+  "driveConnectFailed": "Couldn't connect to Google Drive",
+  "disconnectDriveTitle": "Disconnect Google Drive?",
+  "disconnectDriveMessage": "Copies will no longer be saved to Drive. The ones already there are kept.",
+  "disconnect": "Disconnect",
+  "format": "Format",
+  "@format": {
+    "description": "Formato de archivo"
+  },
+  "aacDescription": "Compressed: small files that play on any device",
+  "wavDescription": "Uncompressed: the highest fidelity, but much larger files",
+  "quality": "Quality",
+  "qualityLow": "Low",
+  "qualityMedium": "Medium",
+  "qualityHigh": "High",
+  "countdown": "Countdown",
+  "secondsCount": "{seconds} seconds",
+  "@secondsCount": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "countdownSubtitle": "{seconds} seconds before recording with the ⏱ button",
+  "@countdownSubtitle": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "recordingSection": "Recording",
+  "@recordingSection": {
+    "description": "Sección de las opciones"
+  },
+  "formatNote": "Applies to new recordings. When editing, each recording keeps its format.",
+  "storageSection": "Where recordings are saved",
+  "@storageSection": {
+    "description": "Sección de las opciones"
+  },
+  "storageDescription": "Recordings are always saved inside the app. You can also keep a copy of each one in a device folder and in Google Drive, with the name you gave it and in its subfolder. Copies are updated when you rename or edit a recording, but aren't deleted when you delete it.",
+  "deviceFolder": "Device folder",
+  "noFolder": "Not saved to any folder",
+  "stopSavingToFolder": "Stop saving to the folder",
+  "chooseAnotherFolder": "Choose another folder",
+  "showFolderRecordings": "Show the folder's recordings",
+  "showFolderRecordingsSubtitle": "Adds the audio files (.m4a and .wav) in the folder and its subfolders to the app",
+  "driveAccount": "{email} · folder “{folder}”",
+  "@driveAccount": {
+    "description": "Cuenta y carpeta de Google Drive conectadas",
+    "placeholders": {
+      "email": {
+        "type": "String"
+      },
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "driveSaveCopy": "Save a copy to your Google Drive",
+  "driveUnavailable": "Not available: this version of the app isn't set up to access Google",
+  "copyNow": "Copy now",
+  "copyNowSubtitle": "Only what's missing or changed is copied",
+  "copyFailed": "{count, plural, =1{Couldn't copy 1 recording} other{Couldn't copy {count} recordings}}",
+  "@copyFailed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "importFailed": "{count, plural, =1{Couldn't add 1 recording from the folder} other{Couldn't add {count} recordings from the folder}}",
+  "@importFailed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readFolderFailed": "Couldn't read the folder",
+  "readRecordingsFailed": "Couldn't read the recordings",
+  "driveReconnect": "Reconnect your Google Drive account",
+  "offline": "No connection",
+  "noFolderPermission": "No permission for the folder anymore. Choose it again.",
+  "errorWithDetail": "{message}: {detail}",
+  "@errorWithDetail": {
+    "description": "Un error y su causa",
+    "placeholders": {
+      "message": {
+        "type": "String"
+      },
+      "detail": {
+        "type": "String"
+      }
+    }
+  }
+}

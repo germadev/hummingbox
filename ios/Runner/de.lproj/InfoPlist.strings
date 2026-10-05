@@ -1,0 +1,3 @@
+/* Nombre de la app y aviso del permiso del micrófono. */
+"CFBundleDisplayName" = "Rekorder";
+"NSMicrophoneUsageDescription" = "Der Mikrofonzugriff wird benötigt, um Ton aufzunehmen.";

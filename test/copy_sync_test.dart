@@ -164,7 +164,7 @@ void main() {
     await addRecording();
     store.settings = const AppSettings(folder: folder);
     folders.writeError = PlatformException(
-      code: 'failed',
+      code: 'no_permission',
       message: 'Sin permiso',
     );
 
@@ -173,7 +173,7 @@ void main() {
       'folder': const CopyError(
         CopyErrorKind.copy,
         count: 1,
-        detail: 'Sin permiso',
+        noPermission: true,
       ),
     });
     expect((await repository.loadAll()).single.copies, isEmpty);
@@ -332,10 +332,7 @@ void main() {
 
       await sync.sync();
 
-      expect(
-        sync.errors['folder'],
-        const CopyError(CopyErrorKind.readFolder, detail: 'Sin permiso'),
-      );
+      expect(sync.errors['folder'], const CopyError(CopyErrorKind.readFolder));
       // Las copias se intentan igualmente.
       expect(folders.calls, ['write Grabación 1.m4a']);
     });

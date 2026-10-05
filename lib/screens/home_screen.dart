@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
+import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../services/audio_player_service.dart';
@@ -75,6 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Las grabaciones nuevas se llaman «Grabación N» en el idioma de la app.
+    widget.repository.defaultNamePrefix = context.l10n.defaultRecordingName;
+  }
+
+  @override
   void dispose() {
     _lifecycle.dispose();
     _imports.cancel();
@@ -94,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showMessage('No se pudieron cargar las grabaciones');
+      _showMessage((l10n) => l10n.loadRecordingsFailed);
       return;
     }
     _syncCopies();
@@ -196,11 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _recordings = [..._recordings, ...added]
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     });
-    _showMessage(
-      added.length == 1
-          ? 'Se ha añadido 1 grabación de la carpeta'
-          : 'Se han añadido ${added.length} grabaciones de la carpeta',
-    );
+    _showMessage((l10n) => l10n.importedFromFolder(added.length));
     unawaited(_addMissingDetails());
   }
 
@@ -229,13 +233,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _createFolder() async {
     final input = await showNameDialog(
       context,
-      title: 'Nueva carpeta',
-      confirmLabel: 'Crear',
+      title: context.l10n.newFolder,
+      confirmLabel: context.l10n.create,
     );
     if (input == null || !mounted) return;
     final name = safeFileName(input, fallback: '');
     if (name.isEmpty || name.startsWith('.')) {
-      _showMessage('Ese nombre no vale para una carpeta');
+      _showMessage((l10n) => l10n.invalidFolderName);
       return;
     }
     await widget.sync.createFolder(name);
@@ -281,12 +285,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await widget.sync.load();
       final started = await start(widget.sync.settings.recording, _folder);
       if (!started) {
-        _showMessage(
-          'Permite el acceso al micrófono en los ajustes para poder grabar',
-        );
+        _showMessage((l10n) => l10n.microphonePermission);
       }
     } catch (_) {
-      _showMessage('No se pudo iniciar la grabación');
+      _showMessage((l10n) => l10n.startRecordingFailed);
     }
   }
 
@@ -299,12 +301,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted) return;
     if (recording == null) {
-      _showMessage('No se pudo guardar la grabación');
+      _showMessage((l10n) => l10n.saveRecordingFailed);
       return;
     }
     final saved = recording;
     setState(() => _recordings = [saved, ..._recordings]);
-    _showMessage('Guardada como «${saved.name}»');
+    _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncCopies();
   }
 
@@ -316,9 +318,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final discard = await showConfirmDialog(
       context,
-      title: '¿Descartar la grabación?',
-      message: 'Se perderá el audio grabado hasta ahora.',
-      confirmLabel: 'Descartar',
+      title: context.l10n.discardRecordingTitle,
+      message: context.l10n.discardRecordingMessage,
+      confirmLabel: context.l10n.discard,
     );
     if (discard) await _recorder.cancel();
   }
@@ -327,7 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _togglePlayback(Recording recording) {
     if (_recorder.isBusy) {
-      _showMessage('Detén la grabación para poder reproducir');
+      _showMessage((l10n) => l10n.stopToPlay);
       return;
     }
     _player.toggle(recording);
@@ -335,7 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _seek(Recording recording, Duration position) {
     if (_recorder.isBusy) {
-      _showMessage('Detén la grabación para poder reproducir');
+      _showMessage((l10n) => l10n.stopToPlay);
       return;
     }
     if (_player.isCurrent(recording)) {
@@ -364,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _edit(Recording recording) async {
     if (_recorder.isBusy) {
-      _showMessage('Detén la grabación para poder editar');
+      _showMessage((l10n) => l10n.stopToEdit);
       return;
     }
     await _player.stop();
@@ -387,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : [for (final r in _recordings) r.id == edited.id ? edited : r];
     });
     _showMessage(
-      result.isCopy ? 'Guardada como «${edited.name}»' : 'Cambios guardados',
+      (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
     _syncCopies();
   }
@@ -405,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       _syncCopies();
     } catch (_) {
-      _showMessage('No se pudo renombrar la grabación');
+      _showMessage((l10n) => l10n.renameFailed);
     }
   }
 
@@ -418,16 +420,16 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await shareRecording(recording, origin: origin);
     } catch (_) {
-      _showMessage('No se pudo compartir la grabación');
+      _showMessage((l10n) => l10n.shareFailed);
     }
   }
 
   Future<void> _delete(Recording recording) async {
     final confirmed = await showConfirmDialog(
       context,
-      title: '¿Eliminar «${recording.name}»?',
-      message: 'Esta acción no se puede deshacer.',
-      confirmLabel: 'Eliminar',
+      title: context.l10n.deleteTitle(recording.name),
+      message: context.l10n.deleteMessage,
+      confirmLabel: context.l10n.delete,
     );
     if (!confirmed) return;
 
@@ -441,17 +443,19 @@ class _HomeScreenState extends State<HomeScreen> {
             if (r.id != recording.id) r,
         ];
       });
-      _showMessage('Grabación eliminada');
+      _showMessage((l10n) => l10n.recordingDeleted);
     } catch (_) {
-      _showMessage('No se pudo eliminar la grabación');
+      _showMessage((l10n) => l10n.deleteFailed);
     }
   }
 
-  void _showMessage(String message) {
+  /// Muestra un aviso con el texto que devuelve [message] en el idioma de la
+  /// app (se lee al mostrarlo, así que se puede llamar tras un `await`).
+  void _showMessage(String Function(AppLocalizations l10n) message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
   Future<void> _openSettings() {
@@ -481,12 +485,12 @@ class _HomeScreenState extends State<HomeScreen> {
       key: _scaffoldKey,
       appBar: AppBar(
         // Nombre de la carpeta abierta, arriba a la izquierda.
-        title: Text(folder.isEmpty ? 'Grabadora' : folder),
+        title: Text(folder.isEmpty ? context.l10n.appTitle : folder),
         actions: [
           _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
           IconButton(
             key: const Key('settings-button'),
-            tooltip: 'Opciones',
+            tooltip: context.l10n.settings,
             icon: const Icon(Icons.settings_outlined),
             onPressed: _openSettings,
           ),
@@ -496,7 +500,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Se abre deslizando desde la izquierda. Al abrirlo se buscan
       // subcarpetas nuevas.
       drawer: FolderDrawer(
-        rootName: widget.sync.settings.folder?.name ?? 'Grabaciones',
+        rootName: widget.sync.settings.folder?.name ?? context.l10n.rootFolder,
         folders: folderNames,
         counts: {
           for (final name in ['', ...folderNames]) name: _countIn(name),
@@ -530,7 +534,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_recorder.pending != null) {
           _recorder.cancel();
         } else if (_recorder.isActive) {
-          _showMessage('Detén la grabación antes de salir');
+          _showMessage((l10n) => l10n.stopToLeave);
         } else {
           _openFolder('');
         }
@@ -587,14 +591,14 @@ class _SyncIndicator extends StatelessWidget {
       builder: (context, _) {
         if (sync.syncing) {
           return IconButton(
-            tooltip: 'Guardando copias…',
+            tooltip: context.l10n.savingCopies,
             icon: const Icon(Icons.sync),
             onPressed: onPressed,
           );
         }
         if (sync.errors.isNotEmpty) {
           return IconButton(
-            tooltip: 'No se pudieron guardar algunas copias',
+            tooltip: context.l10n.copiesFailed,
             icon: Icon(
               Icons.sync_problem,
               color: Theme.of(context).colorScheme.error,
@@ -630,14 +634,16 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              inFolder ? 'Esta carpeta está vacía' : 'Aún no hay grabaciones',
+              inFolder
+                  ? context.l10n.emptyFolderTitle
+                  : context.l10n.noRecordingsTitle,
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
               inFolder
-                  ? 'Pulsa el botón rojo para grabar en ella.'
-                  : 'Pulsa el botón rojo para empezar a grabar.',
+                  ? context.l10n.emptyFolderHint
+                  : context.l10n.noRecordingsHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

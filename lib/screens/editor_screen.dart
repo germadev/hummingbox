@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../audio/audio_edit.dart';
 import '../audio/levels.dart';
+import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../services/audio_player_service.dart';
 import '../services/recording_editor.dart';
@@ -191,7 +192,7 @@ class _EditorScreenState extends State<EditorScreen> {
         } catch (_) {
           if (mounted && request == _previewRequest) {
             setState(() => _rendering = false);
-            _showMessage('No se pudo preparar la escucha');
+            _showMessage((l10n) => l10n.previewFailed);
           }
           return;
         }
@@ -298,6 +299,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final session = _session;
     if (session == null || _saving) return;
 
+    final copyName = context.l10n.editedCopyName(session.recording.name);
     setState(() => _savingAsCopy = asCopy);
     await _player.stop();
     try {
@@ -305,28 +307,32 @@ class _EditorScreenState extends State<EditorScreen> {
         session,
         _edit,
         asCopy: asCopy,
+        copyName: copyName,
       );
       if (!mounted) return;
       Navigator.pop(context, EditResult(recording, isCopy: asCopy));
     } catch (_) {
       if (!mounted) return;
       setState(() => _savingAsCopy = null);
-      _showMessage('No se pudo guardar la edición');
+      _showMessage((l10n) => l10n.editSaveFailed);
     }
   }
 
-  void _showMessage(String message) {
+  /// Muestra un aviso con el texto que devuelve [message] en el idioma de la
+  /// app (se lee al mostrarlo, así que se puede llamar tras un `await`).
+  void _showMessage(String Function(AppLocalizations l10n) message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
   Future<void> _confirmExit() async {
     final discard = await showConfirmDialog(
       context,
-      title: '¿Descartar los cambios?',
-      message: 'Los cambios que no has guardado se perderán.',
-      confirmLabel: 'Descartar',
+      title: context.l10n.discardChangesTitle,
+      message: context.l10n.discardChangesMessage,
+      confirmLabel: context.l10n.discard,
     );
     if (discard && mounted) Navigator.pop(context);
   }
@@ -342,11 +348,11 @@ class _EditorScreenState extends State<EditorScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Editar grabación'),
+          title: Text(context.l10n.editRecording),
           actions: [
             TextButton(
               onPressed: _changed && !_saving ? _reset : null,
-              child: const Text('Restablecer'),
+              child: Text(context.l10n.reset),
             ),
           ],
           bottom: _saving
@@ -376,7 +382,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 key: const Key('save-copy-button'),
                 icon: const Icon(Icons.file_copy_outlined),
                 label: _ButtonLabel(
-                  _savingAsCopy == true ? 'Guardando…' : 'Guardar copia',
+                  _savingAsCopy == true
+                      ? context.l10n.saving
+                      : context.l10n.saveCopy,
                 ),
                 onPressed: canSave ? () => _save(asCopy: true) : null,
               ),
@@ -387,7 +395,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 key: const Key('save-edit-button'),
                 icon: const Icon(Icons.save_outlined),
                 label: _ButtonLabel(
-                  _savingAsCopy == false ? 'Guardando…' : 'Guardar',
+                  _savingAsCopy == false
+                      ? context.l10n.saving
+                      : context.l10n.save,
                 ),
                 onPressed: canSave ? () => _save(asCopy: false) : null,
               ),
@@ -400,17 +410,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _buildBody() {
     if (_failed) {
-      return const _Message(
+      return _Message(
         icon: Icons.error_outline,
-        text: 'No se pudo abrir el audio para editarlo.',
+        text: context.l10n.openAudioFailed,
       );
     }
     final session = _session;
     if (session == null) {
-      return const _Message(text: 'Preparando el audio…', loading: true);
+      return _Message(text: context.l10n.preparingAudio, loading: true);
     }
 
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final maxFade = _maxFadeFor(_edit);
     final gainLabel = formatGain(_edit.gainDb);
 
@@ -441,9 +452,9 @@ class _EditorScreenState extends State<EditorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _TimeLabel(label: 'Inicio', time: _edit.start),
-              _TimeLabel(label: 'Duración', time: _edit.length),
-              _TimeLabel(label: 'Fin', time: _edit.end),
+              _TimeLabel(label: l10n.trimStartLabel, time: _edit.start),
+              _TimeLabel(label: l10n.durationLabel, time: _edit.length),
+              _TimeLabel(label: l10n.trimEndLabel, time: _edit.end),
             ],
           ),
           const SizedBox(height: 8),
@@ -452,8 +463,8 @@ class _EditorScreenState extends State<EditorScreen> {
               key: const Key('preview-button'),
               iconSize: 32,
               tooltip: _previewPlaying || _rendering
-                  ? 'Pausar'
-                  : 'Escuchar la selección',
+                  ? l10n.pause
+                  : l10n.playSelection,
               icon: _rendering
                   ? const SizedBox.square(
                       dimension: 32,
@@ -469,7 +480,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const Divider(height: 32),
           _SectionHeader(
             icon: Icons.volume_up_outlined,
-            title: 'Volumen',
+            title: l10n.volume,
             value: gainLabel,
           ),
           Slider(
@@ -487,7 +498,7 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               OutlinedButton.icon(
                 icon: const Icon(Icons.auto_fix_high),
-                label: const Text('Normalizar'),
+                label: Text(l10n.normalize),
                 onPressed: _selectionPeak > 0 ? _normalize : null,
               ),
               if (_clips)
@@ -501,7 +512,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Las partes más fuertes se saturarán',
+                      l10n.clippingWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.error,
                       ),
@@ -513,7 +524,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const Divider(height: 32),
           _SectionHeader(
             icon: Icons.trending_up,
-            title: 'Fundido de entrada',
+            title: l10n.fadeIn,
             value: formatSeconds(_edit.fadeIn),
           ),
           _FadeSlider(
@@ -524,7 +535,7 @@ class _EditorScreenState extends State<EditorScreen> {
           ),
           _SectionHeader(
             icon: Icons.trending_down,
-            title: 'Fundido de salida',
+            title: l10n.fadeOut,
             value: formatSeconds(_edit.fadeOut),
           ),
           _FadeSlider(

@@ -4,6 +4,7 @@ import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/screens/editor_screen.dart';
 
 import 'fakes.dart';
+import 'l10n_helpers.dart';
 
 void main() {
   late InMemoryRecordingsRepository repository;
@@ -30,7 +31,7 @@ void main() {
 
   Future<void> pumpEditor(WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
@@ -154,7 +155,7 @@ void main() {
     await tester.tap(find.text('Normalizar'));
     await tester.pump();
 
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.text('¿Descartar los cambios?'), findsOneWidget);
 
@@ -168,7 +169,7 @@ void main() {
   testWidgets('sale sin preguntar si no hay cambios', (tester) async {
     await pumpEditor(tester);
 
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     expect(closed, isTrue);

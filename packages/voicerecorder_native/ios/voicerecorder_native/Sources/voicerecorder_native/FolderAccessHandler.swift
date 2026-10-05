@@ -131,7 +131,9 @@ final class FolderAccessHandler: NSObject, UIDocumentPickerDelegate {
     let folder = try URL(
       resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
     guard folder.startAccessingSecurityScopedResource() else {
-      throw NativeError("Ya no hay permiso para escribir en la carpeta. Elígela de nuevo.")
+      throw NativeError(
+        "Ya no hay permiso para escribir en la carpeta. Elígela de nuevo.",
+        code: "no_permission")
     }
     defer { folder.stopAccessingSecurityScopedResource() }
     return try body(folder)

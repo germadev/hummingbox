@@ -13,6 +13,10 @@ import '../utils/files.dart';
 
 /// Almacén de las grabaciones del usuario.
 abstract interface class RecordingsRepository {
+  /// Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»).
+  /// Lo fija la interfaz según el idioma.
+  abstract String defaultNamePrefix;
+
   /// Devuelve una ruta libre donde guardar una nueva grabación en [format].
   Future<String> createRecordingPath({
     RecordingFormat format = RecordingFormat.aac,
@@ -80,7 +84,8 @@ class FileRecordingsRepository implements RecordingsRepository {
     : _directoryProvider = directory ?? _defaultDirectory;
 
   static const _indexFileName = 'recordings.json';
-  static const defaultNamePrefix = 'Grabación';
+  @override
+  String defaultNamePrefix = 'Grabación';
 
   final Future<Directory> Function() _directoryProvider;
   Directory? _directory;
@@ -177,7 +182,10 @@ class FileRecordingsRepository implements RecordingsRepository {
         path: path,
         name:
             name ??
-            nextDefaultName(index.values.map((m) => m['name'] as String?)),
+            nextDefaultName(
+              index.values.map((m) => m['name'] as String?),
+              prefix: defaultNamePrefix,
+            ),
         createdAt: createdAt ?? DateTime.now(),
         duration: duration,
         waveform: waveform,
@@ -275,8 +283,11 @@ class FileRecordingsRepository implements RecordingsRepository {
   }
 
   /// Siguiente nombre libre del tipo "Grabación N".
-  static String nextDefaultName(Iterable<String?> existingNames) {
-    final pattern = RegExp('^$defaultNamePrefix (\\d+)\$');
+  static String nextDefaultName(
+    Iterable<String?> existingNames, {
+    String prefix = 'Grabación',
+  }) {
+    final pattern = RegExp('^${RegExp.escape(prefix)} (\\d+)\$');
     var highest = 0;
     for (final name in existingNames) {
       final match = name == null ? null : pattern.firstMatch(name);
@@ -285,7 +296,7 @@ class FileRecordingsRepository implements RecordingsRepository {
         if (number > highest) highest = number;
       }
     }
-    return '$defaultNamePrefix ${highest + 1}';
+    return '$prefix ${highest + 1}';
   }
 
   /// Modifica los metadatos de [recording] partiendo de los guardados (y no

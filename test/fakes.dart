@@ -129,6 +129,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
 
   final List<Recording> recordings;
   final discarded = <String>[];
+
+  @override
+  String defaultNamePrefix = 'Grabación';
   var _counter = 0;
 
   Recording byId(String id) => recordings.firstWhere((r) => r.id == id);
@@ -160,6 +163,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
           name ??
           FileRecordingsRepository.nextDefaultName(
             recordings.map((r) => r.name),
+            prefix: defaultNamePrefix,
           ),
       createdAt: createdAt ?? DateTime.now(),
       duration: duration,
@@ -331,6 +335,7 @@ class FakeRecordingEditor extends RecordingEditor {
     EditSession session,
     AudioEdit edit, {
     required bool asCopy,
+    String? copyName,
   }) async {
     savedEdit = edit;
     savedAsCopy = asCopy;
@@ -338,7 +343,9 @@ class FakeRecordingEditor extends RecordingEditor {
       return (await repository.add(
         path: await repository.createRecordingPath(),
         duration: edit.length,
-        name: '${session.recording.name}${RecordingEditor.copySuffix}',
+        name:
+            copyName ??
+            '${session.recording.name}${RecordingEditor.copySuffix}',
       ))!;
     }
     return repository.replaceAudio(
@@ -544,7 +551,7 @@ class FakeDriveService implements DriveService {
   var _counter = 0;
 
   @override
-  Future<DriveSettings?> connect() async => account;
+  Future<DriveSettings?> connect({required String folderName}) async => account;
 
   @override
   Future<void> disconnect() async => disconnected = true;

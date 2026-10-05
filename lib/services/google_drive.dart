@@ -39,8 +39,9 @@ abstract interface class DriveService {
   bool get isAvailable;
 
   /// Inicia sesión, pide permiso para crear archivos en Drive y prepara la
-  /// carpeta de las grabaciones. Devuelve `null` si el usuario lo cancela.
-  Future<DriveSettings?> connect();
+  /// carpeta de las grabaciones, [folderName]. Devuelve `null` si el usuario
+  /// lo cancela.
+  Future<DriveSettings?> connect({required String folderName});
 
   /// Cierra la sesión y retira el permiso.
   Future<void> disconnect();
@@ -80,7 +81,6 @@ class GoogleDriveService implements DriveService {
 
   final http.Client _http;
 
-  static const folderName = 'Grabadora';
   static const scopes = ['https://www.googleapis.com/auth/drive.file'];
 
   late final DriveApi _api = DriveApi(_http, _authHeaders);
@@ -104,7 +104,7 @@ class GoogleDriveService implements DriveService {
   }
 
   @override
-  Future<DriveSettings?> connect() async {
+  Future<DriveSettings?> connect({required String folderName}) async {
     if (!isAvailable) {
       throw const DriveAuthException(
         'Esta versión de la app no tiene configurado el acceso a Google',
@@ -120,7 +120,11 @@ class GoogleDriveService implements DriveService {
       rethrow;
     }
     final folderId = await _api.ensureFolder(folderName);
-    return DriveSettings(email: account.email, folderId: folderId);
+    return DriveSettings(
+      email: account.email,
+      folderId: folderId,
+      folderName: folderName,
+    );
   }
 
   @override
@@ -310,10 +314,7 @@ class DriveApi {
     });
     final location = session.headers['location'];
     if (location == null) {
-      throw DriveException(
-        session.statusCode,
-        'no se recibió la dirección de subida',
-      );
+      throw DriveException(session.statusCode, 'no upload URL received');
     }
 
     final request = http.StreamedRequest('PUT', Uri.parse(location))

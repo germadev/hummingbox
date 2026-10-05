@@ -1,0 +1,3 @@
+/* Nombre de la app y aviso del permiso del micrófono. */
+"CFBundleDisplayName" = "Grabadora";
+"NSMicrophoneUsageDescription" = "Necesitamos acceso al micrófono para grabar audio.";

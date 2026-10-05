@@ -6,10 +6,13 @@ import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/utils/formatters.dart';
 
+import 'l10n_helpers.dart';
 import 'mp4_helpers.dart';
 import 'wav_helpers.dart';
 
 void main() {
+  setUpAll(useSpanishFormats);
+
   group('opciones de grabación', () {
     test('por defecto, AAC a 44,1 kHz y 128 kbps, como antes', () {
       const options = RecordingOptions();
@@ -75,6 +78,7 @@ void main() {
             channels: 2,
             bitsPerSample: 24,
           ),
+          es,
         ),
         'WAV · 24 bits · 48 kHz · estéreo',
       );

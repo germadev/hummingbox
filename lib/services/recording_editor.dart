@@ -80,11 +80,13 @@ class RecordingEditor {
   }
 
   /// Aplica [edit] y guarda el resultado, sustituyendo el audio original o,
-  /// si [asCopy] es `true`, como una grabación nueva.
+  /// si [asCopy] es `true`, como una grabación nueva llamada [copyName] (por
+  /// defecto, el nombre del original seguido de [copySuffix]).
   Future<Recording> save(
     EditSession session,
     AudioEdit edit, {
     required bool asCopy,
+    String? copyName,
   }) async {
     final recording = session.recording;
     final edited = p.join(session.directory.path, 'edited.wav');
@@ -122,7 +124,7 @@ class RecordingEditor {
       path: path,
       duration: result.duration,
       waveform: result.levels,
-      name: '${recording.name}$copySuffix',
+      name: copyName ?? '${recording.name}$copySuffix',
       audio: audio,
       folder: recording.folder,
     );

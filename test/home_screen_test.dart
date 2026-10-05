@@ -9,6 +9,7 @@ import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 
 import 'fakes.dart';
+import 'l10n_helpers.dart';
 import 'waveform_helpers.dart';
 
 void main() {
@@ -52,6 +53,7 @@ void main() {
     setUpEditor?.call(editor);
     await tester.pumpWidget(
       VoiceRecorderApp(
+        locale: testLocale,
         repository: repository,
         recorderFactory: () => recorder,
         playerFactory: () => player,

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../app.dart';
 import '../controllers/recorder_controller.dart';
+import '../l10n/l10n.dart';
 import '../services/audio_recorder_service.dart';
 import '../utils/formatters.dart';
 import 'waveform_view.dart';
@@ -236,8 +237,8 @@ class _DragHandle extends StatelessWidget {
         button: visible,
         label: visible
             ? (expanded
-                  ? 'Ocultar el panel de grabación'
-                  : 'Mostrar el panel de grabación')
+                  ? context.l10n.hideRecordPanel
+                  : context.l10n.showRecordPanel)
             : null,
         excludeSemantics: true,
         child: GestureDetector(
@@ -274,26 +275,35 @@ class _RecordingInfo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final muted = theme.colorScheme.onSurfaceVariant;
     final pending = controller.pending;
     final (label, icon, iconColor) = switch ((pending, controller.status)) {
       (PendingStart.countdown, _) => (
-        'Empieza a grabar en…',
+        l10n.countdownStatus,
         Icons.timer_outlined,
         recordRed,
       ),
       (PendingStart.voice, _) => (
-        'Esperando a que hables…',
+        l10n.waitingForVoice,
         Icons.hearing,
         recordRed,
       ),
       (null, RecorderStatus.idle) => (
-        'Lista para grabar',
+        l10n.readyToRecord,
         Icons.circle,
         muted.withValues(alpha: 0.4),
       ),
-      (null, RecorderStatus.recording) => ('Grabando', Icons.circle, recordRed),
-      (null, RecorderStatus.paused) => ('En pausa', Icons.pause_circle, muted),
+      (null, RecorderStatus.recording) => (
+        l10n.recordingStatus,
+        Icons.circle,
+        recordRed,
+      ),
+      (null, RecorderStatus.paused) => (
+        l10n.pausedStatus,
+        Icons.pause_circle,
+        muted,
+      ),
     };
     // Solo cambia de color lo grabado; el hueco anterior sigue en gris.
     final idleColor = muted.withValues(alpha: 0.4);
@@ -371,6 +381,7 @@ class _Controls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final active = controller.isActive;
     final waiting = controller.pending != null;
     final paused = controller.status == RecorderStatus.paused;
@@ -378,14 +389,14 @@ class _Controls extends StatelessWidget {
     final Widget left = active || waiting
         ? IconButton.filledTonal(
             key: const Key('cancel-button'),
-            tooltip: active ? 'Descartar' : 'Cancelar',
+            tooltip: active ? l10n.discard : l10n.cancel,
             iconSize: 28,
             icon: const Icon(Icons.close),
             onPressed: onCancelPressed,
           )
         : IconButton.filledTonal(
             key: const Key('countdown-button'),
-            tooltip: 'Grabar tras una cuenta atrás de $countdownSeconds s',
+            tooltip: l10n.countdownButton(countdownSeconds),
             iconSize: 28,
             icon: const Icon(Icons.timer_outlined),
             onPressed: onCountdownPressed,
@@ -393,14 +404,14 @@ class _Controls extends StatelessWidget {
     final Widget right = active
         ? IconButton.filledTonal(
             key: const Key('pause-button'),
-            tooltip: paused ? 'Reanudar' : 'Pausar',
+            tooltip: paused ? l10n.resume : l10n.pause,
             iconSize: 28,
             icon: Icon(paused ? Icons.mic : Icons.pause),
             onPressed: paused ? controller.resume : controller.pause,
           )
         : IconButton.filledTonal(
             key: const Key('voice-button'),
-            tooltip: 'Grabar al detectar la voz',
+            tooltip: l10n.voiceButton,
             iconSize: 28,
             icon: const Icon(Icons.record_voice_over_outlined),
             onPressed: onVoicePressed,
@@ -465,9 +476,10 @@ class RecordButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final ringColor = Theme.of(context).colorScheme.outlineVariant;
     final innerSize = recording ? 32.0 : 64.0;
+    final l10n = context.l10n;
     final label = recording
-        ? 'Detener y guardar'
-        : (startsNow ? 'Empezar ya' : 'Grabar');
+        ? l10n.stopAndSave
+        : (startsNow ? l10n.startNow : l10n.record);
 
     return Semantics(
       button: true,

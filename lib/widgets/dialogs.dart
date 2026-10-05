@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 /// Muestra un diálogo de confirmación. Devuelve `true` si se confirma.
 Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
   required String confirmLabel,
-  String cancelLabel = 'Cancelar',
+  String? cancelLabel,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
@@ -16,7 +18,7 @@ Future<bool> showConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: Text(cancelLabel),
+          child: Text(cancelLabel ?? context.l10n.cancel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
@@ -72,7 +74,7 @@ Future<T?> showChoiceDialog<T>(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(context.l10n.cancel),
         ),
       ],
     ),
@@ -83,9 +85,9 @@ Future<T?> showChoiceDialog<T>(
 Future<String?> showRenameDialog(BuildContext context, String currentName) {
   return showNameDialog(
     context,
-    title: 'Renombrar grabación',
+    title: context.l10n.renameRecording,
     initialName: currentName,
-    confirmLabel: 'Guardar',
+    confirmLabel: context.l10n.save,
   );
 }
 
@@ -150,13 +152,13 @@ class _NameDialogState extends State<_NameDialog> {
         autofocus: true,
         maxLength: 80,
         textCapitalization: TextCapitalization.sentences,
-        decoration: const InputDecoration(labelText: 'Nombre'),
+        decoration: InputDecoration(labelText: context.l10n.nameLabel),
         onSubmitted: (_) => _submit(),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
+          child: Text(context.l10n.cancel),
         ),
         ValueListenableBuilder(
           valueListenable: _controller,

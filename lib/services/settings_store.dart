@@ -83,29 +83,50 @@ class FolderSettings {
 
 /// Cuenta de Google Drive conectada y carpeta donde se guardan las copias.
 class DriveSettings {
-  const DriveSettings({required this.email, required this.folderId});
+  const DriveSettings({
+    required this.email,
+    required this.folderId,
+    this.folderName = defaultFolderName,
+  });
+
+  /// Nombre de la carpeta en las versiones en las que siempre se llamaba
+  /// igual.
+  static const defaultFolderName = 'Grabadora';
 
   final String email;
   final String folderId;
 
-  Map<String, dynamic> toJson() => {'email': email, 'folderId': folderId};
+  /// Nombre que tenía la carpeta al conectar (el de la app en su idioma).
+  final String folderName;
+
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'folderId': folderId,
+    'folderName': folderName,
+  };
 
   static DriveSettings? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final email = json['email'];
     final folderId = json['folderId'];
+    final folderName = json['folderName'];
     if (email is! String || folderId is! String) return null;
-    return DriveSettings(email: email, folderId: folderId);
+    return DriveSettings(
+      email: email,
+      folderId: folderId,
+      folderName: folderName is String ? folderName : defaultFolderName,
+    );
   }
 
   @override
   bool operator ==(Object other) =>
       other is DriveSettings &&
       other.email == email &&
-      other.folderId == folderId;
+      other.folderId == folderId &&
+      other.folderName == folderName;
 
   @override
-  int get hashCode => Object.hash(email, folderId);
+  int get hashCode => Object.hash(email, folderId, folderName);
 }
 
 /// Opciones de la app.

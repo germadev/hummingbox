@@ -5,6 +5,7 @@ import 'package:voicerecorder/screens/settings_screen.dart';
 import 'package:voicerecorder/services/copy_sync.dart';
 
 import 'fakes.dart';
+import 'l10n_helpers.dart';
 
 void main() {
   late InMemorySettingsStore store;
@@ -29,7 +30,7 @@ void main() {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: SettingsScreen(sync: sync)));
+    await tester.pumpWidget(localizedApp(home: SettingsScreen(sync: sync)));
     await sync.load();
     await tester.pumpAndSettle();
   }

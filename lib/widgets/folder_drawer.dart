@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/l10n.dart';
+
 /// Menú lateral con la carpeta de grabaciones y sus subcarpetas. Se abre
 /// deslizando desde la izquierda o con el botón de la barra superior.
 class FolderDrawer extends StatelessWidget {
@@ -55,7 +57,7 @@ class FolderDrawer extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
-                'Carpetas',
+                context.l10n.folders,
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: theme.colorScheme.primary,
                 ),
@@ -69,7 +71,7 @@ class FolderDrawer extends StatelessWidget {
             ListTile(
               key: const Key('new-folder'),
               leading: const Icon(Icons.create_new_folder_outlined),
-              title: const Text('Nueva carpeta'),
+              title: Text(context.l10n.newFolder),
               shape: const StadiumBorder(),
               onTap: onCreate,
             ),

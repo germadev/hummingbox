@@ -142,6 +142,7 @@ class CopyError {
     this.count = 0,
     this.detail,
     this.offline = false,
+    this.noPermission = false,
   });
 
   /// Describe [error], que afectó a [count] grabaciones.
@@ -149,12 +150,14 @@ class CopyError {
     return CopyError(
       kind,
       count: count,
+      // Los mensajes de Google Drive dan detalles útiles; los del sistema,
+      // no (y no están traducidos), salvo la falta de permiso.
       detail: switch (error) {
-        PlatformException(:final message?) => message,
         DriveException(:final message) => message,
         _ => null,
       },
       offline: error is SocketException || error is ClientException,
+      noPermission: error is PlatformException && error.code == 'no_permission',
     );
   }
 
@@ -167,20 +170,25 @@ class CopyError {
   /// Si falló por no haber conexión.
   final bool offline;
 
+  /// Si se retiró el permiso sobre la carpeta del dispositivo.
+  final bool noPermission;
+
   @override
   bool operator ==(Object other) =>
       other is CopyError &&
       other.kind == kind &&
       other.count == count &&
       other.detail == detail &&
-      other.offline == offline;
+      other.offline == offline &&
+      other.noPermission == noPermission;
 
   @override
-  int get hashCode => Object.hash(kind, count, detail, offline);
+  int get hashCode => Object.hash(kind, count, detail, offline, noPermission);
 
   @override
   String toString() =>
-      'CopyError($kind, count: $count, detail: $detail, offline: $offline)';
+      'CopyError($kind, count: $count, detail: $detail, offline: $offline, '
+      'noPermission: $noPermission)';
 }
 
 /// Audios de la carpeta del dispositivo que la app todavía no tiene.

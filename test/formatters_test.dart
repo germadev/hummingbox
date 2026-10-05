@@ -4,8 +4,13 @@ import 'package:voicerecorder/controllers/recorder_controller.dart';
 import 'package:voicerecorder/services/share_service.dart';
 import 'package:voicerecorder/utils/formatters.dart';
 
+import 'l10n_helpers.dart';
+
 void main() {
-  setUpAll(() => initializeDateFormatting('es'));
+  setUpAll(() async {
+    await initializeDateFormatting('es');
+    useSpanishFormats();
+  });
 
   group('formatDuration', () {
     test('formatea minutos y segundos', () {
@@ -38,11 +43,11 @@ void main() {
 
     test('usa "Hoy" y "Ayer" para fechas recientes', () {
       expect(
-        formatRecordingDate(DateTime(2026, 10, 4, 17, 45), now: now),
+        formatRecordingDate(DateTime(2026, 10, 4, 17, 45), es, now: now),
         'Hoy, 17:45',
       );
       expect(
-        formatRecordingDate(DateTime(2026, 10, 3, 9, 3), now: now),
+        formatRecordingDate(DateTime(2026, 10, 3, 9, 3), es, now: now),
         'Ayer, 9:03',
       );
     });
@@ -51,6 +56,7 @@ void main() {
       expect(
         formatRecordingDate(
           DateTime(2025, 12, 31, 23, 59),
+          es,
           now: DateTime(2026, 1, 1, 0, 5),
         ),
         'Ayer, 23:59',
@@ -59,7 +65,7 @@ void main() {
 
     test('muestra la fecha completa para fechas anteriores', () {
       expect(
-        formatRecordingDate(DateTime(2026, 9, 28, 8, 30), now: now),
+        formatRecordingDate(DateTime(2026, 9, 28, 8, 30), es, now: now),
         '28 sept 2026, 8:30',
       );
     });
