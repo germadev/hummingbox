@@ -8,12 +8,22 @@ import '../utils/formatters.dart';
 import '../utils/search.dart';
 import 'waveform_seek_bar.dart';
 
-enum RecordingAction { edit, rename, transcribe, viewTranscript, share, delete }
+enum RecordingAction {
+  edit,
+  rename,
+  transcribe,
+  viewTranscript,
+  transcribeInLanguage,
+  share,
+  delete,
+}
 
 /// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
 /// toda la grabación. La onda hace de barra de progreso: muestra lo
 /// reproducido y permite saltar. Tocar el nombre permite cambiarlo. Debajo,
-/// el principio de su transcripción o lo que lleva transcrito.
+/// mientras se escucha o si coincide con la búsqueda, su transcripción, y lo
+/// que lleva transcrito si se ha pedido transcribirla (las de segundo plano,
+/// solo mientras se escucha).
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
@@ -24,7 +34,7 @@ class RecordingTile extends StatelessWidget {
     required this.onSeek,
     required this.onAction,
     this.onCancelTranscription,
-    this.highlight = const [],
+    this.search,
     this.showFolder = false,
   });
 
@@ -33,9 +43,10 @@ class RecordingTile extends StatelessWidget {
   final TranscriptionController transcriptions;
   final VoidCallback? onCancelTranscription;
 
-  /// Palabras buscadas (normalizadas): se resaltan en el nombre y en la
-  /// transcripción, que se muestra desde la primera que aparece.
-  final List<String> highlight;
+  /// Lo que se busca, si se está buscando: se resalta en el nombre y en la
+  /// transcripción, que se muestra (desde la primera coincidencia) si está
+  /// en ella.
+  final SearchQuery? search;
 
   /// Si se muestra la subcarpeta en la que está (en los resultados de una
   /// búsqueda, que incluye todas las carpetas).
@@ -68,194 +79,220 @@ class RecordingTile extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: theme.colorScheme.primary,
         );
+        final transcript = recording.transcript;
+        final search = this.search;
+        // Mientras se escucha o si tiene lo que se busca.
+        final showTranscript =
+            isCurrent ||
+            (transcript != null &&
+                search != null &&
+                search.findMatchesIn(transcript.text).isNotEmpty);
+        final showProgress =
+            transcriptions.isRequested(recording) ||
+            (isCurrent && transcriptions.isTranscribing(recording));
 
-        return Card.filled(
-          color: isCurrent
-              ? theme.colorScheme.secondaryContainer
-              : theme.colorScheme.surfaceContainerLow,
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              ListTile(
-                contentPadding: const EdgeInsets.only(left: 12, right: 4),
-                isThreeLine: true,
-                onTap: onTogglePlay,
-                leading: IconButton.filled(
-                  // ListTile tiñe los iconos de `leading`; se fija el color
-                  // para que contraste con el fondo del botón.
-                  color: theme.colorScheme.onPrimary,
-                  tooltip: isPlaying ? l10n.pause : l10n.play,
-                  // Mientras se lee el audio (p. ej. de Google Drive).
-                  icon: player.isLoading(recording)
-                      ? SizedBox.square(
-                          dimension: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: theme.colorScheme.onPrimary,
+        // Los toques en los huecos de la tarjeta no llegan a la lista (que
+        // deseleccionaría la grabación).
+        return GestureDetector(
+          onTap: () {},
+          excludeFromSemantics: true,
+          child: Card.filled(
+            color: isCurrent
+                ? theme.colorScheme.secondaryContainer
+                : theme.colorScheme.surfaceContainerLow,
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                  isThreeLine: true,
+                  onTap: onTogglePlay,
+                  leading: IconButton.filled(
+                    // ListTile tiñe los iconos de `leading`; se fija el color
+                    // para que contraste con el fondo del botón.
+                    color: theme.colorScheme.onPrimary,
+                    tooltip: isPlaying ? l10n.pause : l10n.play,
+                    // Mientras se lee el audio (p. ej. de Google Drive).
+                    icon: player.isLoading(recording)
+                        ? SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: theme.colorScheme.onPrimary,
+                            ),
+                          )
+                        : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                    onPressed: onTogglePlay,
+                  ),
+                  // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
+                  title: Builder(
+                    builder: (titleContext) => Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Semantics(
+                        button: true,
+                        hint: l10n.rename,
+                        child: InkWell(
+                          key: Key('name-${recording.id}'),
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () =>
+                              onAction(RecordingAction.rename, titleContext),
+                          child: Text.rich(
+                            _highlighted(
+                              recording.name,
+                              search,
+                              highlightStyle,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        )
-                      : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                  onPressed: onTogglePlay,
-                ),
-                // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
-                title: Builder(
-                  builder: (titleContext) => Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Semantics(
-                      button: true,
-                      hint: l10n.rename,
-                      child: InkWell(
-                        key: Key('name-${recording.id}'),
-                        borderRadius: BorderRadius.circular(4),
-                        onTap: () =>
-                            onAction(RecordingAction.rename, titleContext),
-                        child: Text.rich(
-                          _highlighted(
-                            recording.name,
-                            highlight,
-                            highlightStyle,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ),
                   ),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      [
-                        if (showFolder && recording.folder.isNotEmpty)
-                          recording.folder,
-                        formatRecordingDate(recording.createdAt, l10n),
-                        duration,
-                      ].join(' · '),
-                    ),
-                    Text(
-                      audio == null
-                          ? formatName(recording.format)
-                          : formatAudioInfo(audio, l10n),
-                      key: Key('audio-info-${recording.id}'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: mutedStyle,
-                    ),
-                  ],
-                ),
-                trailing: Builder(
-                  builder: (tileContext) => PopupMenuButton<RecordingAction>(
-                    tooltip: l10n.moreOptions,
-                    onSelected: (action) => onAction(action, tileContext),
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: RecordingAction.edit,
-                        child: ListTile(
-                          leading: const Icon(Icons.content_cut),
-                          title: Text(l10n.edit),
-                        ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        [
+                          if (showFolder && recording.folder.isNotEmpty)
+                            recording.folder,
+                          formatRecordingDate(recording.createdAt, l10n),
+                          duration,
+                        ].join(' · '),
                       ),
-                      PopupMenuItem(
-                        value: RecordingAction.rename,
-                        child: ListTile(
-                          leading: const Icon(Icons.edit_outlined),
-                          title: Text(l10n.rename),
-                        ),
-                      ),
-                      if (recording.transcript == null)
-                        PopupMenuItem(
-                          value: RecordingAction.transcribe,
-                          enabled: !transcriptions.isTranscribing(recording),
-                          child: ListTile(
-                            leading: const Icon(Icons.notes),
-                            title: Text(l10n.transcribe),
-                          ),
-                        )
-                      else
-                        PopupMenuItem(
-                          value: RecordingAction.viewTranscript,
-                          child: ListTile(
-                            leading: const Icon(Icons.subject),
-                            title: Text(l10n.viewTranscript),
-                          ),
-                        ),
-                      PopupMenuItem(
-                        value: RecordingAction.share,
-                        child: ListTile(
-                          leading: const Icon(Icons.share_outlined),
-                          title: Text(l10n.share),
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: RecordingAction.delete,
-                        child: ListTile(
-                          leading: const Icon(Icons.delete_outline),
-                          title: Text(l10n.delete),
-                        ),
+                      Text(
+                        audio == null
+                            ? formatName(recording.format)
+                            : formatAudioInfo(audio, l10n),
+                        key: Key('audio-info-${recording.id}'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: mutedStyle,
                       ),
                     ],
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: WaveformSeekBar(
-                  key: Key('waveform-${recording.id}'),
-                  levels: recording.waveform,
-                  duration: isCurrent && player.duration > Duration.zero
-                      ? player.duration
-                      : recording.duration,
-                  position: isCurrent ? player.position : null,
-                  onSeek: onSeek,
-                ),
-              ),
-              if (transcriptions.isTranscribing(recording))
-                _TranscriptionProgress(
-                  progress: transcriptions.progressOf(recording),
-                  running: transcriptions.isRunning(recording),
-                  onCancel: onCancelTranscription,
-                )
-              else if (recording.transcript case final transcript?)
-                InkWell(
-                  key: Key('transcript-${recording.id}'),
-                  onTap: () =>
-                      onAction(RecordingAction.viewTranscript, context),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsetsDirectional.only(
-                            end: 8,
-                            top: 2,
-                          ),
-                          child: Icon(
-                            Icons.subject,
-                            size: 16,
-                            color: theme.colorScheme.onSurfaceVariant,
+                  trailing: Builder(
+                    builder: (tileContext) => PopupMenuButton<RecordingAction>(
+                      tooltip: l10n.moreOptions,
+                      onSelected: (action) => onAction(action, tileContext),
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: RecordingAction.edit,
+                          child: ListTile(
+                            leading: const Icon(Icons.content_cut),
+                            title: Text(l10n.edit),
                           ),
                         ),
-                        Expanded(
-                          child: Text.rich(
-                            _highlighted(
-                              searchExcerpt(transcript.text, highlight),
-                              highlight,
-                              highlightStyle,
+                        PopupMenuItem(
+                          value: RecordingAction.rename,
+                          child: ListTile(
+                            leading: const Icon(Icons.edit_outlined),
+                            title: Text(l10n.rename),
+                          ),
+                        ),
+                        if (recording.transcript == null)
+                          PopupMenuItem(
+                            value: RecordingAction.transcribe,
+                            // Si va en segundo plano, se adelanta.
+                            enabled: !transcriptions.isRequested(recording),
+                            child: ListTile(
+                              leading: const Icon(Icons.notes),
+                              title: Text(l10n.transcribe),
                             ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: mutedStyle,
+                          )
+                        else
+                          PopupMenuItem(
+                            value: RecordingAction.viewTranscript,
+                            child: ListTile(
+                              leading: const Icon(Icons.subject),
+                              title: Text(l10n.viewTranscript),
+                            ),
+                          ),
+                        PopupMenuItem(
+                          value: RecordingAction.transcribeInLanguage,
+                          child: ListTile(
+                            leading: const Icon(Icons.translate),
+                            title: Text(l10n.transcribeInLanguage),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: RecordingAction.share,
+                          child: ListTile(
+                            leading: const Icon(Icons.share_outlined),
+                            title: Text(l10n.share),
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: RecordingAction.delete,
+                          child: ListTile(
+                            leading: const Icon(Icons.delete_outline),
+                            title: Text(l10n.delete),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: WaveformSeekBar(
+                    key: Key('waveform-${recording.id}'),
+                    levels: recording.waveform,
+                    duration: isCurrent && player.duration > Duration.zero
+                        ? player.duration
+                        : recording.duration,
+                    position: isCurrent ? player.position : null,
+                    onSeek: onSeek,
+                  ),
+                ),
+                if (showProgress)
+                  _TranscriptionProgress(
+                    progress: transcriptions.progressOf(recording),
+                    running: transcriptions.isRunning(recording),
+                    onCancel: onCancelTranscription,
+                  )
+                else if (transcript != null && showTranscript)
+                  InkWell(
+                    key: Key('transcript-${recording.id}'),
+                    onTap: () =>
+                        onAction(RecordingAction.viewTranscript, context),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsetsDirectional.only(
+                              end: 8,
+                              top: 2,
+                            ),
+                            child: Icon(
+                              Icons.subject,
+                              size: 16,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text.rich(
+                              _highlighted(
+                                search?.excerpt(transcript.text) ??
+                                    transcript.text,
+                                search,
+                                highlightStyle,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: mutedStyle,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -263,9 +300,9 @@ class RecordingTile extends StatelessWidget {
   }
 }
 
-/// [text] con las palabras de [terms] en el estilo [style].
-InlineSpan _highlighted(String text, List<String> terms, TextStyle style) {
-  final matches = findMatches(text, terms);
+/// [text] con lo que encuentra [search] en el estilo [style].
+InlineSpan _highlighted(String text, SearchQuery? search, TextStyle style) {
+  final matches = search?.findMatchesIn(text) ?? const [];
   if (matches.isEmpty) return TextSpan(text: text);
   final spans = <TextSpan>[];
   var position = 0;

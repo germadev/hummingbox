@@ -282,13 +282,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       };
 
   String _languageTitle(String language, AppLocalizations l10n) =>
-      switch (language) {
-        TranscriptionSettings.appLanguage => l10n.appLanguageOption(
-          languageName(Localizations.localeOf(context).languageCode),
-        ),
-        TranscriptionSettings.detectLanguage => l10n.detectLanguageOption,
-        final code => languageName(code),
-      };
+      transcriptionLanguageTitle(
+        language,
+        l10n,
+        appLanguage: Localizations.localeOf(context).languageCode,
+      );
 
   String _whisperSubtitle(AppLocalizations l10n) {
     if (_whisper.downloading case final model?) {
@@ -489,6 +487,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
               const Divider(),
               _SectionTitle(l10n.transcriptionSection),
+              SwitchListTile(
+                key: const Key('auto-transcribe-option'),
+                secondary: const Icon(Icons.auto_awesome_outlined),
+                title: Text(l10n.autoTranscribe),
+                subtitle: Text(l10n.autoTranscribeSubtitle),
+                value: settings.transcription.automatic,
+                onChanged: (automatic) => _sync.setTranscription(
+                  settings.transcription.copyWith(automatic: automatic),
+                ),
+              ),
               ListTile(
                 key: const Key('transcription-engine-option'),
                 leading: const Icon(Icons.notes),
@@ -534,6 +542,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _languageTitle(settings.transcription.language, l10n),
                 ),
                 onTap: _chooseLanguage,
+              ),
+              const Divider(),
+              _SectionTitle(l10n.searchSection),
+              SwitchListTile(
+                key: const Key('similar-words-option'),
+                secondary: const Icon(Icons.manage_search),
+                title: Text(l10n.similarWords),
+                subtitle: Text(l10n.similarWordsSubtitle),
+                value: settings.searchSimilarWords,
+                onChanged: _sync.setSearchSimilarWords,
               ),
               const Divider(),
               _SectionTitle(l10n.appearanceSection),

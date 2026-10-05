@@ -132,6 +132,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearSearch => 'Clear search';
 
   @override
+  String get pullToSearch => 'Pull to search';
+
+  @override
+  String get releaseToSearch => 'Release to search';
+
+  @override
   String get noSearchResultsTitle => 'No results';
 
   @override
@@ -618,6 +624,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get transcribeAgain => 'Transcribe again';
 
   @override
+  String get transcribeInLanguage => 'Transcribe in another language';
+
+  @override
+  String get recordingLanguage => 'Recording language';
+
+  @override
+  String get sameAsSettings => 'As in Settings';
+
+  @override
   String get deleteTranscript => 'Delete transcript';
 
   @override
@@ -632,6 +647,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transcriptionEngine => 'Transcribe with';
+
+  @override
+  String get autoTranscribe => 'Transcribe automatically';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'In the background, recordings that don\'t have a transcript yet';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Recordings can\'t be transcribed automatically';
 
   @override
   String get systemSpeechRecognition => 'System speech recognition';
@@ -700,6 +726,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get detectLanguageOption => 'Detect automatically (Whisper only)';
+
+  @override
+  String get searchSection => 'Search';
+
+  @override
+  String get similarWords => 'Include similar words';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Also with typos or variants, like “meetng” or “meetings” for “meeting”';
 
   @override
   String get appearanceSection => 'Appearance';

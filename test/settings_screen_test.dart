@@ -124,6 +124,22 @@ void main() {
     expect(tester.widget<SwitchListTile>(option).value, isFalse);
   });
 
+  testWidgets('desactiva buscar palabras parecidas', (tester) async {
+    await pumpSettings(tester);
+    final option = find.byKey(const Key('similar-words-option'));
+    await tester.scrollUntilVisible(option, 200);
+    await tester.ensureVisible(option);
+    await tester.pumpAndSettle();
+    expect(tester.widget<SwitchListTile>(option).value, isTrue);
+    expect(find.text('Incluir palabras parecidas'), findsOneWidget);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+
+    expect(store.settings.searchSimilarWords, isFalse);
+    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+  });
+
   group('transcripción', () {
     Future<void> tapOption(WidgetTester tester, String key) async {
       final option = find.byKey(Key(key));

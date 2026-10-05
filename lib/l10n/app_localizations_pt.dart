@@ -133,6 +133,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clearSearch => 'Limpar a pesquisa';
 
   @override
+  String get pullToSearch => 'Puxe para pesquisar';
+
+  @override
+  String get releaseToSearch => 'Solte para pesquisar';
+
+  @override
   String get noSearchResultsTitle => 'Nenhum resultado';
 
   @override
@@ -619,6 +625,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get transcribeAgain => 'Transcrever de novo';
 
   @override
+  String get transcribeInLanguage => 'Transcrever em outro idioma';
+
+  @override
+  String get recordingLanguage => 'Idioma da gravação';
+
+  @override
+  String get sameAsSettings => 'Como nas configurações';
+
+  @override
   String get deleteTranscript => 'Excluir transcrição';
 
   @override
@@ -632,6 +647,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get transcriptionEngine => 'Transcrever com';
+
+  @override
+  String get autoTranscribe => 'Transcrever automaticamente';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'Em segundo plano, as gravações que ainda não têm transcrição';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Não é possível transcrever as gravações automaticamente';
 
   @override
   String get systemSpeechRecognition => 'Reconhecimento de voz do sistema';
@@ -700,6 +726,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get detectLanguageOption => 'Detectar automaticamente (só Whisper)';
+
+  @override
+  String get searchSection => 'Pesquisa';
+
+  @override
+  String get similarWords => 'Incluir palavras parecidas';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Também com erros de digitação, como «reunao» para «reunião»';
 
   @override
   String get appearanceSection => 'Aparência';

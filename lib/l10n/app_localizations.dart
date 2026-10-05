@@ -338,6 +338,18 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get clearSearch;
 
+  /// Texto que aparece al tirar de la lista hacia abajo, antes del punto en que se busca al soltar
+  ///
+  /// In en, this message translates to:
+  /// **'Pull to search'**
+  String get pullToSearch;
+
+  /// Texto que aparece al tirar de la lista hacia abajo, pasado el punto: al soltar se busca
+  ///
+  /// In en, this message translates to:
+  /// **'Release to search'**
+  String get releaseToSearch;
+
   /// No description provided for @noSearchResultsTitle.
   ///
   /// In en, this message translates to:
@@ -1142,6 +1154,24 @@ abstract class AppLocalizations {
   /// **'Transcribe again'**
   String get transcribeAgain;
 
+  /// Acción para elegir el idioma de una grabación y volver a transcribirla en él
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe in another language'**
+  String get transcribeInLanguage;
+
+  /// Título del diálogo para elegir el idioma en que se transcribe una grabación
+  ///
+  /// In en, this message translates to:
+  /// **'Recording language'**
+  String get recordingLanguage;
+
+  /// Opción del idioma de una grabación: usar el idioma elegido en las opciones de la transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'As in Settings'**
+  String get sameAsSettings;
+
   /// No description provided for @deleteTranscript.
   ///
   /// In en, this message translates to:
@@ -1171,6 +1201,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Transcribe with'**
   String get transcriptionEngine;
+
+  /// Opción para transcribir en segundo plano las grabaciones sin transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe automatically'**
+  String get autoTranscribe;
+
+  /// No description provided for @autoTranscribeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'In the background, recordings that don\'t have a transcript yet'**
+  String get autoTranscribeSubtitle;
+
+  /// Aviso cuando la transcripción automática no puede seguir; la acción «Ver» explica por qué
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings can\'t be transcribed automatically'**
+  String get autoTranscriptionFailed;
 
   /// No description provided for @systemSpeechRecognition.
   ///
@@ -1279,6 +1327,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detect automatically (Whisper only)'**
   String get detectLanguageOption;
+
+  /// Título de la sección de las opciones de la búsqueda
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchSection;
+
+  /// Opción para que la búsqueda encuentre también palabras con erratas o variantes
+  ///
+  /// In en, this message translates to:
+  /// **'Include similar words'**
+  String get similarWords;
+
+  /// Los ejemplos se han comprobado con la búsqueda (test/search_test.dart)
+  ///
+  /// In en, this message translates to:
+  /// **'Also with typos or variants, like “meetng” or “meetings” for “meeting”'**
+  String get similarWordsSubtitle;
 
   /// Título de la sección de las opciones del aspecto de la app
   ///

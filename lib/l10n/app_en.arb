@@ -99,6 +99,14 @@
     "description": "Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)"
   },
   "clearSearch": "Clear search",
+  "pullToSearch": "Pull to search",
+  "@pullToSearch": {
+    "description": "Texto que aparece al tirar de la lista hacia abajo, antes del punto en que se busca al soltar"
+  },
+  "releaseToSearch": "Release to search",
+  "@releaseToSearch": {
+    "description": "Texto que aparece al tirar de la lista hacia abajo, pasado el punto: al soltar se busca"
+  },
   "noSearchResultsTitle": "No results",
   "noSearchResultsHint": "No recording has “{query}” in its name or transcript.",
   "@noSearchResultsHint": {
@@ -469,6 +477,18 @@
   "copy": "Copy",
   "copied": "Copied to the clipboard",
   "transcribeAgain": "Transcribe again",
+  "transcribeInLanguage": "Transcribe in another language",
+  "@transcribeInLanguage": {
+    "description": "Acción para elegir el idioma de una grabación y volver a transcribirla en él"
+  },
+  "recordingLanguage": "Recording language",
+  "@recordingLanguage": {
+    "description": "Título del diálogo para elegir el idioma en que se transcribe una grabación"
+  },
+  "sameAsSettings": "As in Settings",
+  "@sameAsSettings": {
+    "description": "Opción del idioma de una grabación: usar el idioma elegido en las opciones de la transcripción"
+  },
   "deleteTranscript": "Delete transcript",
   "transcriptDeleted": "Transcript deleted",
   "transcriptOutdated": "The recording has changed since it was transcribed.",
@@ -477,6 +497,15 @@
     "description": "Título de la sección de las opciones de la transcripción"
   },
   "transcriptionEngine": "Transcribe with",
+  "autoTranscribe": "Transcribe automatically",
+  "@autoTranscribe": {
+    "description": "Opción para transcribir en segundo plano las grabaciones sin transcripción"
+  },
+  "autoTranscribeSubtitle": "In the background, recordings that don't have a transcript yet",
+  "autoTranscriptionFailed": "Recordings can't be transcribed automatically",
+  "@autoTranscriptionFailed": {
+    "description": "Aviso cuando la transcripción automática no puede seguir; la acción «Ver» explica por qué"
+  },
   "systemSpeechRecognition": "System speech recognition",
   "systemSpeechDescription": "No downloads. On Android, needs version 13 or later",
   "whisperDescription": "On the device, offline. Needs a model download",
@@ -546,6 +575,18 @@
     }
   },
   "detectLanguageOption": "Detect automatically (Whisper only)",
+  "searchSection": "Search",
+  "@searchSection": {
+    "description": "Título de la sección de las opciones de la búsqueda"
+  },
+  "similarWords": "Include similar words",
+  "@similarWords": {
+    "description": "Opción para que la búsqueda encuentre también palabras con erratas o variantes"
+  },
+  "similarWordsSubtitle": "Also with typos or variants, like “meetng” or “meetings” for “meeting”",
+  "@similarWordsSubtitle": {
+    "description": "Los ejemplos se han comprobado con la búsqueda (test/search_test.dart)"
+  },
   "appearanceSection": "Appearance",
   "@appearanceSection": {
     "description": "Título de la sección de las opciones del aspecto de la app"

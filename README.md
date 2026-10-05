@@ -25,8 +25,9 @@ Google Drive.
   the app are picked up.
 - **Play and edit**: seek on the waveform, trim, change the volume,
   normalize and add fades.
-- **Transcribe** on the device with the system speech recognizer or Whisper.
-  Transcripts are saved as `.txt` files next to the audio.
+- **Transcribe** automatically, in the background, on the device with the
+  system speech recognizer or Whisper. Transcripts are saved as `.txt` files
+  next to the audio.
 - **Search** recording names and transcripts.
 - Light and dark themes, in English, Spanish, Italian, Portuguese, French,
   German, Chinese and Japanese.

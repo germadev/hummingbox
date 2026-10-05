@@ -133,6 +133,12 @@ class AppLocalizationsIt extends AppLocalizations {
   String get clearSearch => 'Cancella la ricerca';
 
   @override
+  String get pullToSearch => 'Trascina per cercare';
+
+  @override
+  String get releaseToSearch => 'Rilascia per cercare';
+
+  @override
   String get noSearchResultsTitle => 'Nessun risultato';
 
   @override
@@ -619,6 +625,15 @@ class AppLocalizationsIt extends AppLocalizations {
   String get transcribeAgain => 'Trascrivi di nuovo';
 
   @override
+  String get transcribeInLanguage => 'Trascrivi in un\'altra lingua';
+
+  @override
+  String get recordingLanguage => 'Lingua della registrazione';
+
+  @override
+  String get sameAsSettings => 'Come nelle impostazioni';
+
+  @override
   String get deleteTranscript => 'Elimina trascrizione';
 
   @override
@@ -633,6 +648,17 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get transcriptionEngine => 'Trascrivi con';
+
+  @override
+  String get autoTranscribe => 'Trascrivi automaticamente';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'In background, le registrazioni che non hanno ancora una trascrizione';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Impossibile trascrivere automaticamente le registrazioni';
 
   @override
   String get systemSpeechRecognition => 'Riconoscimento vocale di sistema';
@@ -701,6 +727,16 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get detectLanguageOption => 'Rileva automaticamente (solo Whisper)';
+
+  @override
+  String get searchSection => 'Ricerca';
+
+  @override
+  String get similarWords => 'Includi parole simili';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Anche con errori o varianti, come «riunone» o «riunioni» per «riunione»';
 
   @override
   String get appearanceSection => 'Aspetto';

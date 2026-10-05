@@ -9,11 +9,11 @@ import '../utils/formatters.dart';
 import '../utils/languages.dart';
 
 /// Lo que se pide al cerrar la pantalla de la transcripción.
-enum TranscriptAction { transcribeAgain, delete }
+enum TranscriptAction { transcribeAgain, transcribeInLanguage, delete }
 
 /// Muestra la transcripción de una grabación, para leerla, copiarla o
 /// compartirla. Devuelve una [TranscriptAction] si se pide volver a
-/// transcribirla o eliminarla.
+/// transcribirla (en el mismo idioma o en otro) o eliminarla.
 class TranscriptScreen extends StatelessWidget {
   const TranscriptScreen({super.key, required this.recording});
 
@@ -80,6 +80,13 @@ class TranscriptScreen extends StatelessWidget {
                 child: ListTile(
                   leading: const Icon(Icons.refresh),
                   title: Text(l10n.transcribeAgain),
+                ),
+              ),
+              PopupMenuItem(
+                value: TranscriptAction.transcribeInLanguage,
+                child: ListTile(
+                  leading: const Icon(Icons.translate),
+                  title: Text(l10n.transcribeInLanguage),
                 ),
               ),
               PopupMenuItem(

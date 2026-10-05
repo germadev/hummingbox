@@ -136,6 +136,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clearSearch => 'Effacer la recherche';
 
   @override
+  String get pullToSearch => 'Tirez pour rechercher';
+
+  @override
+  String get releaseToSearch => 'Relâchez pour rechercher';
+
+  @override
   String get noSearchResultsTitle => 'Aucun résultat';
 
   @override
@@ -625,6 +631,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get transcribeAgain => 'Transcrire à nouveau';
 
   @override
+  String get transcribeInLanguage => 'Transcrire dans une autre langue';
+
+  @override
+  String get recordingLanguage => 'Langue de l\'enregistrement';
+
+  @override
+  String get sameAsSettings => 'Comme dans les réglages';
+
+  @override
   String get deleteTranscript => 'Supprimer la transcription';
 
   @override
@@ -639,6 +654,17 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get transcriptionEngine => 'Transcrire avec';
+
+  @override
+  String get autoTranscribe => 'Transcrire automatiquement';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'En arrière-plan, les enregistrements qui n\'ont pas encore de transcription';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Impossible de transcrire les enregistrements automatiquement';
 
   @override
   String get systemSpeechRecognition => 'Reconnaissance vocale du système';
@@ -709,6 +735,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get detectLanguageOption =>
       'Détecter automatiquement (Whisper uniquement)';
+
+  @override
+  String get searchSection => 'Recherche';
+
+  @override
+  String get similarWords => 'Inclure les mots similaires';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Aussi avec des fautes ou des variantes, comme « reunon » ou « réunions » pour « réunion »';
 
   @override
   String get appearanceSection => 'Apparence';

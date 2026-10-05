@@ -130,6 +130,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clearSearch => '検索をクリア';
 
   @override
+  String get pullToSearch => '引っ張って検索';
+
+  @override
+  String get releaseToSearch => '指を離して検索';
+
+  @override
   String get noSearchResultsTitle => '結果なし';
 
   @override
@@ -600,6 +606,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get transcribeAgain => 'もう一度文字起こし';
 
   @override
+  String get transcribeInLanguage => '別の言語で文字起こし';
+
+  @override
+  String get recordingLanguage => '録音の言語';
+
+  @override
+  String get sameAsSettings => '設定と同じ';
+
+  @override
   String get deleteTranscript => '文字起こしを削除';
 
   @override
@@ -613,6 +628,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get transcriptionEngine => '文字起こしの方法';
+
+  @override
+  String get autoTranscribe => '自動で文字起こし';
+
+  @override
+  String get autoTranscribeSubtitle => 'まだ文字起こしされていない録音をバックグラウンドで処理します';
+
+  @override
+  String get autoTranscriptionFailed => '録音を自動で文字起こしできません';
 
   @override
   String get systemSpeechRecognition => 'システムの音声認識';
@@ -679,6 +703,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get detectLanguageOption => '自動検出（Whisper のみ）';
+
+  @override
+  String get searchSection => '検索';
+
+  @override
+  String get similarWords => '似た単語も含める';
+
+  @override
+  String get similarWordsSubtitle => '入力ミスや語形の違いがあっても見つけます（ラテン文字の言語のみ）';
 
   @override
   String get appearanceSection => '外観';

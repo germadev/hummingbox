@@ -138,6 +138,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clearSearch => 'Suche löschen';
 
   @override
+  String get pullToSearch => 'Ziehen zum Suchen';
+
+  @override
+  String get releaseToSearch => 'Loslassen zum Suchen';
+
+  @override
   String get noSearchResultsTitle => 'Keine Ergebnisse';
 
   @override
@@ -629,6 +635,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get transcribeAgain => 'Erneut transkribieren';
 
   @override
+  String get transcribeInLanguage => 'In einer anderen Sprache transkribieren';
+
+  @override
+  String get recordingLanguage => 'Sprache der Aufnahme';
+
+  @override
+  String get sameAsSettings => 'Wie in den Einstellungen';
+
+  @override
   String get deleteTranscript => 'Transkript löschen';
 
   @override
@@ -643,6 +658,17 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get transcriptionEngine => 'Transkribieren mit';
+
+  @override
+  String get autoTranscribe => 'Automatisch transkribieren';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'Im Hintergrund die Aufnahmen, die noch kein Transkript haben';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Die Aufnahmen können nicht automatisch transkribiert werden';
 
   @override
   String get systemSpeechRecognition => 'Spracherkennung des Systems';
@@ -713,6 +739,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get detectLanguageOption => 'Automatisch erkennen (nur Whisper)';
+
+  @override
+  String get searchSection => 'Suche';
+
+  @override
+  String get similarWords => 'Ähnliche Wörter einbeziehen';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Auch mit Tippfehlern oder Varianten, wie „Besprechng“ oder „Besprechungen“ für „Besprechung“';
 
   @override
   String get appearanceSection => 'Darstellung';

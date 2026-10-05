@@ -130,6 +130,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearSearch => '清除搜索';
 
   @override
+  String get pullToSearch => '下拉搜索';
+
+  @override
+  String get releaseToSearch => '松开即可搜索';
+
+  @override
   String get noSearchResultsTitle => '无结果';
 
   @override
@@ -595,6 +601,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get transcribeAgain => '重新转写';
 
   @override
+  String get transcribeInLanguage => '用其他语言转写';
+
+  @override
+  String get recordingLanguage => '录音的语言';
+
+  @override
+  String get sameAsSettings => '与设置相同';
+
+  @override
   String get deleteTranscript => '删除转写';
 
   @override
@@ -608,6 +623,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get transcriptionEngine => '转写方式';
+
+  @override
+  String get autoTranscribe => '自动转写';
+
+  @override
+  String get autoTranscribeSubtitle => '在后台转写还没有转写文本的录音';
+
+  @override
+  String get autoTranscriptionFailed => '无法自动转写录音';
 
   @override
   String get systemSpeechRecognition => '系统语音识别';
@@ -674,6 +698,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get detectLanguageOption => '自动检测（仅限 Whisper）';
+
+  @override
+  String get searchSection => '搜索';
+
+  @override
+  String get similarWords => '包括相似的词';
+
+  @override
+  String get similarWordsSubtitle => '也查找有拼写错误或词形变化的词（仅限拉丁字母语言）';
 
   @override
   String get appearanceSection => '外观';

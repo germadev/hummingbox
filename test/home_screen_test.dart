@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:voicerecorder/app.dart';
@@ -30,11 +31,17 @@ void main() {
 
   setUpAll(() => initializeDateFormatting('es'));
 
+  /// Sin transcripción automática: los tests que no son suyos no esperan
+  /// transcripciones ni `.txt` (ver el grupo «transcripción automática»).
+  const manual = TranscriptionSettings(automatic: false);
+
   setUp(() {
     repository = InMemoryRecordingsRepository();
     recorder = FakeAudioRecorderService();
     player = FakeAudioPlayerService();
-    store = InMemorySettingsStore(const AppSettings(folder: testFolder));
+    store = InMemorySettingsStore(
+      const AppSettings(folder: testFolder, transcription: manual),
+    );
     folders = FakeFolderAccess();
     drive = FakeDriveService();
     screen = FakeScreenAwake();
@@ -47,11 +54,12 @@ void main() {
     String name, {
     List<double>? waveform,
     String folder = '',
+    DateTime? createdAt,
   }) => Recording(
     id: id,
     path: '/fake/$id.m4a',
     name: name,
-    createdAt: DateTime(2026, 9, 28, 8, 30),
+    createdAt: createdAt ?? DateTime(2026, 9, 28, 8, 30),
     duration: const Duration(seconds: 83),
     waveform: waveform,
     folder: folder,
@@ -374,7 +382,11 @@ void main() {
   });
 
   group('menú inicial', () {
-    setUp(() => store = InMemorySettingsStore());
+    setUp(
+      () => store = InMemorySettingsStore(
+        const AppSettings(transcription: manual),
+      ),
+    );
 
     testWidgets('sin destino, pide elegirlo antes de grabar', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
@@ -781,7 +793,7 @@ void main() {
       await tester.tap(find.text(item));
     }
 
-    testWidgets('transcribe desde el menú y muestra el principio del texto', (
+    testWidgets('transcribe desde el menú y muestra el texto al escucharla', (
       tester,
     ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
@@ -791,12 +803,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(transcriber.calls, [('a', TranscriptionEngine.system, 'es')]);
-      expect(find.text('Hola, esto es una prueba.'), findsOneWidget);
       expect(find.text('Transcripción lista'), findsOneWidget);
       expect(
         repository.byId('a').transcript!.text,
         'Hola, esto es una prueba.',
       );
+      // El texto solo se ve mientras se escucha.
+      expect(find.text('Hola, esto es una prueba.'), findsNothing);
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(find.text('Hola, esto es una prueba.'), findsOneWidget);
 
       // Ahora el menú lleva a la transcripción.
       await tester.tap(find.byTooltip('Más opciones'));
@@ -812,6 +828,7 @@ void main() {
         transcription: TranscriptionSettings(
           engine: TranscriptionEngine.whisper,
           language: TranscriptionSettings.detectLanguage,
+          automatic: false,
         ),
       );
       await pumpApp(tester);
@@ -933,6 +950,10 @@ void main() {
     testWidgets('abre la transcripción y la elimina', (tester) async {
       repository = InMemoryRecordingsRepository([transcribed()]);
       await pumpApp(tester);
+      // Al escucharla se ve su transcripción, que se abre al tocarla.
+      expect(find.byKey(const Key('transcript-a')), findsNothing);
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('transcript-a')));
       await tester.pumpAndSettle();
@@ -951,6 +972,8 @@ void main() {
       expect(find.text('Transcripción eliminada'), findsOneWidget);
       expect(find.text('Buenos días a todos.'), findsNothing);
       expect(repository.byId('a').transcript, isNull);
+      // No se vuelve a transcribir sola.
+      expect(repository.byId('a').needsTranscript, isFalse);
     });
 
     testWidgets('avisa si la grabación cambió y deja volver a transcribir', (
@@ -959,7 +982,7 @@ void main() {
       repository = InMemoryRecordingsRepository([transcribed(revision: 1)]);
       await pumpApp(tester);
 
-      await tester.tap(find.byKey(const Key('transcript-a')));
+      await chooseInMenu(tester, 'Ver transcripción');
       await tester.pumpAndSettle();
       expect(
         find.text('La grabación ha cambiado desde que se transcribió.'),
@@ -973,7 +996,313 @@ void main() {
 
       expect(transcriber.calls, hasLength(1));
       expect(repository.byId('a').transcript!.revision, 1);
-      expect(find.text('Hola, esto es una prueba.'), findsOneWidget);
+      expect(
+        repository.byId('a').transcript!.text,
+        'Hola, esto es una prueba.',
+      );
+    });
+  });
+
+  group('transcripción automática', () {
+    setUp(() => store.settings = const AppSettings(folder: testFolder));
+
+    /// Sale de la app y vuelve a ella.
+    void leaveAndReturn(WidgetTester tester) {
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+    }
+
+    Iterable<String> transcribed() => transcriber.calls.map((c) => c.$1);
+
+    testWidgets('transcribe sola, en segundo plano, de la más reciente a la '
+        'más antigua', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('old', 'Antigua', createdAt: DateTime(2026, 9, 1)),
+        sample('new', 'Reciente', createdAt: DateTime(2026, 9, 30)),
+      ]);
+      final gate = transcriber.gate = Completer<void>();
+      await pumpApp(tester);
+
+      expect(transcribed(), ['new']);
+      // En segundo plano no se ve el progreso, y se puede pedir.
+      expect(find.byKey(const Key('transcription-progress')), findsNothing);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(transcribed(), ['new', 'old']);
+      expect(repository.byId('new').transcript, isNotNull);
+      expect(repository.byId('old').transcript, isNotNull);
+      // Se guarda junto al audio, sin avisos.
+      expect(
+        folders.files.values,
+        containsAll(['Reciente.txt', 'Antigua.txt']),
+      );
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('no transcribe si está desactivada', (tester) async {
+      store.settings = const AppSettings(
+        folder: testFolder,
+        transcription: manual,
+      );
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      expect(transcriber.calls, isEmpty);
+    });
+
+    testWidgets('al activarla en las opciones, empieza', (tester) async {
+      store.settings = const AppSettings(
+        folder: testFolder,
+        transcription: manual,
+      );
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('settings-button')));
+      await tester.pumpAndSettle();
+      final option = find.byKey(const Key('auto-transcribe-option'));
+      await tester.scrollUntilVisible(option, 200);
+      await tester.ensureVisible(option);
+      await tester.pumpAndSettle();
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+
+      expect(store.settings.transcription.automatic, isTrue);
+      expect(transcribed(), ['a']);
+      expect(repository.byId('a').transcript, isNotNull);
+    });
+
+    testWidgets('la grabación nueva se transcribe al guardarla; mientras se '
+        'graba, espera', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      final gate = transcriber.gate = Completer<void>();
+      await pumpApp(tester);
+      expect(transcribed(), ['a']);
+
+      // Al grabar se interrumpe y no empieza ninguna otra.
+      await tester.tap(record());
+      await pumpAnimations(tester);
+      gate.complete();
+      await pumpAnimations(tester);
+      expect(transcribed(), ['a']);
+      expect(repository.byId('a').transcript, isNull);
+
+      transcriber.gate = null;
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+
+      // Vuelve a empezar la interrumpida y sigue con la nueva.
+      expect(transcribed(), ['a', 'a', 'rec_0']);
+      expect(repository.byId('a').transcript, isNotNull);
+      expect(repository.byId('rec_0').transcript, isNotNull);
+    });
+
+    testWidgets('sin palabras, no lo vuelve a intentar', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      transcriber.error = const TranscriptionException(
+        TranscriptionError.noSpeech,
+      );
+      await pumpApp(tester);
+
+      expect(repository.byId('a').needsTranscript, isFalse);
+      expect(find.byType(SnackBar), findsNothing);
+      // Ni al volver a la app.
+      leaveAndReturn(tester);
+      await tester.pumpAndSettle();
+      expect(transcribed(), ['a']);
+    });
+
+    testWidgets('si no se puede, se detiene y avisa una vez de por qué', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Entrevista', createdAt: DateTime(2026, 9, 30)),
+        sample('b', 'Notas'),
+      ]);
+      transcriber.error = const TranscriptionException(
+        TranscriptionError.systemUnavailable,
+      );
+      await pumpApp(tester);
+
+      // No sigue con las demás.
+      expect(transcribed(), ['a']);
+      expect(
+        find.text('No se pueden transcribir las grabaciones automáticamente'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Ver'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('El reconocimiento de voz no está disponible'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      // Al volver a la app lo intenta otra vez, sin repetir el aviso.
+      leaveAndReturn(tester);
+      await tester.pumpAndSettle();
+      expect(transcribed(), ['a', 'a']);
+      expect(
+        find.text('No se pueden transcribir las grabaciones automáticamente'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('pedir la que va en segundo plano muestra su progreso', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      final gate = transcriber.gate = Completer<void>();
+      await pumpApp(tester);
+      expect(find.byKey(const Key('transcription-progress')), findsNothing);
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Transcribir'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Transcribiendo… 25\u00a0%'), findsOneWidget);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Transcripción lista'), findsOneWidget);
+      // No se ha transcrito dos veces.
+      expect(transcribed(), ['a']);
+    });
+
+    testWidgets('no vuelve a transcribir la que se ha eliminado', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      expect(repository.byId('a').transcript, isNotNull);
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ver transcripción'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar transcripción'));
+      await tester.pumpAndSettle();
+
+      expect(repository.byId('a').transcript, isNull);
+      leaveAndReturn(tester);
+      await tester.pumpAndSettle();
+      expect(transcribed(), ['a']);
+    });
+  });
+
+  group('idioma de cada grabación', () {
+    Future<void> chooseInMenu(WidgetTester tester, String item) async {
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> chooseLanguage(WidgetTester tester, String language) async {
+      expect(find.text('Idioma de la grabación'), findsOneWidget);
+      await tester.tap(find.text(language));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('se transcribe en el idioma elegido para la grabación, también '
+        'al volver a transcribir', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Interview')]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      // Por defecto, el de las opciones.
+      expect(find.text('Como en las opciones'), findsOneWidget);
+      expect(find.text('El de la app (Español)'), findsOneWidget);
+      await chooseLanguage(tester, 'English');
+
+      expect(repository.byId('a').transcriptionLanguage, 'en');
+      expect(transcriber.calls, [('a', TranscriptionEngine.system, 'en')]);
+      expect(find.text('Transcripción lista'), findsOneWidget);
+
+      // «Volver a transcribir» lo respeta.
+      await chooseInMenu(tester, 'Ver transcripción');
+      await chooseInMenu(tester, 'Volver a transcribir');
+      expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'en'));
+    });
+
+    testWidgets('desde la transcripción, y «Como en las opciones» vuelve al '
+        'de las opciones', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: 'Interview',
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: 'en',
+          transcript: Transcript(
+            text: 'Hello everyone.',
+            engine: TranscriptionEngine.system,
+            language: 'en-US',
+            revision: 0,
+            createdAt: DateTime(2026, 9, 28, 9),
+          ),
+        ),
+      ]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Ver transcripción');
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await chooseLanguage(tester, 'Français');
+      expect(transcriber.calls, [('a', TranscriptionEngine.system, 'fr')]);
+      expect(repository.byId('a').transcriptionLanguage, 'fr');
+
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await chooseLanguage(tester, 'Como en las opciones');
+      expect(repository.byId('a').transcriptionLanguage, isNull);
+      expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'es'));
+    });
+
+    testWidgets('la transcripción automática usa el idioma de la grabación, y '
+        'si no se puede, solo se salta esa', (tester) async {
+      store.settings = const AppSettings(folder: testFolder);
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'de',
+          path: '/fake/de.m4a',
+          name: 'Gespräch',
+          createdAt: DateTime(2026, 9, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: 'de',
+        ),
+        sample('es', 'Entrevista'),
+      ]);
+      transcriber.errorFor = (language) => language == 'de'
+          ? const TranscriptionException(
+              TranscriptionError.needsDownload,
+              language: 'de-DE',
+            )
+          : null;
+      await pumpApp(tester);
+
+      expect(transcriber.calls, [
+        ('de', TranscriptionEngine.system, 'de'),
+        ('es', TranscriptionEngine.system, 'es'),
+      ]);
+      expect(repository.byId('es').transcript, isNotNull);
+      expect(
+        find.text('No se pueden transcribir las grabaciones automáticamente'),
+        findsNothing,
+      );
     });
   });
 
@@ -1013,6 +1342,43 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
+    });
+
+    testWidgets('la lupa está en el centro de la barra', (tester) async {
+      await pumpApp(tester);
+      final search = tester.getCenter(find.byKey(const Key('search-button')));
+
+      expect(search.dx, tester.getSize(find.byType(AppBar)).width / 2);
+    });
+
+    testWidgets('el campo tiene la lupa a la izquierda y la X a la derecha, '
+        'alineados con los botones', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'reunión');
+      await tester.pump();
+
+      final folders = tester.getCenter(find.byKey(const Key('folders-button')));
+      final settings = tester.getCenter(
+        find.byKey(const Key('settings-button')),
+      );
+      final magnifier = tester.getCenter(
+        find.descendant(of: searchField(), matching: find.byIcon(Icons.search)),
+      );
+      final text = tester.getRect(find.byType(EditableText));
+      final clear = tester.getCenter(find.byTooltip('Borrar la búsqueda'));
+
+      for (final y in [settings.dy, magnifier.dy, text.center.dy, clear.dy]) {
+        expect(y, moreOrLessEquals(folders.dy, epsilon: 0.5));
+      }
+      expect(magnifier.dx, lessThan(text.left));
+      expect(clear.dx, greaterThan(text.right));
+      expect(clear.dx, lessThan(settings.dx));
+      expect(
+        tester.widget<TextField>(searchField()).textAlign,
+        TextAlign.start,
+      );
     });
 
     testWidgets('mientras se graba no se abre el menú de carpetas', (
@@ -1075,6 +1441,153 @@ void main() {
       expect(searchField(), findsNothing);
       expect(find.byKey(const ValueKey('a')), findsOneWidget);
       expect(find.byKey(const ValueKey('b')), findsNothing);
+    });
+
+    testWidgets('la transcripción se ve al escucharla o si tiene lo buscado', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Entrevista', 'Buenos días a todos.'),
+      ]);
+      await pumpApp(tester);
+      Finder transcript() => find.byKey(const Key('transcript-a'));
+      expect(transcript(), findsNothing);
+
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      // Solo en el nombre: no.
+      await tester.enterText(searchField(), 'entrevista');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('a')), findsOneWidget);
+      expect(transcript(), findsNothing);
+      await tester.enterText(searchField(), 'buenos');
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Borrar la búsqueda'));
+      await tester.pumpAndSettle();
+      expect(transcript(), findsNothing);
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+    });
+
+    testWidgets('encuentra palabras parecidas, después de las exactas', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Clase', 'Hoy repasamos el presupuesto.'),
+        withTranscript('b', 'Notas', 'El presupusto no cuadra.'),
+        sample('c', 'Idea para el viaje'),
+      ]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(searchField(), 'presupusto');
+      await tester.pumpAndSettle();
+      // Primero la que lo tiene tal cual, después la parecida.
+      final exact = tester.getTopLeft(find.byKey(const ValueKey('b'))).dy;
+      final similar = tester.getTopLeft(find.byKey(const ValueKey('a'))).dy;
+      expect(exact, lessThan(similar));
+      expect(find.byKey(const ValueKey('c')), findsNothing);
+      // La parecida, resaltada.
+      final snippet = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const Key('transcript-a')),
+          matching: find.byType(Text),
+        ),
+      );
+      final highlighted = [
+        for (final span in (snippet.textSpan! as TextSpan).children!)
+          if (span.style?.fontWeight == FontWeight.bold)
+            (span as TextSpan).text,
+      ];
+      expect(highlighted, ['presupuesto']);
+    });
+
+    testWidgets('sin palabras parecidas, solo las exactas', (tester) async {
+      store.settings = store.settings.withSearchSimilarWords(false);
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Clase', 'Hoy repasamos el presupuesto.'),
+        withTranscript('b', 'Notas', 'El presupusto no cuadra.'),
+      ]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'presupusto');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('b')), findsOneWidget);
+      expect(find.byKey(const ValueKey('a')), findsNothing);
+    });
+
+    testWidgets('tocar el fondo de la lista quita el foco del campo', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      Future<void> tapBackground() async {
+        await tester.tapAt(
+          tester.getBottomLeft(find.byType(ListView)) + const Offset(400, -10),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // Sin nada escrito, se cierra.
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tapBackground();
+      expect(searchField(), findsNothing);
+
+      // Con algo escrito, se queda, sin foco ni teclado.
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'entre');
+      await tester.pumpAndSettle();
+      await tapBackground();
+      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
+
+    testWidgets('tocar el fondo deselecciona la grabación, salvo si suena', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Entrevista', 'Buenos días a todos.'),
+      ]);
+      await pumpApp(tester);
+      final background =
+          tester.getBottomLeft(find.byType(ListView)) + const Offset(400, -10);
+      Finder transcript() => find.byKey(const Key('transcript-a'));
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+
+      // Sonando, sigue sonando.
+      await tester.tapAt(background);
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+      expect(player.calls.last, isNot('stop'));
+
+      // Un toque en un hueco de la tarjeta no la deselecciona.
+      await tester.tap(find.byTooltip('Pausar'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(
+        Offset(
+          tester.getTopLeft(find.byKey(const ValueKey('a'))).dx + 24,
+          tester.getCenter(find.byKey(const Key('waveform-a'))).dy,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+
+      // En pausa, se deselecciona.
+      await tester.tapAt(background);
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'stop');
+      expect(transcript(), findsNothing);
     });
 
     testWidgets('el extracto de la transcripción muestra la coincidencia', (
@@ -1167,6 +1680,114 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(searchField(), findsNothing);
+    });
+
+    testWidgets('al tirar aparece un fondo tras la lupa y un texto; al '
+        'pasar el punto, el fondo se pone morado y vibra; se busca al '
+        'soltar, y volviendo atrás se cancela', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      final haptics = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate') {
+            haptics.add(call.arguments);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      await pumpApp(tester);
+      final colors = Theme.of(tester.element(find.byType(ListView)))
+          .colorScheme;
+      final background = find.byKey(const Key('pull-to-search'));
+      final hint = find.byKey(const Key('pull-to-search-hint'));
+      Color? color() =>
+          (tester.widget<AnimatedContainer>(background).decoration!
+                  as BoxDecoration)
+              .color;
+      String hintText() => tester.widget<Text>(hint).data!;
+      final button = find.byKey(const Key('search-button'));
+      final atRest = tester.getCenter(button);
+      final barBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
+      expect(background, findsNothing);
+      expect(hint, findsNothing);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      // Se tira poco a poco hasta pasar el punto.
+      while (haptics.isEmpty) {
+        await gesture.moveBy(const Offset(0, 10));
+        await tester.pump();
+        // La lupa no se mueve; el fondo, gris claro, aparece detrás.
+        expect(tester.getCenter(button), atRest);
+        if (background.evaluate().isNotEmpty && haptics.isEmpty) {
+          expect(tester.getCenter(background), atRest);
+          expect(color(), colors.surfaceContainerHighest);
+          // El texto, entre la barra y la primera grabación.
+          expect(hintText(), 'Tira para buscar');
+          final text = tester.getRect(find.text('Tira para buscar'));
+          final visible = tester.getRect(
+            find.ancestor(of: hint, matching: find.byType(ClipRect)).first,
+          );
+          expect(visible.top, greaterThanOrEqualTo(barBottom - 1e-6));
+          expect(
+            visible.bottom,
+            lessThanOrEqualTo(
+              tester.getTopLeft(find.byKey(const ValueKey('a'))).dy + 1e-6,
+            ),
+          );
+          expect(text.center.dx, atRest.dx);
+        }
+      }
+      expect(haptics, ['HapticFeedbackType.mediumImpact']);
+      expect(color(), colors.primary);
+      expect(hintText(), 'Suelta para buscar');
+      // Hasta soltar, no se busca.
+      expect(searchField(), findsNothing);
+
+      // Volviendo a subir antes del punto se cancela.
+      while (color() == colors.primary) {
+        await gesture.moveBy(const Offset(0, -5));
+        await tester.pump();
+      }
+      expect(color(), colors.surfaceContainerHighest);
+      expect(hintText(), 'Tira para buscar');
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(searchField(), findsNothing);
+      expect(background, findsNothing);
+      expect(hint, findsNothing);
+
+      // Pasándolo y soltando, sí.
+      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(searchField(), findsOneWidget);
+      expect(haptics, hasLength(2));
+    });
+
+    testWidgets('con la búsqueda ya enfocada, tirar vuelve a mostrar el '
+        'teclado', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      // Se oculta el teclado (p. ej. con «atrás» en Android) sin perder el
+      // foco.
+      tester.testTextInput.hide();
+      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+
+      expect(searchFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
     });
   });
 
@@ -1327,6 +1948,8 @@ void main() {
     await tester.pumpAndSettle();
     final option = find.byKey(const Key('theme-option'));
     await tester.scrollUntilVisible(option, 200);
+    await tester.ensureVisible(option);
+    await tester.pumpAndSettle();
     await tester.tap(option);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Claro'));

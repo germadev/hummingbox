@@ -375,6 +375,10 @@ class StorageSync extends ChangeNotifier {
   Future<void> setTranscription(TranscriptionSettings transcription) =>
       _change((settings) => settings.withTranscription(transcription));
 
+  /// Elige si la búsqueda encuentra también palabras parecidas.
+  Future<void> setSearchSimilarWords(bool similar) =>
+      _change((settings) => settings.withSearchSimilarWords(similar));
+
   /// Cambia el tema de la app.
   Future<void> setTheme(AppTheme theme) =>
       _change((settings) => settings.withTheme(theme));

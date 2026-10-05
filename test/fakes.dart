@@ -215,6 +215,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         audio: audio,
         folder: current.folder,
         transcript: current.transcript,
+        transcriptionLanguage: current.transcriptionLanguage,
       ),
     );
   }
@@ -233,9 +234,54 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   @override
   Future<Recording> setTranscript(
     Recording recording,
-    Transcript? transcript,
-  ) async =>
-      _replace(byId(recording.id).copyWith(transcript: () => transcript));
+    Transcript? transcript, {
+    bool keepExisting = false,
+  }) async {
+    final current = byId(recording.id);
+    if (keepExisting && current.transcript != null) return current;
+    return _replace(
+      Recording(
+        id: current.id,
+        path: current.path,
+        name: current.name,
+        createdAt: current.createdAt,
+        duration: current.duration,
+        waveform: current.waveform,
+        revision: current.revision,
+        copies: current.copies,
+        audio: current.audio,
+        folder: current.folder,
+        transcript: transcript,
+        noAutoTranscript: transcript == null ? recording.revision : null,
+        transcriptionLanguage: current.transcriptionLanguage,
+      ),
+    );
+  }
+
+  @override
+  Future<Recording> setTranscriptionLanguage(
+    Recording recording,
+    String? language,
+  ) async {
+    final current = byId(recording.id);
+    return _replace(
+      Recording(
+        id: current.id,
+        path: current.path,
+        name: current.name,
+        createdAt: current.createdAt,
+        duration: current.duration,
+        waveform: current.waveform,
+        revision: current.revision,
+        copies: current.copies,
+        audio: current.audio,
+        folder: current.folder,
+        transcript: current.transcript,
+        noAutoTranscript: current.noAutoTranscript,
+        transcriptionLanguage: language,
+      ),
+    );
+  }
 
   @override
   Future<Recording> setCopy(
@@ -289,6 +335,8 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         audio: audioChanged ? null : current.audio,
         folder: current.folder,
         transcript: current.transcript,
+        noAutoTranscript: current.noAutoTranscript,
+        transcriptionLanguage: current.transcriptionLanguage,
       ),
     );
   }
@@ -995,6 +1043,9 @@ class FakeTranscriber implements Transcriber {
   /// Si se indica, transcribir falla con este error.
   Object? error;
 
+  /// Si se indica, el error (o `null`) con que falla según el idioma.
+  Object? Function(String language)? errorFor;
+
   /// Si se indica, transcribir espera a que se complete.
   Completer<void>? gate;
 
@@ -1016,6 +1067,7 @@ class FakeTranscriber implements Transcriber {
       throw const TranscriptionException(TranscriptionError.canceled);
     }
     if (error case final error?) throw error;
+    if (errorFor?.call(language) case final error?) throw error;
     return Transcript(
       text: text,
       engine: engine,
