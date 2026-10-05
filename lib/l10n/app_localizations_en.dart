@@ -31,9 +31,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nameLabel => 'Name';
 
   @override
-  String get defaultRecordingName => 'Recording';
-
-  @override
   String editedCopyName(String name) {
     return '$name (edited)';
   }
@@ -751,4 +748,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String get renameToTranscriptTitle => 'Rename the recording?';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return 'With the new transcript, “$current” would be called “$name”.';
+  }
+
+  @override
+  String get keepName => 'Keep name';
+
+  @override
+  String get piano => 'Piano';
+
+  @override
+  String get pianoHint =>
+      'Play a key to hear its note.\nSwipe over the small keyboard to move along it.';
+
+  @override
+  String get noteNames => 'C D E F G A B';
+
+  @override
+  String get close => 'Close';
 }

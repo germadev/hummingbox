@@ -31,9 +31,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nameLabel => '名称';
 
   @override
-  String get defaultRecordingName => '录音';
-
-  @override
   String editedCopyName(String name) {
     return '$name（已编辑）';
   }
@@ -722,4 +719,27 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get themeDark => '深色';
+
+  @override
+  String get renameToTranscriptTitle => '重命名录音？';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return '根据新的转写内容，“$current”将改名为“$name”。';
+  }
+
+  @override
+  String get keepName => '保留原名';
+
+  @override
+  String get piano => '钢琴';
+
+  @override
+  String get pianoHint => '点按琴键即可听到音符。\n在小键盘上滑动可移动位置。';
+
+  @override
+  String get noteNames => 'C D E F G A B';
+
+  @override
+  String get close => '关闭';
 }

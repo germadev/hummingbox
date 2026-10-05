@@ -7,7 +7,6 @@
   "discard": "Abandonner",
   "create": "Créer",
   "nameLabel": "Nom",
-  "defaultRecordingName": "Enregistrement",
   "editedCopyName": "{name} (modifié)",
   "loadRecordingsFailed": "Impossible de charger les enregistrements",
   "newFolder": "Nouveau dossier",
@@ -210,5 +209,12 @@
   "theme": "Thème",
   "themeSystem": "Automatique (celui du système)",
   "themeLight": "Clair",
-  "themeDark": "Sombre"
+  "themeDark": "Sombre",
+  "renameToTranscriptTitle": "Renommer l’enregistrement ?",
+  "renameToTranscriptMessage": "Avec la nouvelle transcription, « {current} » s’appellerait « {name} ».",
+  "keepName": "Conserver",
+  "piano": "Piano",
+  "pianoHint": "Touchez une touche pour entendre sa note.\nFaites glisser le doigt sur le petit clavier pour vous y déplacer.",
+  "noteNames": "Do Ré Mi Fa Sol La Si",
+  "close": "Fermer"
 }

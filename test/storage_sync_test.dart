@@ -32,18 +32,26 @@ void main() {
     folderId: 'folder1',
   );
 
+  /// Grabaciones añadidas con [addRecording] en el test.
+  var added = 0;
+
+  /// Añade una grabación llamada «Grabación N» o, si no [named], con el
+  /// nombre provisional («2026-10-05 14.32»).
   Future<Recording> addRecording({
     String folder = '',
     List<int> bytes = const [1, 2, 3],
+    bool named = true,
   }) async {
     final path = await repository.createRecordingPath();
     await File(path).writeAsBytes(bytes);
     // Nombres de archivo distintos aunque se creen en el mismo segundo.
     await Future<void>.delayed(const Duration(milliseconds: 2));
+    added++;
     return (await repository.add(
       path: path,
       duration: Duration.zero,
       folder: folder,
+      name: named ? 'Grabación $added' : null,
     ))!;
   }
 
@@ -72,7 +80,9 @@ void main() {
     directory = await Directory.systemTemp.createTemp('sync_test');
     repository = FileRecordingsRepository(
       directory: () async => Directory(p.join(directory.path, 'recordings')),
+      clock: () => testNow,
     );
+    added = 0;
     store = InMemorySettingsStore();
     folders = FakeFolderAccess();
     drive = FakeDriveService();
@@ -332,6 +342,23 @@ void main() {
 
         await sync.sync();
         expect(writes(), hasLength(2));
+      });
+
+      test('con el nombre provisional, al transcribirla se renombra el audio '
+          'y el .txt se llama igual', () async {
+        await addRecording(named: false);
+        await sync.sync();
+        expect(writes(), ['write 2026-10-05 14.32.m4a']);
+
+        await transcribe(await single(), '¿Qué tal? Una idea.');
+        await sync.sync();
+
+        expect(
+          folders.calls,
+          contains('rename doc0 → 2026-10-05.Qué tal Una idea.m4a'),
+        );
+        expect(writes().last, 'write 2026-10-05.Qué tal Una idea.txt');
+        expect((await single()).isSavedIn('folder'), isTrue);
       });
 
       test(
@@ -632,7 +659,7 @@ void main() {
 
       await sync.sync();
 
-      expect(writes(), ['write Grabación 1.wav']);
+      expect(writes(), ['write 2026-10-05 14.32.wav']);
       expect((await single()).format, RecordingFormat.wav);
     });
 

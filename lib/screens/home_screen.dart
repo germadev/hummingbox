@@ -15,6 +15,7 @@ import '../models/recording_options.dart';
 import '../models/transcription.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
+import '../services/piano_sound.dart';
 import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
 import '../services/screen_awake.dart';
@@ -23,9 +24,11 @@ import '../services/share_service.dart';
 import '../services/storage_sync.dart';
 import '../services/transcriber.dart';
 import '../utils/languages.dart';
+import '../utils/recording_names.dart';
 import '../utils/search.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/folder_drawer.dart';
+import '../widgets/piano.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
@@ -43,6 +46,7 @@ class HomeScreen extends StatefulWidget {
     required this.sync,
     required this.transcriber,
     required this.whisper,
+    required this.piano,
     this.screen = const PlatformScreenAwake(),
   });
 
@@ -61,6 +65,9 @@ class HomeScreen extends StatefulWidget {
 
   /// Instalación de Whisper.
   final WhisperController whisper;
+
+  /// Sonido de las teclas del piano.
+  final PianoSound piano;
 
   /// Mantiene la pantalla encendida mientras se graba (si está activado en
   /// las opciones).
@@ -101,6 +108,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Cuánto se ha tirado de la lista hacia abajo: la lupa de la barra lo
   /// indica.
   final _pull = ValueNotifier(_Pull.none);
+
+  /// Parte ampliada del piano: se conserva al cerrarlo.
+  final _pianoFirstKey = ValueNotifier(PianoPanel.initialFirstKey);
 
   /// Todas las grabaciones, de todas las carpetas, de la más antigua a la
   /// más reciente.
@@ -157,23 +167,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Las grabaciones nuevas se llaman «Grabación N» en el idioma de la app.
-    widget.repository.defaultNamePrefix = context.l10n.defaultRecordingName;
-  }
-
-  @override
   void dispose() {
     _lifecycle.dispose();
     _changes.cancel();
     _search.dispose();
     _searchFocus.dispose();
     _pull.dispose();
+    _pianoFirstKey.dispose();
     _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
     widget.sync.removeListener(_onSettingsChanged);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
+    if (_pianoOpen) {
+      unawaited(SystemChrome.setPreferredOrientations(const []));
+    }
     _recorder.dispose();
     _player.dispose();
     _transcriptions.dispose();
@@ -446,6 +453,21 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.sync.openFolder(folder);
   }
 
+  // --- Piano ---
+
+  bool _pianoOpen = false;
+
+  /// El piano se ve siempre en horizontal: al abrirlo la pantalla gira y al
+  /// cerrarlo vuelve a girar como diga el sistema.
+  void _onPianoChanged(bool opened) {
+    _pianoOpen = opened;
+    unawaited(
+      SystemChrome.setPreferredOrientations(
+        opened ? PianoPanel.landscape : const [],
+      ),
+    );
+  }
+
   Future<void> _createFolder() async {
     final input = await showNameDialog(
       context,
@@ -637,6 +659,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _rename(Recording recording) async {
     final name = await showRenameDialog(context, recording.name);
     if (name == null || name == recording.name) return;
+    await _applyName(recording, name);
+  }
+
+  /// Cambia el nombre de [recording] (y el de su archivo, al guardarla).
+  Future<void> _applyName(Recording recording, String name) async {
     try {
       final renamed = await widget.repository.rename(recording, name);
       if (!mounted) return;
@@ -698,7 +725,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Transcribe [recording] con lo elegido en las opciones (y su idioma, si
   /// se ha elegido uno para ella). Si no se puede, explica por qué y qué
   /// hacer.
-  Future<void> _transcribe(Recording recording) async {
+  ///
+  /// Si ya tenía transcripción o se ha cambiado su idioma
+  /// ([languageChanged]), pregunta si pasa a llamarse como empieza la nueva
+  /// (la primera vez, con el nombre provisional, cambia sin preguntar).
+  Future<void> _transcribe(
+    Recording recording, {
+    bool languageChanged = false,
+  }) async {
     if (_recorder.isBusy) {
       _showMessage((l10n) => l10n.stopToTranscribe);
       return;
@@ -730,6 +764,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
+      if (languageChanged || current.transcript != null) {
+        await _offerTranscriptName(transcribed);
+      }
     } on TranscriptionException catch (e) {
       await _explainTranscriptionError(e, current);
     } catch (_) {
@@ -784,7 +821,32 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     _replaceRecording(updated);
-    await _transcribe(updated);
+    await _transcribe(updated, languageChanged: true);
+  }
+
+  /// Pregunta si [recording] pasa a llamarse con su fecha y el principio de
+  /// su transcripción (p. ej. al volver a transcribirla), si no se llama ya
+  /// así.
+  Future<void> _offerTranscriptName(Recording recording) async {
+    final text = recording.transcript?.text;
+    if (text == null) return;
+    final proposed = RecordingNames.fromTranscript(recording.createdAt, text);
+    if (proposed == null) return;
+    final name = RecordingNames.unique(proposed, [
+      for (final r in _recordings)
+        if (r.folder == recording.folder && r.id != recording.id) r.name,
+    ]);
+    if (name == recording.name) return;
+    final l10n = context.l10n;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.renameToTranscriptTitle,
+      message: l10n.renameToTranscriptMessage(recording.name, name),
+      confirmLabel: l10n.rename,
+      cancelLabel: l10n.keepName,
+    );
+    if (!confirmed || !mounted) return;
+    await _applyName(_latest(recording), name);
   }
 
   // --- Transcripción automática ---
@@ -1200,6 +1262,17 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
+          // Abre el piano (mientras se graba, no: su sonido podría cortar la
+          // grabación).
+          if (!searching)
+            IconButton(
+              key: const Key('piano-button'),
+              tooltip: context.l10n.piano,
+              icon: const Icon(Icons.piano),
+              onPressed: _recorder.isBusy
+                  ? null
+                  : () => _scaffoldKey.currentState?.openEndDrawer(),
+            ),
           IconButton(
             key: const Key('settings-button'),
             tooltip: context.l10n.settings,
@@ -1229,11 +1302,27 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       // Mientras se graba no se cambia de carpeta.
       drawerEnableOpenDragGesture: !_recorder.isBusy,
-      // También se abre deslizando hacia la derecha en cualquier punto de la
-      // lista, no solo desde el borde.
-      body: _SwipeToOpenDrawer(
+      // El piano, que se abre deslizando desde la derecha y ocupa todo el
+      // ancho.
+      endDrawer: Drawer(
+        key: const Key('piano-drawer'),
+        width: MediaQuery.sizeOf(context).width,
+        shape: const RoundedRectangleBorder(),
+        child: PianoPanel(
+          sound: widget.piano,
+          firstKey: _pianoFirstKey,
+          onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
+        ),
+      ),
+      endDrawerEnableOpenDragGesture: !_recorder.isBusy,
+      onEndDrawerChanged: _onPianoChanged,
+      // También se abren deslizando en cualquier punto de la lista, no solo
+      // desde el borde: hacia la derecha las carpetas y hacia la izquierda
+      // el piano.
+      body: _SwipeToOpenDrawers(
         enabled: !_recorder.isBusy,
-        onOpen: () => _scaffoldKey.currentState?.openDrawer(),
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onOpenEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
         // Los toques en las grabaciones no llegan aquí.
         child: GestureDetector(
           key: const Key('list-background'),
@@ -1370,26 +1459,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Llama a [onOpen] al deslizar hacia la derecha (hacia la izquierda en los
-/// idiomas que se escriben de derecha a izquierda) en cualquier punto de
-/// [child]. Lo que se arrastra dentro de [child] (p. ej. la onda para saltar)
-/// tiene prioridad.
-class _SwipeToOpenDrawer extends StatefulWidget {
-  const _SwipeToOpenDrawer({
+/// Llama a [onOpenDrawer] al deslizar hacia la derecha y a [onOpenEndDrawer]
+/// al deslizar hacia la izquierda (al revés en los idiomas que se escriben
+/// de derecha a izquierda) en cualquier punto de [child]. Lo que se arrastra
+/// dentro de [child] (p. ej. la onda para saltar) tiene prioridad.
+class _SwipeToOpenDrawers extends StatefulWidget {
+  const _SwipeToOpenDrawers({
     required this.enabled,
-    required this.onOpen,
+    required this.onOpenDrawer,
+    required this.onOpenEndDrawer,
     required this.child,
   });
 
   final bool enabled;
-  final VoidCallback onOpen;
+  final VoidCallback onOpenDrawer;
+  final VoidCallback onOpenEndDrawer;
   final Widget child;
 
   @override
-  State<_SwipeToOpenDrawer> createState() => _SwipeToOpenDrawerState();
+  State<_SwipeToOpenDrawers> createState() => _SwipeToOpenDrawersState();
 }
 
-class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
+class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Lo que hay que deslizar para abrir el menú.
   static const _distance = 48.0;
 
@@ -1402,10 +1493,12 @@ class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
   double get _direction =>
       Directionality.of(context) == TextDirection.rtl ? -1 : 1;
 
-  void _open() {
+  /// Abre el menú de las carpetas si [forward] (hacia la derecha) o, si no,
+  /// el piano.
+  void _open({required bool forward}) {
     if (_opened) return;
     _opened = true;
-    widget.onOpen();
+    (forward ? widget.onOpenDrawer : widget.onOpenEndDrawer)();
   }
 
   @override
@@ -1419,11 +1512,15 @@ class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
       },
       onHorizontalDragUpdate: (details) {
         _dragged += (details.primaryDelta ?? 0) * _direction;
-        if (_dragged > _distance) _open();
+        if (_dragged.abs() > _distance) _open(forward: _dragged > 0);
       },
       onHorizontalDragEnd: (details) {
         final velocity = (details.primaryVelocity ?? 0) * _direction;
-        if (_dragged > 0 && velocity > _flingVelocity) _open();
+        if (_dragged > 0 && velocity > _flingVelocity) {
+          _open(forward: true);
+        } else if (_dragged < 0 && velocity < -_flingVelocity) {
+          _open(forward: false);
+        }
       },
       child: widget.child,
     );

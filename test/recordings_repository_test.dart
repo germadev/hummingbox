@@ -8,12 +8,19 @@ import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
+import 'fakes.dart';
+
 void main() {
   late Directory directory;
   late FileRecordingsRepository repository;
 
-  FileRecordingsRepository newRepository() =>
-      FileRecordingsRepository(directory: () async => directory);
+  /// Fecha de las grabaciones nuevas.
+  var now = testNow;
+
+  FileRecordingsRepository newRepository() => FileRecordingsRepository(
+    directory: () async => directory,
+    clock: () => now,
+  );
 
   /// Crea un archivo de audio de prueba en una ruta nueva.
   Future<String> createAudioFile() async {
@@ -26,6 +33,7 @@ void main() {
     final root = await Directory.systemTemp.createTemp('recordings_test');
     // La carpeta todavía no existe: el repositorio debe crearla.
     directory = Directory(p.join(root.path, 'recordings'));
+    now = testNow;
     repository = newRepository();
   });
 
@@ -106,20 +114,21 @@ void main() {
     expect(await repository.loadAll(), isEmpty);
   });
 
-  test('añade grabaciones numeradas y las lista de la más antigua a la más '
-      'nueva', () async {
+  test('añade grabaciones con la fecha y la hora y las lista de la más '
+      'antigua a la más nueva', () async {
     final first = await repository.add(
       path: await createAudioFile(),
       duration: const Duration(seconds: 5),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 5));
+    now = DateTime(2026, 10, 5, 14, 33);
     final second = await repository.add(
       path: await createAudioFile(),
       duration: const Duration(seconds: 12),
     );
 
-    expect(first!.name, 'Grabación 1');
-    expect(second!.name, 'Grabación 2');
+    expect(first!.name, '2026-10-05 14.32');
+    expect(first.provisionalName, isTrue);
+    expect(second!.name, '2026-10-05 14.33');
 
     final all = await repository.loadAll();
     expect(all.map((r) => r.id), [first.id, second.id]);
@@ -280,18 +289,112 @@ void main() {
     expect(index.readAsStringSync(), isNot(contains(recording.id)));
   });
 
-  test('nextDefaultName continúa tras el número más alto', () {
-    expect(FileRecordingsRepository.nextDefaultName([]), 'Grabación 1');
-    expect(
-      FileRecordingsRepository.nextDefaultName([
-        'Grabación 2',
-        'Entrevista',
-        'Grabación 7',
-        null,
-        'Grabación 3 bis',
-      ]),
-      'Grabación 8',
-    );
+  group('nombres', () {
+    Transcript transcript(String text) =>
+        Transcript(text: text, revision: 0, createdAt: testNow);
+
+    Future<Recording> addNew({String folder = ''}) async =>
+        (await repository.add(
+          path: await createAudioFile(),
+          duration: Duration.zero,
+          folder: folder,
+        ))!;
+
+    test('en la misma carpeta y el mismo minuto, con un número', () async {
+      final first = await addNew();
+      final second = await addNew();
+      final other = await addNew(folder: 'Clases');
+
+      expect(first.name, '2026-10-05 14.32');
+      expect(second.name, '2026-10-05 14.32 (2)');
+      expect(other.name, '2026-10-05 14.32');
+    });
+
+    test('al transcribirla, se llama como empieza la transcripción, y se '
+        'conserva entre sesiones', () async {
+      final recording = await addNew();
+
+      final transcribed = await repository.setTranscript(
+        recording,
+        transcript(' ¿Hola, qué tal? Esto es una prueba de nombres largos.'),
+      );
+
+      // Sin lo que no vale en un nombre de archivo («?») ni la puntuación
+      // del principio.
+      expect(
+        transcribed.name,
+        '2026-10-05.Hola, qué tal Esto es una prueba de',
+      );
+      expect(transcribed.provisionalName, isFalse);
+      final reloaded = (await newRepository().loadAll()).single;
+      expect(reloaded.name, transcribed.name);
+      expect(reloaded.provisionalName, isFalse);
+    });
+
+    test('solo la primera vez: al volver a transcribirla no cambia', () async {
+      final recording = await repository.setTranscript(
+        await addNew(),
+        transcript('Primera'),
+      );
+
+      final again = await repository.setTranscript(
+        recording,
+        transcript('Segunda'),
+      );
+
+      expect(again.name, '2026-10-05.Primera');
+    });
+
+    test('sin palabras se queda con la fecha y la hora', () async {
+      final recording = await addNew();
+
+      final silent = await repository.setTranscript(recording, null);
+      expect(silent.name, '2026-10-05 14.32');
+      expect(silent.provisionalName, isTrue);
+
+      final symbols = await repository.setTranscript(
+        recording,
+        transcript(' … '),
+      );
+      expect(symbols.name, '2026-10-05 14.32');
+    });
+
+    test('no repite el nombre de otra de la carpeta', () async {
+      await repository.setTranscript(await addNew(), transcript('Hola'));
+      final second = await repository.setTranscript(
+        await addNew(),
+        transcript('hola.'),
+      );
+
+      expect(second.name, '2026-10-05.hola (2)');
+    });
+
+    test('si se renombra, ya no cambia al transcribirla', () async {
+      final renamed = await repository.rename(await addNew(), 'Idea');
+      expect(renamed.provisionalName, isFalse);
+
+      final transcribed = await repository.setTranscript(
+        renamed,
+        transcript('Hola'),
+      );
+
+      expect(transcribed.name, 'Idea');
+    });
+
+    test('las que tienen nombre no lo cambian al transcribirlas', () async {
+      final recording = (await repository.add(
+        path: await createAudioFile(),
+        duration: Duration.zero,
+        name: 'Entrevista',
+      ))!;
+
+      final transcribed = await repository.setTranscript(
+        recording,
+        transcript('Hola'),
+      );
+
+      expect(transcribed.name, 'Entrevista');
+    });
   });
 
   group('guardadas fuera de la app', () {

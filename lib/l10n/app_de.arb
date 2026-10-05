@@ -7,7 +7,6 @@
   "discard": "Verwerfen",
   "create": "Erstellen",
   "nameLabel": "Name",
-  "defaultRecordingName": "Aufnahme",
   "editedCopyName": "{name} (bearbeitet)",
   "loadRecordingsFailed": "Die Aufnahmen konnten nicht geladen werden",
   "newFolder": "Neuer Ordner",
@@ -210,5 +209,12 @@
   "theme": "Design",
   "themeSystem": "Automatisch (wie das System)",
   "themeLight": "Hell",
-  "themeDark": "Dunkel"
+  "themeDark": "Dunkel",
+  "renameToTranscriptTitle": "Aufnahme umbenennen?",
+  "renameToTranscriptMessage": "Mit der neuen Transkription würde „{current}“ „{name}“ heißen.",
+  "keepName": "Beibehalten",
+  "piano": "Klavier",
+  "pianoHint": "Tippe auf eine Taste, um ihren Ton zu hören.\nWische über die kleine Tastatur, um dich darauf zu bewegen.",
+  "noteNames": "C D E F G A H",
+  "close": "Schließen"
 }

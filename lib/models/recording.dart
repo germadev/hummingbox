@@ -20,6 +20,7 @@ class Recording {
     this.transcript,
     this.noAutoTranscript,
     this.transcriptionLanguage,
+    this.provisionalName = false,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -50,6 +51,7 @@ class Recording {
       transcript: Transcript.fromJson(json['transcript']),
       noAutoTranscript: json['noAutoTranscript'] as int?,
       transcriptionLanguage: json['transcriptionLanguage'] as String?,
+      provisionalName: json['provisionalName'] == true,
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -108,6 +110,12 @@ class Recording {
   /// Si es `null`, el de las opciones.
   final String? transcriptionLanguage;
 
+  /// Indica si [name] es el provisional que se le dio al crearla (la fecha y
+  /// la hora, ver `RecordingNames`): al transcribirla por primera vez pasa a
+  /// llamarse como empieza su transcripción. Si el usuario la renombra, ya
+  /// no.
+  final bool provisionalName;
+
   /// Indica si se debe transcribir automáticamente: no tiene transcripción
   /// y no se ha quedado sin ella a propósito (ver [noAutoTranscript]).
   bool get needsTranscript =>
@@ -147,6 +155,7 @@ class Recording {
     if (noAutoTranscript != null) 'noAutoTranscript': noAutoTranscript,
     if (transcriptionLanguage != null)
       'transcriptionLanguage': transcriptionLanguage,
+    if (provisionalName) 'provisionalName': true,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -161,6 +170,7 @@ class Recording {
     Map<String, CopyState>? copies,
     AudioInfo? audio,
     Transcript? Function()? transcript,
+    bool? provisionalName,
   }) {
     return Recording(
       id: id,
@@ -176,6 +186,7 @@ class Recording {
       transcript: transcript == null ? this.transcript : transcript(),
       noAutoTranscript: noAutoTranscript,
       transcriptionLanguage: transcriptionLanguage,
+      provisionalName: provisionalName ?? this.provisionalName,
     );
   }
 }

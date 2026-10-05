@@ -6,6 +6,7 @@ import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
+import 'services/piano_sound.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/screen_awake.dart';
@@ -30,6 +31,7 @@ class VoiceRecorderApp extends StatelessWidget {
     required this.sync,
     required this.transcriber,
     required this.whisper,
+    required this.piano,
     this.screen = const PlatformScreenAwake(),
     this.locale,
   });
@@ -49,6 +51,7 @@ class VoiceRecorderApp extends StatelessWidget {
   final StorageSync sync;
   final Transcriber transcriber;
   final WhisperController whisper;
+  final PianoSound piano;
   final ScreenAwake screen;
 
   /// Idioma fijo (para los tests); si es `null`, el del sistema.
@@ -91,6 +94,7 @@ class VoiceRecorderApp extends StatelessWidget {
         sync: sync,
         transcriber: transcriber,
         whisper: whisper,
+        piano: piano,
         screen: screen,
       ),
     );

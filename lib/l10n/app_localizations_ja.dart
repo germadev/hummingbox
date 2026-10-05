@@ -31,9 +31,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get nameLabel => '名前';
 
   @override
-  String get defaultRecordingName => '録音';
-
-  @override
   String editedCopyName(String name) {
     return '$name（編集済み）';
   }
@@ -727,4 +724,27 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get themeDark => 'ダーク';
+
+  @override
+  String get renameToTranscriptTitle => '録音の名前を変更しますか？';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return '新しい文字起こしにより、「$current」は「$name」という名前になります。';
+  }
+
+  @override
+  String get keepName => 'そのまま';
+
+  @override
+  String get piano => 'ピアノ';
+
+  @override
+  String get pianoHint => '鍵盤をタップすると音が鳴ります。\n小さな鍵盤をスワイプすると移動できます。';
+
+  @override
+  String get noteNames => 'C D E F G A B';
+
+  @override
+  String get close => '閉じる';
 }

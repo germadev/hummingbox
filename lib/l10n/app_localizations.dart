@@ -152,12 +152,6 @@ abstract class AppLocalizations {
   /// **'Name'**
   String get nameLabel;
 
-  /// Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»)
-  ///
-  /// In en, this message translates to:
-  /// **'Recording'**
-  String get defaultRecordingName;
-
   /// Nombre de la copia de una grabación editada
   ///
   /// In en, this message translates to:
@@ -1375,6 +1369,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @renameToTranscriptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename the recording?'**
+  String get renameToTranscriptTitle;
+
+  /// Al volver a transcribir una grabación, propone llamarla con su fecha y el principio de la nueva transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'With the new transcript, “{current}” would be called “{name}”.'**
+  String renameToTranscriptMessage(String current, String name);
+
+  /// No description provided for @keepName.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep name'**
+  String get keepName;
+
+  /// No description provided for @piano.
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get piano;
+
+  /// En el piano, antes de tocar ninguna tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Play a key to hear its note.\nSwipe over the small keyboard to move along it.'**
+  String get pianoHint;
+
+  /// Nombres de las siete notas naturales, de Do a Si, separados por espacios (solfeo o letras, según el idioma; en alemán, H para el Si)
+  ///
+  /// In en, this message translates to:
+  /// **'C D E F G A B'**
+  String get noteNames;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
 }
 
 class _AppLocalizationsDelegate

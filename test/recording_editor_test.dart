@@ -33,7 +33,10 @@ void main() {
     library = Directory(p.join(root.path, 'recordings'));
     temp = await Directory(p.join(root.path, 'tmp')).create();
     codec = CopyingAudioCodec();
-    repository = FileRecordingsRepository(directory: () async => library);
+    repository = FileRecordingsRepository(
+      directory: () async => library,
+      clock: () => testNow,
+    );
 
     // El "m4a" de la grabación es un WAV: el códec de prueba solo copia.
     final path = await repository.createRecordingPath();
@@ -108,7 +111,7 @@ void main() {
     await editor.close(session);
 
     expect(copy.id, isNot(recording.id));
-    expect(copy.name, 'Grabación 1 (editada)');
+    expect(copy.name, '2026-10-05 14.32 (editada)');
     expect(copy.duration, const Duration(seconds: 1));
     expect(await readSamples(copy.path), hasLength(1000));
     // El original no cambia.

@@ -12,6 +12,7 @@ import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
+import 'package:voicerecorder/widgets/piano.dart';
 
 import 'fakes.dart';
 import 'l10n_helpers.dart';
@@ -28,6 +29,7 @@ void main() {
   late FakeScreenAwake screen;
   late FakeTranscriber transcriber;
   late FakeWhisperService whisper;
+  late FakePianoSound piano;
 
   setUpAll(() => initializeDateFormatting('es'));
 
@@ -47,6 +49,7 @@ void main() {
     screen = FakeScreenAwake();
     whisper = FakeWhisperService();
     transcriber = FakeTranscriber(whisper: whisper);
+    piano = FakePianoSound();
   });
 
   Recording sample(
@@ -88,6 +91,7 @@ void main() {
         ),
         transcriber: transcriber,
         whisper: fakeWhisperController(whisper),
+        piano: piano,
         screen: screen,
       ),
     );
@@ -133,8 +137,8 @@ void main() {
 
     expect(find.text('Grabando'), findsNothing);
     expect(panelHeight(tester), collapsed);
-    expect(find.text('Grabación 1'), findsOneWidget);
-    expect(find.text('Guardada como «Grabación 1»'), findsOneWidget);
+    expect(find.text('2026-10-05 14.32'), findsOneWidget);
+    expect(find.text('Guardada como «2026-10-05 14.32»'), findsOneWidget);
     expect(recorder.calls, ['hasPermission', 'start', 'pause', 'stop']);
   });
 
@@ -427,7 +431,7 @@ void main() {
       await tester.tap(record());
       await tester.pumpAndSettle();
 
-      expect(find.text('Grabación 1').hitTestable(), findsOneWidget);
+      expect(find.text('2026-10-05 14.32').hitTestable(), findsOneWidget);
       expect(find.text('Toma 0').hitTestable(), findsNothing);
     });
   });
@@ -484,7 +488,7 @@ void main() {
       await pumpAnimations(tester);
       await tester.tap(record());
       await tester.pumpAndSettle();
-      expect(drive.calls, ['upload Grabación 1.m4a']);
+      expect(drive.calls, ['upload 2026-10-05 14.32.m4a']);
     });
 
     testWidgets('sin Google Drive configurado, solo deja elegir carpeta', (
@@ -607,6 +611,7 @@ void main() {
       store.settings = const AppSettings(
         folder: testFolder,
         countdownSeconds: 5,
+        transcription: manual,
       );
       await pumpApp(tester);
       await tester.drag(handle(), const Offset(0, -300));
@@ -628,7 +633,7 @@ void main() {
 
       await tester.tap(record());
       await tester.pumpAndSettle();
-      expect(find.text('Grabación 1'), findsOneWidget);
+      expect(find.text('2026-10-05 14.32'), findsOneWidget);
     });
 
     testWidgets('cancela la cuenta atrás con la X', (tester) async {
@@ -664,7 +669,7 @@ void main() {
       await tester.tap(record());
       await tester.pumpAndSettle();
 
-      expect(find.text('Grabación 1'), findsOneWidget);
+      expect(find.text('2026-10-05 14.32'), findsOneWidget);
       expect(editor.trims, {
         recorder.path!: const Duration(milliseconds: 2200),
       });
@@ -1269,6 +1274,13 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// Al volver a transcribirla, pregunta si se renombra: se deja como está.
+    Future<void> keepName(WidgetTester tester) async {
+      expect(find.text('¿Renombrar la grabación?'), findsOneWidget);
+      await tester.tap(find.text('Mantener'));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('se transcribe en el idioma elegido para la grabación, también '
         'al volver a transcribir', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Interview')]);
@@ -1279,15 +1291,73 @@ void main() {
       expect(find.text('Como en las opciones'), findsOneWidget);
       expect(find.text('El de la app (Español)'), findsOneWidget);
       await chooseLanguage(tester, 'English');
+      await keepName(tester);
 
       expect(repository.byId('a').transcriptionLanguage, 'en');
       expect(transcriber.calls, [('a', TranscriptionEngine.system, 'en')]);
       expect(find.text('Transcripción lista'), findsOneWidget);
+      expect(repository.byId('a').name, 'Interview');
 
       // «Volver a transcribir» lo respeta.
       await chooseInMenu(tester, 'Ver transcripción');
       await chooseInMenu(tester, 'Volver a transcribir');
+      await keepName(tester);
       expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'en'));
+    });
+
+    testWidgets('al volver a transcribirla, puede pasar a llamarse como '
+        'empieza la nueva transcripción', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: 'Interview',
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: const Duration(seconds: 83),
+          transcript: Transcript(
+            text: 'Hello everyone.',
+            revision: 0,
+            createdAt: DateTime(2026, 9, 28, 9),
+          ),
+        ),
+      ]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Ver transcripción');
+      await chooseInMenu(tester, 'Volver a transcribir');
+
+      expect(
+        find.text(
+          'Con la nueva transcripción, «Interview» pasaría a llamarse '
+          '«2026-09-28.Hola, esto es una prueba».',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Renombrar'));
+      await tester.pumpAndSettle();
+
+      expect(repository.byId('a').name, '2026-09-28.Hola, esto es una prueba');
+      // Se renombran también el audio y el .txt de la carpeta.
+      expect(
+        folders.calls,
+        containsAll([
+          'rename doc0 → 2026-09-28.Hola, esto es una prueba.m4a',
+          'rename doc1 → 2026-09-28.Hola, esto es una prueba.txt',
+        ]),
+      );
+    });
+
+    testWidgets('si ya se llama así, no pregunta', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', '2026-09-28.Hola, esto es una prueba'),
+      ]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await chooseLanguage(tester, 'English');
+
+      expect(transcriber.calls, hasLength(1));
+      expect(find.text('¿Renombrar la grabación?'), findsNothing);
     });
 
     testWidgets('desde la transcripción, y «Como en las opciones» vuelve al '
@@ -1314,11 +1384,13 @@ void main() {
       await chooseInMenu(tester, 'Ver transcripción');
       await chooseInMenu(tester, 'Transcribir en otro idioma');
       await chooseLanguage(tester, 'Français');
+      await keepName(tester);
       expect(transcriber.calls, [('a', TranscriptionEngine.system, 'fr')]);
       expect(repository.byId('a').transcriptionLanguage, 'fr');
 
       await chooseInMenu(tester, 'Transcribir en otro idioma');
       await chooseLanguage(tester, 'Como en las opciones');
+      await keepName(tester);
       expect(repository.byId('a').transcriptionLanguage, isNull);
       expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'es'));
     });
@@ -1892,6 +1964,7 @@ void main() {
       store.settings = const AppSettings(
         folder: testFolder,
         openFolder: 'Clases',
+        transcription: manual,
       );
       await pumpApp(tester);
       expect(title(tester), 'Clases');
@@ -1903,7 +1976,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.recordings.single.folder, 'Clases');
-      expect(find.text('Grabación 1'), findsOneWidget);
+      expect(find.text('2026-10-05 14.32'), findsOneWidget);
     });
 
     testWidgets('el menú lateral se abre deslizando en la lista', (
@@ -1920,7 +1993,9 @@ void main() {
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
     });
 
-    testWidgets('deslizar hacia la izquierda no abre el menú', (tester) async {
+    testWidgets('deslizar hacia la izquierda no abre el menú, sino el piano', (
+      tester,
+    ) async {
       await pumpApp(tester);
 
       await tester.drag(
@@ -1930,6 +2005,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('new-folder')), findsNothing);
+      expect(find.byKey(const Key('piano-keyboard')), findsOneWidget);
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {
@@ -2020,5 +2096,139 @@ void main() {
     expect(find.text('Formato'), findsOneWidget);
     await tester.scrollUntilVisible(find.text('Carpeta del dispositivo'), 200);
     expect(find.text('Carpeta del dispositivo'), findsOneWidget);
+  });
+
+  group('piano', () {
+    Finder keyboard() => find.byKey(const Key('piano-keyboard'));
+    Finder overview() => find.byKey(const Key('piano-overview'));
+
+    /// Centro de la tecla blanca [index] (desde la izquierda) del teclado.
+    Offset whiteKey(WidgetTester tester, int index) {
+      final rect = tester.getRect(keyboard());
+      final width = rect.width / PianoPanel.visibleWhiteKeys;
+      // Abajo, donde no hay negras.
+      return Offset(rect.left + (index + 0.5) * width, rect.bottom - 20);
+    }
+
+    testWidgets('se abre con su botón y suena al tocar las teclas', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(
+          'Toca una tecla para oír su nota.\n'
+          'Desliza sobre el teclado pequeño para moverte por él.',
+        ),
+        findsOneWidget,
+      );
+      // Desde el Do3, con las teclas a la vista preparadas.
+      expect(piano.prepared, containsAll([48, 49, 65]));
+
+      await tester.tapAt(whiteKey(tester, 0));
+      await tester.pump();
+      expect(piano.played, [48]);
+      expect(find.text('Do3'), findsWidgets);
+      expect(find.text('130.8 Hz'), findsOneWidget);
+
+      // Una negra: arriba, entre el Do y el Re.
+      final rect = tester.getRect(keyboard());
+      final width = rect.width / PianoPanel.visibleWhiteKeys;
+      await tester.tapAt(Offset(rect.left + width, rect.top + 20));
+      await tester.pump();
+      expect(piano.played.last, 49);
+      expect(find.byKey(const Key('piano-note')), findsOneWidget);
+      expect(find.text('Do♯3'), findsOneWidget);
+    });
+
+    testWidgets('deslizando el dedo por las teclas suenan todas y no se '
+        'cierra', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(whiteKey(tester, 4));
+      for (var i = 3; i >= 0; i--) {
+        await gesture.moveTo(whiteKey(tester, i));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // Sol3, Fa3, Mi3, Re3, Do3.
+      expect(piano.played, [55, 53, 52, 50, 48]);
+      expect(keyboard(), findsOneWidget);
+    });
+
+    testWidgets('deslizando sobre las octavas cambia la parte ampliada, y se '
+        'conserva al cerrarlo', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+
+      // Hasta el final de la derecha: las 11 blancas más agudas.
+      final strip = tester.getRect(overview());
+      await tester.dragFrom(strip.center, Offset(strip.width, 0));
+      await tester.pumpAndSettle();
+      await tester.tapAt(whiteKey(tester, PianoPanel.visibleWhiteKeys - 1));
+      await tester.pump();
+      expect(piano.played, [108]);
+
+      await tester.tap(find.byTooltip('Cerrar'));
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsNothing);
+
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      await tester.tapAt(whiteKey(tester, PianoPanel.visibleWhiteKeys - 1));
+      await tester.pump();
+      expect(piano.played, [108, 108]);
+    });
+
+    testWidgets('se ve en horizontal: gira la pantalla al abrirlo y la '
+        'deja como diga el sistema al cerrarlo', (tester) async {
+      final orientations = <Object?>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'SystemChrome.setPreferredOrientations') {
+            orientations.add(call.arguments);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      await tester.drag(find.text('Entrevista'), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(orientations, [
+        ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
+      ]);
+
+      await tester.tap(find.byTooltip('Cerrar'));
+      await tester.pumpAndSettle();
+      expect(orientations.last, isEmpty);
+    });
+
+    testWidgets('mientras se graba no se abre', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(record());
+      await pumpAnimations(tester);
+
+      final button = tester.widget<IconButton>(
+        find.byKey(const Key('piano-button')),
+      );
+      expect(button.onPressed, isNull);
+    });
   });
 }

@@ -8,6 +8,7 @@ import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
 import 'services/folder_access.dart';
 import 'services/google_drive.dart';
+import 'services/piano_sound.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/settings_store.dart';
@@ -59,6 +60,7 @@ Future<void> main() async {
         audioPath: sync.audioPath,
       ),
       whisper: WhisperController(whisper),
+      piano: AudioplayersPianoSound(),
     ),
   );
 }

@@ -28,10 +28,6 @@
   "@nameLabel": {
     "description": "Etiqueta del campo de nombre"
   },
-  "defaultRecordingName": "Recording",
-  "@defaultRecordingName": {
-    "description": "Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»)"
-  },
   "editedCopyName": "{name} (edited)",
   "@editedCopyName": {
     "description": "Nombre de la copia de una grabación editada",
@@ -597,5 +593,29 @@
   },
   "themeSystem": "Automatic (the system's)",
   "themeLight": "Light",
-  "themeDark": "Dark"
+  "themeDark": "Dark",
+  "renameToTranscriptTitle": "Rename the recording?",
+  "renameToTranscriptMessage": "With the new transcript, “{current}” would be called “{name}”.",
+  "@renameToTranscriptMessage": {
+    "description": "Al volver a transcribir una grabación, propone llamarla con su fecha y el principio de la nueva transcripción",
+    "placeholders": {
+      "current": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "keepName": "Keep name",
+  "piano": "Piano",
+  "pianoHint": "Play a key to hear its note.\nSwipe over the small keyboard to move along it.",
+  "@pianoHint": {
+    "description": "En el piano, antes de tocar ninguna tecla"
+  },
+  "noteNames": "C D E F G A B",
+  "@noteNames": {
+    "description": "Nombres de las siete notas naturales, de Do a Si, separados por espacios (solfeo o letras, según el idioma; en alemán, H para el Si)"
+  },
+  "close": "Close"
 }

@@ -7,7 +7,6 @@
   "discard": "舍弃",
   "create": "创建",
   "nameLabel": "名称",
-  "defaultRecordingName": "录音",
   "editedCopyName": "{name}（已编辑）",
   "loadRecordingsFailed": "无法加载录音",
   "newFolder": "新建文件夹",
@@ -210,5 +209,12 @@
   "theme": "主题",
   "themeSystem": "自动（跟随系统）",
   "themeLight": "浅色",
-  "themeDark": "深色"
+  "themeDark": "深色",
+  "renameToTranscriptTitle": "重命名录音？",
+  "renameToTranscriptMessage": "根据新的转写内容，“{current}”将改名为“{name}”。",
+  "keepName": "保留原名",
+  "piano": "钢琴",
+  "pianoHint": "点按琴键即可听到音符。\n在小键盘上滑动可移动位置。",
+  "noteNames": "C D E F G A B",
+  "close": "关闭"
 }

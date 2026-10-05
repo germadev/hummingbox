@@ -33,12 +33,15 @@ Drive (as destination and as copy, including change detection by MD5
 checksum and `.txt` transcripts; the Drive API is tested with a fake HTTP
 client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
+automatic recording names, the piano's notes and synthesized sound,
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search
 (including pulling the list down), keeping the screen on, transcribing (also
 automatically, in the background) and reading the transcript, settings,
-downloading Whisper, theme, renaming, deleting and language). Widget tests
+downloading Whisper, theme, renaming (also after transcribing again), the
+piano (playing, sliding across keys, moving along the keyboard and landscape),
+the list order, deleting and language). Widget tests
 run in Spanish.
 
 Audio services, storage, the folder and Drive are behind interfaces, so
@@ -84,7 +87,7 @@ lib/
 │   ├── screen_awake.dart            Keeping the screen on
 │   └── share_service.dart           Sharing (`share_plus` package)
 ├── screens/                      Home, first run, editor, transcript and settings
-├── widgets/                      Record panel, waveforms, list, folders menu and dialogs
+├── widgets/                      Record panel, waveforms, list, folders menu, piano and dialogs
 └── utils/                        Duration and date formats, files, languages and search
 
 packages/voicerecorder_native/    The app's own plugin with the native code

@@ -62,6 +62,16 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   list scrolls to the end when the app opens and when one is added.
 - Each one shows the date ("Today", "Yesterday"…), duration, **format and
   quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**. **Tap the name** to rename it.
+- **Names**: a new recording is called after its date and time
+  (`2026-10-05 14.32`) and, when it is transcribed for the first time, after
+  its date and the first words of the transcript
+  (`2026-10-05.Hello, how are you`, up to 40 characters, without characters
+  that aren't allowed in file names). Recordings with no words keep the date
+  and time. If the name is already taken in the same folder, a number is
+  added (`… (2)`). Its file in the folder or in Drive is renamed with it.
+  Recordings you have renamed are never renamed automatically. When you
+  transcribe one again or in another language, the app asks whether to rename
+  it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek (also on recordings that are not playing).
 - **Rename**, **share** (with the name you gave it) and **delete**.
@@ -74,6 +84,23 @@ each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, next to the folder button
 (the main folder has no title), the list shows its recordings and **new recordings go there**. Back
 returns to the main folder.
+
+## Piano
+
+The piano button (top bar), or swiping left anywhere on the list, opens a
+piano across the whole screen to find the notes of what you hummed. It is
+always shown in **landscape**: the screen rotates when it opens and goes back
+to the system's orientation when it closes.
+
+- The keyboard shows an octave and a half (11 white keys), starting at C3.
+  Play several keys at once or slide your finger across them. Each key shows
+  its note (solfège or letters, depending on the language) and the last one
+  played is shown at the top with its frequency.
+- Below it, all 88 keys (A0 to C8) are shown small across the whole width,
+  with the enlarged part highlighted. Tap or swipe on them to move it. The
+  position is kept when the piano is closed.
+- The sound is synthesized in the app (no samples). The piano can't be
+  opened while recording, so its sound doesn't interrupt the recording.
 
 ## Search
 
