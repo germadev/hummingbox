@@ -33,15 +33,18 @@ Drive (as destination and as copy, including change detection by MD5
 checksum and `.txt` transcripts; the Drive API is tested with a fake HTTP
 client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
-automatic recording names, the piano's notes, synthesized sound and mixing
-with the voice,
+automatic recording names, the piano's notes, the instruments' and the
+synthesizer's sound (in tune, without clipping, with their envelopes) and
+mixing with the voice,
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search
 (including pulling the list down), keeping the screen on, transcribing (also
 automatically, in the background) and reading the transcript, settings,
 downloading Whisper, theme, renaming (also after transcribing again), the
-piano (playing, sliding across keys, moving along the keyboard and landscape),
+piano (playing, sliding across keys, moving smoothly along the keyboard and
+pinching, landscape and drawn sideways in portrait, not closing on swipes,
+instruments and the synthesizer's controls),
 the list order, deleting and language). Widget tests
 run in Spanish.
 
@@ -58,6 +61,9 @@ lib/
 ├── models/
 │   ├── recording.dart            Recording (name, duration, waveform, files in the destination…)
 │   ├── recording_options.dart    Recording format and quality
+│   ├── piano_note.dart           A note played on the piano (key, time, instrument)
+│   ├── instrument.dart           The piano's instruments and their MIDI programs
+│   ├── synth_patch.dart          The synthesizer's sound (wave, envelope, filter)
 │   └── transcription.dart        Transcript, engine, Whisper models and settings
 ├── audio/
 │   ├── levels.dart               Waveform levels (dBFS → 0–1) and resampling
@@ -88,7 +94,7 @@ lib/
 │   ├── screen_awake.dart            Keeping the screen on
 │   └── share_service.dart           Sharing (`share_plus` package)
 ├── screens/                      Home, first run, editor, transcript and settings
-├── widgets/                      Record panel, waveforms, list, folders menu, piano and dialogs
+├── widgets/                      Record panel, waveforms, list, folders menu, piano, synthesizer and dialogs
 └── utils/                        Duration and date formats, files, languages and search
 
 packages/voicerecorder_native/    The app's own plugin with the native code

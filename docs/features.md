@@ -32,11 +32,14 @@ later stop using that destination.
 
 *Settings → Recording*:
 
-| Quality | Sample rate | AAC (`.m4a`)         | WAV (16-bit) |
-|---------|-------------|----------------------|--------------|
-| Low     | 16 kHz      | 32 kbps · 0.2 MB/min | 1.9 MB/min   |
-| Medium  | 22.05 kHz   | 64 kbps · 0.5 MB/min | 2.6 MB/min   |
-| High    | 44.1 kHz    | 128 kbps · 1 MB/min  | 5.3 MB/min   |
+| Quality   | Sample rate | AAC (`.m4a`)          | WAV (16-bit) |
+|-----------|-------------|-----------------------|--------------|
+| Minimum   | 8 kHz       | 16 kbps · 0.1 MB/min  | 1 MB/min     |
+| Low       | 16 kHz      | 32 kbps · 0.2 MB/min  | 1.9 MB/min   |
+| Medium    | 22.05 kHz   | 64 kbps · 0.5 MB/min  | 2.6 MB/min   |
+| High      | 44.1 kHz    | 128 kbps · 1 MB/min   | 5.3 MB/min   |
+| Very high | 48 kHz      | 192 kbps · 1.4 MB/min | 5.8 MB/min   |
+| Maximum   | 48 kHz      | 256 kbps · 1.9 MB/min | 5.8 MB/min   |
 
 Always mono. The default is high-quality AAC. If the microphone or the codec
 does not support those exact values, `record` uses the closest ones; the list
@@ -104,30 +107,62 @@ leave.
 
 ## Piano
 
-The piano button (top bar), or swiping left anywhere on the list, opens a
-piano across the whole screen to find the notes of what you hummed. It is
-always shown in **landscape**: the screen rotates when it opens and goes back
-to the system's orientation when it closes.
+The piano button (at the bottom of the folders menu), or swiping left
+anywhere on the list, opens a piano across the whole screen to find the
+notes of what you hummed. It is always laid out in **landscape**, and the
+screen doesn't rotate while it is open:
 
-- The keyboard shows an octave and a half (11 white keys), starting at C3.
-  Play several keys at once or slide your finger across them. Each key shows
-  its note (solfège or letters, depending on the language) and the last one
+- With the phone in **portrait**, the piano is drawn sideways, already while
+  it slides in, so you turn the phone to play it in landscape. The button
+  next to the close button turns it around if it shows upside down (it is
+  remembered).
+- With the phone in **landscape**, it stays in landscape.
+- Horizontal swipes don't close it (it's easy to swipe while playing): close
+  it with its button or Back.
+
+The keyboard:
+
+- It shows an octave and a half (11 white keys), starting at C3. Play
+  several keys at once or slide your finger across them. Each key shows its
+  note (solfège or letters, depending on the language) and the last one
   played is shown at the top with its frequency.
 - Below it, all 88 keys (A0 to C8) are shown small across the whole width,
-  with the enlarged part highlighted. Tap or swipe on them to move it. The
-  position is kept when the piano is closed.
-- The sound is synthesized in the app (no samples). The piano can't be
-  opened while recording from the main screen.
+  with the enlarged part highlighted. Tap or swipe on them to move it,
+  smoothly (the keys at the edges can be cut). **Pinch** on them to see more
+  or fewer keys (from 5 to 29 white keys). The position and size are kept
+  when the piano is closed.
+- The piano can't be opened while recording from the main screen.
+
+### Instruments and synthesizer
+
+The name at the top left is the instrument: **piano**, **organ**,
+**guitar**, **marimba** or **synthesizer**. All of them are synthesized in
+the app (no samples): they give the note with a timbre that recalls the
+instrument. The piano, guitar and marimba fade out on their own; the organ
+and the synthesizer sound while the key is held and fade out when it is
+released. The choice is remembered.
+
+With the **synthesizer**, its controls are shown above the keys (on the
+right of the screen with the phone in portrait, since the piano is drawn
+sideways): the **wave** (sawtooth, square, triangle or sine), the envelope
+(**attack**, **decay**, **sustain** and **release**), the filter
+(**brightness** and **resonance**) and the **detune** between its two
+oscillators. While a slider is dragged only its value changes; the keys
+sound with it when it's released. *Default sound* goes back to the start.
+The sound is remembered, and each recorded note keeps the sound it had when
+it was played.
 
 ### Recording from the piano
 
-At the top of the piano choose what to record, **piano only** or **piano and
-voice**, and press *Record*; the button shows the time and stops the
+At the top of the piano choose what to record: the piano button is always
+selected (what you play is always recorded) and the microphone button adds
+your **voice**. Then press *Record*; the button shows the time and stops the
 recording. Closing the piano (or Back) while recording stops and saves it.
 The recording goes to the open folder, like any other.
 
-- The app keeps when each key was pressed and released, so the recording
-  keeps the rhythm you played.
+- The app keeps when each key was pressed and released, and with which
+  instrument, so the recording keeps the rhythm you played. You can change
+  the instrument while recording.
 - **Piano only**: no microphone. When you stop, the audio is generated from
   the notes (in the format and quality of the settings) and lasts until the
   last note fades out. If no key was played, nothing is saved.
@@ -149,7 +184,8 @@ The recording goes to the open folder, like any other.
   add several layers. While accompanying, *Play one after another* and
   *Repeat* don't move on.
 - The notes are also saved as a standard **MIDI file** (`.mid`) next to the
-  audio, with the same name (`Idea.m4a` and `Idea.mid`), in the folder and
+  audio (each instrument on its own channel, with its General MIDI program;
+  reading a `.mid`, each channel gets the closest instrument), with the same name (`Idea.m4a` and `Idea.mid`), in the folder and
   in Drive. It is renamed and deleted with the recording. A `.mid` found next
   to an audio file (for example after reinstalling the app, or edited in
   another app) is read; if it is deleted outside the app, the notes are
