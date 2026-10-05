@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
@@ -96,9 +98,33 @@ class _HomeScreenState extends State<HomeScreen> {
   /// lista hacia abajo; se cierra al perder el foco sin nada escrito).
   bool _searchOpen = false;
 
+  /// Cuánto se ha tirado de la lista hacia abajo: la lupa de la barra baja
+  /// con ella.
+  final _pull = ValueNotifier(_Pull.none);
+
   /// Todas las grabaciones, de todas las carpetas.
   List<Recording> _recordings = const [];
   bool _loading = true;
+
+  /// Si ya se puede transcribir automáticamente: tras leer el destino la
+  /// primera vez, para no adelantarse a los `.txt` que ya hay.
+  bool _autoTranscriptionReady = false;
+
+  /// Por qué se ha detenido la transcripción automática (p. ej. si el
+  /// reconocimiento del sistema no está disponible), hasta que cambien las
+  /// opciones o se vuelva a la app.
+  TranscriptionException? _autoTranscriptionStopped;
+
+  /// Errores de la transcripción automática ya avisados en esta sesión.
+  final _reportedAutoErrors = <TranscriptionError>{};
+
+  /// Grabaciones que no se transcriben automáticamente hasta el próximo
+  /// arranque: falló o se canceló.
+  final _autoTranscriptionSkipped = <String>{};
+
+  /// Opciones de la transcripción con las que se transcribe automáticamente
+  /// (si cambian, se vuelve a empezar).
+  TranscriptionSettings? _transcriptionSettings;
 
   /// Subcarpeta abierta; vacío para la principal.
   String get _folder => widget.sync.settings.openFolder;
@@ -108,10 +134,12 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     // Al volver a la app se guarda lo pendiente y se buscan cambios en el
     // destino.
-    _lifecycle = AppLifecycleListener(onResume: _syncStorage);
+    _lifecycle = AppLifecycleListener(onResume: _onResume);
     _changes = widget.sync.changes.listen(_onStorageChanged);
     _recorder.addListener(_updateScreen);
+    _recorder.addListener(_pauseAutoTranscription);
     widget.sync.addListener(_updateScreen);
+    widget.sync.addListener(_onSettingsChanged);
     _search.addListener(_onSearchChanged);
     _searchFocus.addListener(_onSearchFocusChanged);
     widget.sync.load();
@@ -132,7 +160,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _changes.cancel();
     _search.dispose();
     _searchFocus.dispose();
+    _pull.dispose();
     widget.sync.removeListener(_updateScreen);
+    widget.sync.removeListener(_onSettingsChanged);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
     _recorder.dispose();
     _player.dispose();
@@ -154,8 +184,20 @@ class _HomeScreenState extends State<HomeScreen> {
       _showMessage((l10n) => l10n.loadRecordingsFailed);
       return;
     }
-    _syncStorage();
+    unawaited(_syncThenTranscribe());
     await _addMissingDetails();
+  }
+
+  /// Lee el destino y después empieza a transcribir automáticamente.
+  Future<void> _syncThenTranscribe() async {
+    try {
+      await widget.sync.sync();
+    } catch (_) {
+      // Se transcribe igualmente.
+    }
+    _autoTranscriptionReady = true;
+    _transcriptionSettings ??= widget.sync.settings.transcription;
+    await _transcribeMissing();
   }
 
   bool _addingDetails = false;
@@ -250,6 +292,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _syncStorage() => unawaited(widget.sync.sync());
 
+  /// Al volver a la app se guarda lo pendiente, se buscan cambios en el
+  /// destino y después se reanuda la transcripción automática (p. ej. si se
+  /// ha dado un permiso o descargado un idioma en los ajustes del sistema).
+  void _onResume() {
+    _autoTranscriptionStopped = null;
+    unawaited(_syncThenTranscribe());
+  }
+
   bool _screenKeptOn = false;
 
   /// Mantiene la pantalla encendida mientras se graba o se espera para
@@ -280,16 +330,21 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _recordings = recordings);
     if (added > 0) _showMessage((l10n) => l10n.newRecordingsFound(added));
     unawaited(_addMissingDetails());
+    unawaited(_transcribeMissing());
   }
 
   // --- Búsqueda ---
 
   /// Abre el campo de búsqueda con el foco (o le da el foco, si ya está).
+  /// Si ya lo tiene, vuelve a mostrar el teclado, que se puede haber ocultado
+  /// (p. ej. con «atrás» en Android).
   void _startSearch() {
-    if (_searchOpen) {
-      _searchFocus.requestFocus();
-    } else {
+    if (!_searchOpen) {
       setState(() => _searchOpen = true);
+    } else if (_searchFocus.hasFocus) {
+      unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
+    } else {
+      _searchFocus.requestFocus();
     }
   }
 
@@ -408,6 +463,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _recordings = [saved, ..._recordings]);
     _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncStorage();
+    unawaited(_transcribeMissing());
   }
 
   Future<void> _confirmCancel() async {
@@ -457,6 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     // Si se ha descargado, ya se puede calcular lo que le falte.
     unawaited(_addMissingDetails());
+    unawaited(_transcribeMissing());
   }
 
   Future<void> _onAction(
@@ -508,6 +565,8 @@ class _HomeScreenState extends State<HomeScreen> {
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
     _syncStorage();
+    // La copia, o el audio editado si no tenía transcripción.
+    unawaited(_transcribeMissing());
   }
 
   Future<void> _rename(Recording recording) async {
@@ -544,6 +603,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     unawaited(_addMissingDetails());
+    unawaited(_transcribeMissing());
   }
 
   // --- Transcripción ---
@@ -583,6 +643,8 @@ class _HomeScreenState extends State<HomeScreen> {
       _replaceRecording(transcribed);
       // Se guarda como .txt junto al audio.
       _syncStorage();
+      // Si la automática se había detenido, ya se puede.
+      if (_autoTranscriptionStopped != null) _resumeAutoTranscription();
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -599,6 +661,171 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       _showMessage((l10n) => l10n.transcriptionFailed);
     }
+  }
+
+  // --- Transcripción automática ---
+
+  /// Transcribe en segundo plano las grabaciones que no tienen transcripción
+  /// (si está activado en las opciones), de la más reciente a la más antigua.
+  /// Las de Google Drive que no se han descargado se dejan para cuando se
+  /// descarguen (p. ej. al escucharlas).
+  Future<void> _transcribeMissing() async {
+    if (!_autoTranscriptionReady) return;
+    if (_findingTranscriptions) {
+      // Se repite al terminar para incluir las que han llegado entretanto.
+      _transcriptionsPending = true;
+      return;
+    }
+    _findingTranscriptions = true;
+    try {
+      do {
+        _transcriptionsPending = false;
+        await widget.sync.load();
+        for (final recording in _recordings) {
+          if (!mounted || !_autoTranscribing) return;
+          if (!_needsAutoTranscript(recording)) continue;
+          if (!await widget.sync.hasLocalAudio(recording)) continue;
+          // Puede haber cambiado entretanto (o haberse detenido).
+          if (!mounted || !_autoTranscribing) return;
+          final current = _recordings
+              .where((r) => r.id == recording.id)
+              .firstOrNull;
+          if (current != null && _needsAutoTranscript(current)) {
+            _transcribeInBackground(current);
+          }
+        }
+      } while (_transcriptionsPending && mounted);
+    } finally {
+      _findingTranscriptions = false;
+    }
+  }
+
+  bool _findingTranscriptions = false;
+  bool _transcriptionsPending = false;
+
+  /// Indica si se transcribe automáticamente ahora.
+  bool get _autoTranscribing =>
+      widget.sync.settings.transcription.automatic &&
+      _autoTranscriptionStopped == null;
+
+  bool _needsAutoTranscript(Recording recording) =>
+      recording.needsTranscript &&
+      !_autoTranscriptionSkipped.contains(recording.id) &&
+      !_transcriptions.isTranscribing(recording);
+
+  void _transcribeInBackground(Recording recording) {
+    final settings = widget.sync.settings.transcription;
+    unawaited(
+      _transcriptions
+          .transcribeInBackground(
+            recording,
+            engine: settings.engine,
+            language: _transcriptionLanguage(settings),
+          )
+          .then(
+            _onTranscribedInBackground,
+            onError: (Object error) =>
+                _onAutoTranscriptionFailed(recording, error),
+          ),
+    );
+  }
+
+  void _onTranscribedInBackground(Recording? transcribed) {
+    // `null` si se ha pedido entretanto (lo recibe quien lo pidió) o se ha
+    // retirado.
+    if (transcribed == null || !mounted) return;
+    _replaceRecording(transcribed);
+    // Se guarda como .txt junto al audio.
+    _syncStorage();
+  }
+
+  Future<void> _onAutoTranscriptionFailed(
+    Recording recording,
+    Object error,
+  ) async {
+    if (!mounted) return;
+    final exception = error is TranscriptionException
+        ? error
+        : TranscriptionException(TranscriptionError.failed, cause: error);
+    switch (exception.error) {
+      case TranscriptionError.noSpeech:
+        // No se vuelve a intentar hasta que cambie el audio (salvo que
+        // entretanto se haya transcrito o editado).
+        final current = _recordings
+            .where((r) => r.id == recording.id)
+            .firstOrNull;
+        if (current == null ||
+            current.transcript != null ||
+            current.revision != recording.revision) {
+          return;
+        }
+        try {
+          _replaceRecording(
+            await widget.repository.setTranscript(current, null),
+          );
+        } catch (_) {
+          _autoTranscriptionSkipped.add(recording.id);
+        }
+      case TranscriptionError.canceled:
+      case TranscriptionError.failed:
+        _autoTranscriptionSkipped.add(recording.id);
+      case TranscriptionError.downloading:
+        // Se reanuda al volver a la app.
+        _stopAutoTranscription(exception, report: false);
+      case TranscriptionError.systemUnavailable:
+      case TranscriptionError.unsupportedLanguage:
+      case TranscriptionError.needsDownload:
+      case TranscriptionError.denied:
+      case TranscriptionError.microphone:
+      case TranscriptionError.whisperNotInstalled:
+        _stopAutoTranscription(exception);
+    }
+  }
+
+  /// Detiene la transcripción automática por [error], que afectaría a todas,
+  /// y lo avisa (una vez por sesión) con la opción de ver por qué.
+  void _stopAutoTranscription(
+    TranscriptionException error, {
+    bool report = true,
+  }) {
+    _autoTranscriptionStopped = error;
+    _transcriptions.cancelBackground();
+    if (!report || !_reportedAutoErrors.add(error.error) || !mounted) return;
+    final l10n = context.l10n;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(l10n.autoTranscriptionFailed),
+          action: SnackBarAction(
+            label: l10n.view,
+            onPressed: () => _explainTranscriptionError(error),
+          ),
+        ),
+      );
+  }
+
+  void _resumeAutoTranscription() {
+    _autoTranscriptionStopped = null;
+    unawaited(_transcribeMissing());
+  }
+
+  /// Mientras se graba, la transcripción automática espera.
+  void _pauseAutoTranscription() {
+    _transcriptions.backgroundPaused = _recorder.isBusy;
+  }
+
+  /// Si cambian las opciones de la transcripción, vuelve a empezar con las
+  /// nuevas (o se detiene, si se ha desactivado).
+  void _onSettingsChanged() {
+    if (!widget.sync.isLoaded) return;
+    final settings = widget.sync.settings.transcription;
+    final previous = _transcriptionSettings;
+    _transcriptionSettings = settings;
+    if (previous == null || previous == settings) return;
+    _transcriptions.cancelBackground();
+    _reportedAutoErrors.clear();
+    _resumeAutoTranscription();
   }
 
   Future<void> _explainTranscriptionError(TranscriptionException e) async {
@@ -746,14 +973,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ..showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
-  Future<void> _openSettings() {
-    return Navigator.push<void>(
+  Future<void> _openSettings() async {
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
         builder: (context) =>
             SettingsScreen(sync: widget.sync, whisper: widget.whisper),
       ),
     );
+    // P. ej. si se ha instalado Whisper.
+    if (mounted) _resumeAutoTranscription();
   }
 
   // --- Interfaz ---
@@ -781,37 +1010,57 @@ class _HomeScreenState extends State<HomeScreen> {
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        // Abre el menú de carpetas (mientras se graba no se cambia de
-        // carpeta).
-        leading: IconButton(
-          key: const Key('folders-button'),
-          tooltip: context.l10n.folders,
-          icon: const Icon(Icons.folder_outlined),
-          onPressed: _recorder.isBusy
-              ? null
-              : () => _scaffoldKey.currentState?.openDrawer(),
+        // Al tirar de la lista, la lupa baja por debajo de la barra.
+        clipBehavior: Clip.none,
+        // El botón de carpetas y, en una subcarpeta, su nombre (en la
+        // principal, nada), hasta la lupa.
+        leadingWidth: searching || folder.isEmpty
+            ? null
+            : MediaQuery.sizeOf(context).width / 2 - 32,
+        leading: Padding(
+          padding: const EdgeInsetsDirectional.only(start: 4),
+          child: Row(
+            children: [
+              // Abre el menú de carpetas (mientras se graba no se cambia de
+              // carpeta).
+              IconButton(
+                key: const Key('folders-button'),
+                tooltip: context.l10n.folders,
+                icon: const Icon(Icons.folder_outlined),
+                onPressed: _recorder.isBusy
+                    ? null
+                    : () => _scaffoldKey.currentState?.openDrawer(),
+              ),
+              if (!searching && folder.isNotEmpty)
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsetsDirectional.only(start: 12),
+                    child: Text(
+                      folder,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
-        // Mientras se busca, el campo ocupa desde las carpetas hasta las
-        // opciones. Si no, el nombre de la subcarpeta abierta (en la
-        // principal, nada).
-        titleSpacing: searching ? 8 : null,
+        // La lupa, en el centro. Mientras se busca, el campo ocupa desde las
+        // carpetas hasta las opciones, con la lupa a la izquierda.
+        centerTitle: !searching,
+        titleSpacing: 0,
         title: searching
             ? _SearchField(
                 controller: _search,
                 focusNode: _searchFocus,
+                pull: _pull,
                 onClear: _closeSearch,
               )
-            : (folder.isEmpty ? null : Text(folder)),
+            : _SearchButton(pull: _pull, onPressed: _startSearch),
         actions: [
-          if (!searching) ...[
+          if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
-            IconButton(
-              key: const Key('search-button'),
-              tooltip: context.l10n.search,
-              icon: const Icon(Icons.search),
-              onPressed: _startSearch,
-            ),
-          ],
           IconButton(
             key: const Key('settings-button'),
             tooltip: context.l10n.settings,
@@ -899,6 +1148,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final l10n = context.l10n;
     // Tirando hacia abajo desde arriba de la lista se busca.
     return _PullToSearch(
+      pull: _pull,
       onPull: _startSearch,
       child: recordings.isEmpty
           ? switch ((searching, folder.isEmpty)) {
@@ -925,7 +1175,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildList(List<Recording> recordings, List<String> terms) {
     return ListView.builder(
       // También con pocas grabaciones, para poder tirar hacia abajo.
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: _PullToSearch.physics,
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: recordings.length,
       itemBuilder: (context, index) {
@@ -1063,7 +1313,7 @@ class _EmptyState extends StatelessWidget {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics: _PullToSearch.physics,
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: constraints.maxHeight),
           child: Center(
@@ -1093,16 +1343,20 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Campo de búsqueda de la barra superior.
+/// Campo de búsqueda de la barra superior: la lupa a la izquierda (la que
+/// baja al tirar de la lista), el texto y la X para borrar y cerrar, todo
+/// centrado en vertical como los botones de la barra.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
     required this.focusNode,
+    required this.pull,
     required this.onClear,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+  final ValueNotifier<_Pull> pull;
   final VoidCallback onClear;
 
   @override
@@ -1114,9 +1368,12 @@ class _SearchField extends StatelessWidget {
       focusNode: focusNode,
       autofocus: true,
       textInputAction: TextInputAction.search,
+      textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
         hintText: l10n.searchHint,
         border: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        prefixIcon: _SearchButton(pull: pull),
         suffixIcon: IconButton(
           tooltip: l10n.clearSearch,
           icon: const Icon(Icons.close),
@@ -1127,11 +1384,56 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// Llama a [onPull] al tirar de [child] hacia abajo cuando ya está arriba del
-/// todo, y mientras tanto muestra una lupa que aparece poco a poco.
-class _PullToSearch extends StatefulWidget {
-  const _PullToSearch({required this.onPull, required this.child});
+/// Cuánto se ha tirado de la lista hacia abajo para buscar.
+@immutable
+class _Pull {
+  const _Pull(this.distance, {this.armed = false});
 
+  static const none = _Pull(0);
+
+  /// Lo que ha bajado la lista (y la lupa de la barra con ella).
+  final double distance;
+
+  /// Si se ha pasado el punto: al soltar, se busca.
+  final bool armed;
+
+  double get progress =>
+      (distance / _PullToSearch.distance).clamp(0.0, 1.0).toDouble();
+
+  @override
+  bool operator ==(Object other) =>
+      other is _Pull && other.distance == distance && other.armed == armed;
+
+  @override
+  int get hashCode => Object.hash(distance, armed);
+}
+
+/// Llama a [onPull] al tirar de [child] hacia abajo cuando ya está arriba del
+/// todo y soltar tras pasar un punto ([distance]); si se suelta antes, no
+/// hace nada. Mientras tanto, publica en [pull] lo que se ha tirado, para que
+/// la lupa de la barra baje con la lista.
+///
+/// La lista baja (rebota también en Android) y deja sitio a la lupa, sin
+/// nada detrás. Al pasar el punto la lupa cambia de color y el móvil vibra;
+/// volviendo a subir antes de soltar se cancela.
+class _PullToSearch extends StatefulWidget {
+  const _PullToSearch({
+    required this.pull,
+    required this.onPull,
+    required this.child,
+  });
+
+  /// Desplazamiento de la lista y de los estados vacíos: siempre se pueden
+  /// desplazar (también con pocas grabaciones) y rebotan, para que la lista
+  /// baje al tirar.
+  static const physics = BouncingScrollPhysics(
+    parent: AlwaysScrollableScrollPhysics(),
+  );
+
+  /// Lo que tiene que bajar la lista para buscar al soltarla.
+  static const distance = 72.0;
+
+  final ValueNotifier<_Pull> pull;
   final VoidCallback onPull;
   final Widget child;
 
@@ -1140,72 +1442,124 @@ class _PullToSearch extends StatefulWidget {
 }
 
 class _PullToSearchState extends State<_PullToSearch> {
-  /// Lo que hay que tirar para buscar.
-  static const _distance = 80.0;
+  /// Si se está arrastrando la lista.
+  bool _dragging = false;
 
-  /// Lo que se ha tirado más allá del principio de la lista.
-  double _pulled = 0;
-  bool _triggered = false;
+  /// Si se ha tirado de la lista (y no ha rebotado al llegar arriba
+  /// deslizándola): solo entonces baja la lupa.
+  bool _pulling = false;
+
+  bool get _armed => widget.pull.value.armed;
 
   bool _onScroll(ScrollNotification notification) {
     if (notification.depth != 0) return false;
-    var pulled = _pulled;
+    final metrics = notification.metrics;
+    final pulled = math.max(0.0, metrics.minScrollExtent - metrics.pixels);
+    var armed = _armed;
     switch (notification) {
-      case ScrollStartNotification():
-        pulled = 0;
-        _triggered = false;
-      // Android: la lista no pasa del principio; avisa de lo que sobra.
-      case OverscrollNotification(:final overscroll, :final dragDetails)
-          when dragDetails != null && overscroll < 0:
-        pulled -= overscroll;
-      case ScrollUpdateNotification(:final metrics, :final dragDetails)
-          when dragDetails != null:
-        // iOS: la lista rebota más allá del principio.
-        pulled = metrics.pixels < metrics.minScrollExtent
-            ? metrics.minScrollExtent - metrics.pixels
-            : 0;
+      case ScrollStartNotification(:final dragDetails):
+        _dragging = dragDetails != null;
+        if (_dragging) armed = false;
+      case ScrollUpdateNotification(:final dragDetails):
+        // Al soltar, la lista vuelve a su sitio sin que se arrastre.
+        if (_dragging && dragDetails == null) _release();
+        if (_dragging) {
+          if (pulled > 0) _pulling = true;
+          armed = pulled >= _PullToSearch.distance;
+        }
       case ScrollEndNotification():
-        pulled = 0;
+        if (_dragging) _release();
+        _pulling = false;
+        armed = false;
       default:
         break;
     }
-    if (!_triggered && pulled >= _distance) {
-      _triggered = true;
-      widget.onPull();
-    }
-    if (pulled != _pulled) setState(() => _pulled = pulled);
+    if (armed && !_armed) unawaited(HapticFeedback.mediumImpact());
+    // El color de la lupa se mantiene mientras la lista vuelve a su sitio.
+    widget.pull.value = _Pull(_pulling ? pulled : 0, armed: armed);
     return false;
+  }
+
+  /// Al soltar tras pasar el punto, se busca.
+  void _release() {
+    _dragging = false;
+    if (_armed) widget.onPull();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progress = (_pulled / _distance).clamp(0.0, 1.0);
     return NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
-      child: Stack(
-        children: [
-          widget.child,
-          if (progress > 0)
-            Positioned(
-              top: 8 + 16 * progress,
-              left: 0,
-              right: 0,
-              child: IgnorePointer(
-                child: Center(
-                  child: Opacity(
-                    opacity: progress,
-                    child: CircleAvatar(
-                      backgroundColor: theme.colorScheme.secondaryContainer,
-                      foregroundColor: theme.colorScheme.onSecondaryContainer,
-                      child: const Icon(Icons.search),
+      child: widget.child,
+    );
+  }
+}
+
+/// La lupa de la barra superior: en el centro o, mientras se busca, a la
+/// izquierda del campo. Al tirar de la lista hacia abajo ([pull]) baja con
+/// ella dentro de un círculo que va apareciendo y que cambia de color al
+/// pasar el punto en que se busca.
+class _SearchButton extends StatelessWidget {
+  const _SearchButton({required this.pull, this.onPressed});
+
+  final ValueNotifier<_Pull> pull;
+
+  /// Al pulsarla; `null` para la del campo de búsqueda, que no es un botón.
+  final VoidCallback? onPressed;
+
+  /// Diámetro del círculo.
+  static const _size = 40.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<_Pull>(
+      valueListenable: pull,
+      builder: (context, pull, _) {
+        final pulling = pull.distance > 0;
+        final icon = Icon(
+          Icons.search,
+          color: pull.armed
+              ? colors.onPrimary
+              : (pulling ? colors.onSecondaryContainer : null),
+        );
+        return Transform.translate(
+          offset: Offset(0, pull.distance),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (pulling)
+                Opacity(
+                  opacity: pull.progress,
+                  child: AnimatedContainer(
+                    key: const Key('pull-to-search'),
+                    duration: const Duration(milliseconds: 150),
+                    width: _size,
+                    height: _size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: pull.armed
+                          ? colors.primary
+                          : colors.secondaryContainer,
                     ),
                   ),
                 ),
-              ),
-            ),
-        ],
-      ),
+              if (onPressed case final onPressed?)
+                IconButton(
+                  key: const Key('search-button'),
+                  tooltip: context.l10n.search,
+                  icon: icon,
+                  onPressed: onPressed,
+                )
+              else
+                SizedBox.square(
+                  dimension: kMinInteractiveDimension,
+                  child: icon,
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

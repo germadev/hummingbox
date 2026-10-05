@@ -18,6 +18,7 @@ class Recording {
     this.audio,
     this.folder = '',
     this.transcript,
+    this.noAutoTranscript,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -46,6 +47,7 @@ class Recording {
       audio: AudioInfo.fromJson(json['audio']),
       folder: json['folder'] as String? ?? '',
       transcript: Transcript.fromJson(json['transcript']),
+      noAutoTranscript: json['noAutoTranscript'] as int?,
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -94,6 +96,16 @@ class Recording {
   /// Texto de la grabación, si se ha transcrito.
   final Transcript? transcript;
 
+  /// Revisión del audio que no se transcribe automáticamente: aquella en la
+  /// que no se reconoció ninguna palabra o cuya transcripción se eliminó (en
+  /// la app o borrando su `.txt`). Si se edita el audio, ya no cuenta.
+  final int? noAutoTranscript;
+
+  /// Indica si se debe transcribir automáticamente: no tiene transcripción
+  /// y no se ha quedado sin ella a propósito (ver [noAutoTranscript]).
+  bool get needsTranscript =>
+      transcript == null && noAutoTranscript != revision;
+
   /// Indica si la transcripción es de otra versión del audio (si se editó o
   /// se cambió fuera de la app después de transcribirla).
   bool get isTranscriptOutdated =>
@@ -125,6 +137,7 @@ class Recording {
     if (audio != null) 'audio': audio!.toJson(),
     if (folder.isNotEmpty) 'folder': folder,
     if (transcript != null) 'transcript': transcript!.toJson(),
+    if (noAutoTranscript != null) 'noAutoTranscript': noAutoTranscript,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -152,6 +165,7 @@ class Recording {
       audio: audio ?? this.audio,
       folder: folder,
       transcript: transcript == null ? this.transcript : transcript(),
+      noAutoTranscript: noAutoTranscript,
     );
   }
 }

@@ -489,6 +489,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
               const Divider(),
               _SectionTitle(l10n.transcriptionSection),
+              SwitchListTile(
+                key: const Key('auto-transcribe-option'),
+                secondary: const Icon(Icons.auto_awesome_outlined),
+                title: Text(l10n.autoTranscribe),
+                subtitle: Text(l10n.autoTranscribeSubtitle),
+                value: settings.transcription.automatic,
+                onChanged: (automatic) => _sync.setTranscription(
+                  settings.transcription.copyWith(automatic: automatic),
+                ),
+              ),
               ListTile(
                 key: const Key('transcription-engine-option'),
                 leading: const Icon(Icons.notes),

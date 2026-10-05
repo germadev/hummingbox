@@ -35,8 +35,9 @@ client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
-waveform, editing and previewing with the volume, the folders menu, search,
-keeping the screen on, transcribing and reading the transcript, settings,
+waveform, editing and previewing with the volume, the folders menu, search
+(including pulling the list down), keeping the screen on, transcribing (also
+automatically, in the background) and reading the transcript, settings,
 downloading Whisper, theme, renaming, deleting and language). Widget tests
 run in Spanish.
 

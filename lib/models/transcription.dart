@@ -26,6 +26,7 @@ class TranscriptionSettings {
   const TranscriptionSettings({
     this.engine = TranscriptionEngine.system,
     this.language = appLanguage,
+    this.automatic = true,
   });
 
   /// Valor de [language] para usar el idioma de la app.
@@ -41,17 +42,24 @@ class TranscriptionSettings {
   /// ISO 639-1 («es», «en»…).
   final String language;
 
+  /// Si se transcriben solas, en segundo plano, las grabaciones que no
+  /// tienen transcripción.
+  final bool automatic;
+
   TranscriptionSettings copyWith({
     TranscriptionEngine? engine,
     String? language,
+    bool? automatic,
   }) => TranscriptionSettings(
     engine: engine ?? this.engine,
     language: language ?? this.language,
+    automatic: automatic ?? this.automatic,
   );
 
   Map<String, dynamic> toJson() => {
     'engine': engine.name,
     if (language != appLanguage) 'language': language,
+    if (!automatic) 'automatic': false,
   };
 
   factory TranscriptionSettings.fromJson(Object? json) {
@@ -62,6 +70,7 @@ class TranscriptionSettings {
           TranscriptionEngine.values.asNameMap()[json['engine']] ??
           TranscriptionEngine.system,
       language: language is String ? language : appLanguage,
+      automatic: json['automatic'] != false,
     );
   }
 
@@ -69,10 +78,11 @@ class TranscriptionSettings {
   bool operator ==(Object other) =>
       other is TranscriptionSettings &&
       other.engine == engine &&
-      other.language == language;
+      other.language == language &&
+      other.automatic == automatic;
 
   @override
-  int get hashCode => Object.hash(engine, language);
+  int get hashCode => Object.hash(engine, language, automatic);
 }
 
 /// Texto de una grabación, obtenido con el reconocimiento de voz.

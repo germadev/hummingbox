@@ -13,7 +13,9 @@ enum RecordingAction { edit, rename, transcribe, viewTranscript, share, delete }
 /// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
 /// toda la grabación. La onda hace de barra de progreso: muestra lo
 /// reproducido y permite saltar. Tocar el nombre permite cambiarlo. Debajo,
-/// el principio de su transcripción o lo que lleva transcrito.
+/// mientras se escucha o si coincide con la búsqueda, su transcripción, y lo
+/// que lleva transcrito si se ha pedido transcribirla (las de segundo plano,
+/// solo mientras se escucha).
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
@@ -34,7 +36,8 @@ class RecordingTile extends StatelessWidget {
   final VoidCallback? onCancelTranscription;
 
   /// Palabras buscadas (normalizadas): se resaltan en el nombre y en la
-  /// transcripción, que se muestra desde la primera que aparece.
+  /// transcripción, que se muestra (desde la primera que aparece) si alguna
+  /// está en ella.
   final List<String> highlight;
 
   /// Si se muestra la subcarpeta en la que está (en los resultados de una
@@ -68,6 +71,15 @@ class RecordingTile extends StatelessWidget {
           fontWeight: FontWeight.bold,
           color: theme.colorScheme.primary,
         );
+        final transcript = recording.transcript;
+        // Mientras se escucha o si tiene lo que se busca.
+        final showTranscript =
+            isCurrent ||
+            (transcript != null &&
+                findMatches(transcript.text, highlight).isNotEmpty);
+        final showProgress =
+            transcriptions.isRequested(recording) ||
+            (isCurrent && transcriptions.isTranscribing(recording));
 
         return Card.filled(
           color: isCurrent
@@ -168,7 +180,8 @@ class RecordingTile extends StatelessWidget {
                       if (recording.transcript == null)
                         PopupMenuItem(
                           value: RecordingAction.transcribe,
-                          enabled: !transcriptions.isTranscribing(recording),
+                          // Si va en segundo plano, se adelanta.
+                          enabled: !transcriptions.isRequested(recording),
                           child: ListTile(
                             leading: const Icon(Icons.notes),
                             title: Text(l10n.transcribe),
@@ -212,13 +225,13 @@ class RecordingTile extends StatelessWidget {
                   onSeek: onSeek,
                 ),
               ),
-              if (transcriptions.isTranscribing(recording))
+              if (showProgress)
                 _TranscriptionProgress(
                   progress: transcriptions.progressOf(recording),
                   running: transcriptions.isRunning(recording),
                   onCancel: onCancelTranscription,
                 )
-              else if (recording.transcript case final transcript?)
+              else if (transcript != null && showTranscript)
                 InkWell(
                   key: Key('transcript-${recording.id}'),
                   onTap: () =>

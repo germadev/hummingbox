@@ -615,6 +615,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get transcriptionEngine => '文字起こしの方法';
 
   @override
+  String get autoTranscribe => '自動で文字起こし';
+
+  @override
+  String get autoTranscribeSubtitle => 'まだ文字起こしされていない録音をバックグラウンドで処理します';
+
+  @override
+  String get autoTranscriptionFailed => '録音を自動で文字起こしできません';
+
+  @override
   String get systemSpeechRecognition => 'システムの音声認識';
 
   @override

@@ -1172,6 +1172,24 @@ abstract class AppLocalizations {
   /// **'Transcribe with'**
   String get transcriptionEngine;
 
+  /// Opción para transcribir en segundo plano las grabaciones sin transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe automatically'**
+  String get autoTranscribe;
+
+  /// No description provided for @autoTranscribeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'In the background, recordings that don\'t have a transcript yet'**
+  String get autoTranscribeSubtitle;
+
+  /// Aviso cuando la transcripción automática no puede seguir; la acción «Ver» explica por qué
+  ///
+  /// In en, this message translates to:
+  /// **'Recordings can\'t be transcribed automatically'**
+  String get autoTranscriptionFailed;
+
   /// No description provided for @systemSpeechRecognition.
   ///
   /// In en, this message translates to:

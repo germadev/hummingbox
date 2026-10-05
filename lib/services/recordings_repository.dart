@@ -67,7 +67,18 @@ abstract interface class RecordingsRepository {
   });
 
   /// Guarda (o borra, si es `null`) la transcripción de [recording].
-  Future<Recording> setTranscript(Recording recording, Transcript? transcript);
+  ///
+  /// Sin transcripción, esta versión del audio ([Recording.revision]) ya no se
+  /// transcribe automáticamente (ver [Recording.noAutoTranscript]): se ha
+  /// eliminado a propósito o no tiene palabras.
+  ///
+  /// Con [keepExisting], no sustituye la que ya tenga (p. ej. leída de su
+  /// `.txt` mientras se transcribía en segundo plano).
+  Future<Recording> setTranscript(
+    Recording recording,
+    Transcript? transcript, {
+    bool keepExisting = false,
+  });
 
   /// Guarda (o borra, si [state] es `null`) el estado de la copia de
   /// [recording] en el destino [target].
@@ -301,12 +312,19 @@ class FileRecordingsRepository implements RecordingsRepository {
   }
 
   @override
-  Future<Recording> setTranscript(Recording recording, Transcript? transcript) {
+  Future<Recording> setTranscript(
+    Recording recording,
+    Transcript? transcript, {
+    bool keepExisting = false,
+  }) {
     return _update(recording, (metadata) {
+      if (keepExisting && metadata['transcript'] != null) return;
       if (transcript == null) {
         metadata.remove('transcript');
+        metadata['noAutoTranscript'] = recording.revision;
       } else {
         metadata['transcript'] = transcript.toJson();
+        metadata.remove('noAutoTranscript');
       }
     });
   }

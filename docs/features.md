@@ -70,15 +70,23 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 The folder button (top left), or swiping right anywhere on the list, opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
-In a subfolder its name is shown in the top bar (the main folder has no
-title), the list shows its recordings and **new recordings go there**. Back
+In a subfolder its name is shown in the top bar, next to the folder button
+(the main folder has no title), the list shows its recordings and **new recordings go there**. Back
 returns to the main folder.
 
 ## Search
 
-The magnifier (left of ⚙), or **pulling the list down** when it is already at
-the top, opens a search field that spans the top bar, from the folder button
-to ⚙. It searches **names and transcripts** in every folder, ignoring case and
+The magnifier (in the middle of the top bar), or **pulling the list down**
+when it is already at the top, opens a search field that spans the top bar,
+from the folder button to ⚙, with the magnifier on the left and an X on the
+right. While pulling, the list moves down and the bar's magnifier comes down
+with it, inside a circle; past a certain point the circle changes colour and
+the phone gives a short vibration, and **releasing** there opens the search
+(going back up before releasing cancels it). If the search field already has
+the focus, pulling shows the keyboard again (for example after hiding it with
+Back on Android).
+
+It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.
 Results highlight what was found, show the part of the transcript where it
 appears and each recording's subfolder. The X or Back closes the search.
@@ -98,11 +106,14 @@ From a recording's menu → *Edit*:
 
 ## Transcription
 
-From a recording's menu → *Transcribe*, with the system speech recognizer or
-with **Whisper** on the device. The card shows the beginning of the text;
-tapping it opens the whole text to read, copy, share, transcribe again or
-delete it. The text is also saved as a `.txt` file next to the audio. See
-[Transcription](transcription.md).
+Recordings are **transcribed automatically in the background** (it can be
+turned off in Settings), with the system speech recognizer or with
+**Whisper** on the device; a recording can also be transcribed from its menu
+→ *Transcribe*. A recording's card shows its transcript **while it is
+playing** (or paused) or when it **matches the search**; tapping it, or
+*View transcript* in the menu, opens the whole text to read, copy, share,
+transcribe again or delete it. The text is also saved as a `.txt` file next
+to the audio. See [Transcription](transcription.md).
 
 ## Settings
 
@@ -116,8 +127,8 @@ The ⚙ button (top right):
   recording in the app's folder in your Drive ("HummingBox"); without one,
   recordings are stored in Drive. It needs some setup first (see
   [Google Drive setup](google-drive.md)).
-- **Transcription**: engine, Whisper model (download or delete it) and
-  language.
+- **Transcription**: automatic transcription, engine, Whisper model
+  (download or delete it) and language.
 - **Appearance**: theme — system (default), light or dark — with the icon's
   colours (purple `#5C2BD6` and, for recording, red `#FF4D4D`).
 

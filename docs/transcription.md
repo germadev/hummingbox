@@ -1,5 +1,36 @@
 # Transcription
 
+## Automatic transcription
+
+*Settings → Transcription → Transcribe automatically* (on by default):
+recordings without a transcript are transcribed in the background, one at a
+time, from the newest to the oldest, without showing their progress (it is
+shown for the one that is playing). New recordings are transcribed when they
+are saved, and so are those that appear in the destination, edited copies and
+recordings whose audio is edited.
+
+- It starts after the destination has been read, so existing `.txt` files are
+  picked up first instead of being transcribed again.
+- While recording it waits: the transcription in progress stops and starts
+  again when the recording is saved.
+- With Google Drive as the destination, only recordings whose audio is on the
+  phone are transcribed (made in the app, or already played or shared);
+  nothing is downloaded just to transcribe it.
+- It does not retry a recording in which no words were recognized or whose
+  transcript was deleted (in the app or by deleting its `.txt` file), until
+  its audio changes. If one fails or its transcription is cancelled, it is
+  retried the next time the app starts.
+- If transcription cannot work at all (the system recognizer is not
+  available, the language is not supported or not downloaded, a permission is
+  missing, Whisper is not installed), automatic transcription stops and the
+  app says so once, with *View* to see why and how to fix it. It tries again
+  when the transcription settings change, after leaving Settings and when
+  returning to the app.
+- Choosing *Transcribe* in a recording's menu moves it ahead of the automatic
+  ones and shows its progress.
+
+## Engines
+
 *Settings → Transcription → Transcribe with*:
 
 - **System speech recognition** (default): nothing to download.
@@ -32,9 +63,10 @@ Before transcribing, the audio is converted to 16 kHz mono (what the
 recognizers use), in blocks and in a separate isolate. Long recordings are
 split at the silence closest to the limit: with Whisper, into chunks of at
 most 10 minutes, so no more than about 40 MB of samples are held in memory.
-One recording is transcribed at a time; the card shows the progress and the
+One recording is transcribed at a time; when it was requested from the
+menu (or it is the one playing), the card shows the progress and the
 transcription can be cancelled. With Google Drive as the destination,
-transcribing downloads the audio (as playing it does).
+transcribing from the menu downloads the audio (as playing it does).
 
 The text is stored in the app's index together with the engine, the language
 and the audio revision: if the recording is edited or changed afterwards, the

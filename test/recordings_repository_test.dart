@@ -458,6 +458,59 @@ void main() {
       expect((await repository.loadAll()).single.transcript, isNull);
     });
 
+    test('sin transcripción, esa versión no se transcribe sola', () async {
+      final path = await repository.createRecordingPath();
+      await File(path).writeAsBytes([1]);
+      var recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      expect(recording.needsTranscript, isTrue);
+
+      await repository.setTranscript(recording, null);
+      recording = (await repository.loadAll()).single;
+      expect(recording.noAutoTranscript, 0);
+      expect(recording.needsTranscript, isFalse);
+
+      // Al editar el audio, sí.
+      final edited = p.join(directory.path, 'edited.m4a');
+      await File(edited).writeAsBytes([2]);
+      recording = await repository.replaceAudio(
+        recording,
+        sourcePath: edited,
+        duration: Duration.zero,
+      );
+      expect(recording.needsTranscript, isTrue);
+
+      // Y al transcribirla, se olvida.
+      recording = await repository.setTranscript(
+        recording,
+        Transcript(text: 'Hola', revision: 1, createdAt: DateTime(2026, 10, 5)),
+      );
+      expect(recording.noAutoTranscript, isNull);
+    });
+
+    test('puede no sustituir la transcripción que ya tiene', () async {
+      final path = await repository.createRecordingPath();
+      await File(path).writeAsBytes([1]);
+      final recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      Transcript text(String text) =>
+          Transcript(text: text, revision: 0, createdAt: DateTime(2026, 10, 5));
+      await repository.setTranscript(recording, text('Del .txt'));
+
+      final kept = await repository.setTranscript(
+        recording,
+        text('Automática'),
+        keepExisting: true,
+      );
+
+      expect(kept.transcript!.text, 'Del .txt');
+      expect((await repository.loadAll()).single.transcript!.text, 'Del .txt');
+    });
+
     test('guarda el .txt de la transcripción y una sin motor', () async {
       final text = TranscriptFile(
         ref: 'doc9',

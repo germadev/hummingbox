@@ -634,6 +634,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get transcriptionEngine => 'Transcrever com';
 
   @override
+  String get autoTranscribe => 'Transcrever automaticamente';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'Em segundo plano, as gravações que ainda não têm transcrição';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Não é possível transcrever as gravações automaticamente';
+
+  @override
   String get systemSpeechRecognition => 'Reconhecimento de voz do sistema';
 
   @override

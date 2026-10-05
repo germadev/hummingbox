@@ -233,9 +233,28 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   @override
   Future<Recording> setTranscript(
     Recording recording,
-    Transcript? transcript,
-  ) async =>
-      _replace(byId(recording.id).copyWith(transcript: () => transcript));
+    Transcript? transcript, {
+    bool keepExisting = false,
+  }) async {
+    final current = byId(recording.id);
+    if (keepExisting && current.transcript != null) return current;
+    return _replace(
+      Recording(
+        id: current.id,
+        path: current.path,
+        name: current.name,
+        createdAt: current.createdAt,
+        duration: current.duration,
+        waveform: current.waveform,
+        revision: current.revision,
+        copies: current.copies,
+        audio: current.audio,
+        folder: current.folder,
+        transcript: transcript,
+        noAutoTranscript: transcript == null ? recording.revision : null,
+      ),
+    );
+  }
 
   @override
   Future<Recording> setCopy(
@@ -289,6 +308,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         audio: audioChanged ? null : current.audio,
         folder: current.folder,
         transcript: current.transcript,
+        noAutoTranscript: current.noAutoTranscript,
       ),
     );
   }

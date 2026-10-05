@@ -477,6 +477,15 @@
     "description": "Título de la sección de las opciones de la transcripción"
   },
   "transcriptionEngine": "Transcribe with",
+  "autoTranscribe": "Transcribe automatically",
+  "@autoTranscribe": {
+    "description": "Opción para transcribir en segundo plano las grabaciones sin transcripción"
+  },
+  "autoTranscribeSubtitle": "In the background, recordings that don't have a transcript yet",
+  "autoTranscriptionFailed": "Recordings can't be transcribed automatically",
+  "@autoTranscriptionFailed": {
+    "description": "Aviso cuando la transcripción automática no puede seguir; la acción «Ver» explica por qué"
+  },
   "systemSpeechRecognition": "System speech recognition",
   "systemSpeechDescription": "No downloads. On Android, needs version 13 or later",
   "whisperDescription": "On the device, offline. Needs a model download",

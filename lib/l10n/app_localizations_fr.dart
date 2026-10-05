@@ -641,6 +641,17 @@ class AppLocalizationsFr extends AppLocalizations {
   String get transcriptionEngine => 'Transcrire avec';
 
   @override
+  String get autoTranscribe => 'Transcrire automatiquement';
+
+  @override
+  String get autoTranscribeSubtitle =>
+      'En arrière-plan, les enregistrements qui n\'ont pas encore de transcription';
+
+  @override
+  String get autoTranscriptionFailed =>
+      'Impossible de transcrire les enregistrements automatiquement';
+
+  @override
   String get systemSpeechRecognition => 'Reconnaissance vocale du système';
 
   @override

@@ -610,6 +610,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get transcriptionEngine => '转写方式';
 
   @override
+  String get autoTranscribe => '自动转写';
+
+  @override
+  String get autoTranscribeSubtitle => '在后台转写还没有转写文本的录音';
+
+  @override
+  String get autoTranscriptionFailed => '无法自动转写录音';
+
+  @override
   String get systemSpeechRecognition => '系统语音识别';
 
   @override
