@@ -1384,17 +1384,6 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
-          // Abre el piano (mientras se graba, no: su sonido podría cortar la
-          // grabación).
-          if (!searching)
-            IconButton(
-              key: const Key('piano-button'),
-              tooltip: context.l10n.piano,
-              icon: const Icon(Icons.piano),
-              onPressed: _recorder.isBusy
-                  ? null
-                  : () => _scaffoldKey.currentState?.openEndDrawer(),
-            ),
           // Vista compacta o detallada de la lista, donde al buscar está la
           // X del campo. Muestra la vista a la que cambia.
           if (!searching)
@@ -1435,6 +1424,11 @@ class _HomeScreenState extends State<HomeScreen> {
         selected: folder,
         onSelected: _openFolder,
         onCreate: _createFolder,
+        // Mientras se graba no se abre el piano: su sonido podría cortar la
+        // grabación. Al abrirlo se cierra este menú.
+        onOpenPiano: _recorder.isBusy
+            ? null
+            : () => _scaffoldKey.currentState?.openEndDrawer(),
       ),
       onDrawerChanged: (opened) {
         if (opened) _syncStorage();

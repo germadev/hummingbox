@@ -19,6 +19,7 @@ import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 import 'package:voicerecorder/widgets/waveform_seek_bar.dart';
+import 'package:voicerecorder/widgets/folder_drawer.dart';
 import 'package:voicerecorder/widgets/piano.dart';
 
 import 'fakes.dart';
@@ -2301,6 +2302,14 @@ void main() {
 
   group('piano', () {
     Finder keyboard() => find.byKey(const Key('piano-keyboard'));
+
+    /// Abre el piano con su botón, al pie del menú de las carpetas.
+    Future<void> openPiano(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('folders-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('piano-button')));
+    }
+
     Finder overview() => find.byKey(const Key('piano-overview'));
 
     /// Centro de la tecla blanca [index] (desde la izquierda) del teclado.
@@ -2315,7 +2324,7 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       expect(
@@ -2347,7 +2356,7 @@ void main() {
     testWidgets('deslizando el dedo por las teclas suenan todas y no se '
         'cierra', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       final gesture = await tester.startGesture(whiteKey(tester, 4));
@@ -2366,7 +2375,7 @@ void main() {
     testWidgets('deslizando sobre las octavas cambia la parte ampliada, y se '
         'conserva al cerrarlo', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       // Hasta el final de la derecha: las 11 blancas más agudas.
@@ -2383,7 +2392,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(keyboard(), findsNothing);
 
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       await tester.tapAt(
         whiteKey(tester, PianoPanel.initialKeyCount.toInt() - 1),
@@ -2493,7 +2502,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(orientations.last, isEmpty);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(
         tester.widget<RotatedBox>(find.byKey(const Key('piano-rotation'))),
@@ -2505,7 +2514,7 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       // En la cabecera, fuera de las teclas.
@@ -2530,7 +2539,7 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       Set<PianoRecordingMode> selected() => tester
           .widget<SegmentedButton<PianoRecordingMode>>(
@@ -2565,7 +2574,7 @@ void main() {
     testWidgets('se elige el instrumento, que suena, se graba con cada nota '
         'y se recuerda', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(find.text('Piano'), findsWidgets);
 
@@ -2600,7 +2609,7 @@ void main() {
       // Al volver a abrirlo, el órgano.
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(find.text('Órgano'), findsOneWidget);
     });
@@ -2608,7 +2617,7 @@ void main() {
     testWidgets('las octavas se mueven sin saltos, y pellizcando cambia el '
         'tamaño de las teclas', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       PianoKeyboard keys() => tester.widget<PianoKeyboard>(keyboard());
       final strip = tester.getRect(overview());
@@ -2653,7 +2662,7 @@ void main() {
       // Se conserva al cerrarlo.
       await tester.tap(find.byTooltip('Cerrar'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(keys().whiteKeys, PianoPanel.maxKeyCount);
     });
@@ -2663,7 +2672,7 @@ void main() {
       tester,
     ) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('synth-controls')), findsNothing);
 
@@ -2728,7 +2737,7 @@ void main() {
         transcription: manual,
       );
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('piano-record')));
@@ -2761,7 +2770,7 @@ void main() {
 
     testWidgets('sin tocar nada no guarda, y lo dice', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
 
       await tester.tap(find.byKey(const Key('piano-record')));
@@ -2779,7 +2788,7 @@ void main() {
     testWidgets('con voz graba con el micrófono, y al cerrar el piano se '
         'guarda', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Piano y voz'));
       await tester.pump();
@@ -2801,7 +2810,7 @@ void main() {
       expect(find.text(saved.name), findsOneWidget);
 
       // Se recuerda qué se graba.
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       final modes = tester.widget<SegmentedButton<PianoRecordingMode>>(
         find.byKey(const Key('piano-mode')),
@@ -2815,7 +2824,7 @@ void main() {
     testWidgets('con voz y sin permiso del micrófono, lo dice', (tester) async {
       recorder.permissionGranted = false;
       await pumpApp(tester);
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Piano y voz'));
       await tester.pump();
@@ -2909,10 +2918,30 @@ void main() {
       // Al cerrarlo, el piano vuelve a grabar como siempre.
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('piano-button')));
+      await openPiano(tester);
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-target')), findsNothing);
       expect(find.byKey(const Key('piano-mode')), findsOneWidget);
+    });
+
+    testWidgets('se abre desde el pie del menú de las carpetas, que se '
+        'cierra', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('folders-button')));
+      await tester.pumpAndSettle();
+      final button = find.byKey(const Key('piano-button'));
+      final drawer = tester.getRect(find.byType(FolderDrawer));
+      // Abajo del todo, aunque haya pocas carpetas.
+      expect(tester.getRect(button).bottom, greaterThan(drawer.bottom - 80));
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(find.byType(FolderDrawer), findsNothing);
+      // Ya no está en la barra superior.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('piano-button')), findsNothing);
     });
 
     testWidgets('mientras se graba no se abre', (tester) async {
@@ -2920,10 +2949,17 @@ void main() {
       await tester.tap(record());
       await pumpAnimations(tester);
 
-      final button = tester.widget<IconButton>(
-        find.byKey(const Key('piano-button')),
+      // Ni el menú de las carpetas (con el botón del piano) ni deslizando.
+      final folders = tester.widget<IconButton>(
+        find.byKey(const Key('folders-button')),
       );
-      expect(button.onPressed, isNull);
+      expect(folders.onPressed, isNull);
+      await tester.drag(
+        find.byKey(const Key('list-background')),
+        const Offset(-300, 0),
+      );
+      await pumpAnimations(tester);
+      expect(keyboard(), findsNothing);
     });
   });
 }
