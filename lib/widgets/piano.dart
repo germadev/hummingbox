@@ -16,8 +16,10 @@ import '../utils/formatters.dart';
 /// de octava y media y, debajo, todas las octavas en pequeño con la parte
 /// ampliada destacada. Deslizando sobre ellas se cambia la parte ampliada.
 ///
-/// Está pensado para verse en horizontal (ver [landscape]), con las teclas
-/// ocupando todo el alto que queda.
+/// Se ve siempre en horizontal, con las teclas ocupando todo el alto que
+/// queda. Si la pantalla está en vertical, se dibuja girado ([portraitTurns])
+/// para verlo en horizontal girando el móvil, sin que la pantalla gire (ver
+/// [orientationsFor]): así se ve igual mientras se desliza para abrirlo.
 class PianoPanel extends StatefulWidget {
   const PianoPanel({
     super.key,
@@ -28,6 +30,7 @@ class PianoPanel extends StatefulWidget {
     required this.onRecord,
     required this.onStop,
     required this.target,
+    required this.portraitTurns,
     this.onClose,
   });
 
@@ -54,6 +57,11 @@ class PianoPanel extends StatefulWidget {
   /// [PianoKeys.whiteKeys]). Se conserva al cerrar el panel.
   final ValueNotifier<int> firstKey;
 
+  /// Cuartos de vuelta en el sentido de las agujas del reloj con los que se
+  /// dibuja con la pantalla en vertical: 1 para verlo girando el móvil hacia
+  /// la izquierda y 3 hacia la derecha. Se conserva al cerrar el panel.
+  final ValueNotifier<int> portraitTurns;
+
   final VoidCallback? onClose;
 
   /// Teclas blancas de la parte ampliada: octava y media.
@@ -62,12 +70,17 @@ class PianoPanel extends StatefulWidget {
   /// Primera tecla blanca más alta posible.
   static int get lastFirstKey => PianoKeys.whiteKeys.length - visibleWhiteKeys;
 
-  /// Orientaciones de la pantalla mientras está abierto: siempre en
-  /// horizontal.
-  static const landscape = [
-    DeviceOrientation.landscapeLeft,
-    DeviceOrientation.landscapeRight,
-  ];
+  /// Orientaciones de la pantalla mientras está abierto, si se abrió en
+  /// [orientation]: la misma, para que no gire al girar el móvil. En
+  /// vertical, el piano ya está girado (ver [portraitTurns]).
+  static List<DeviceOrientation> orientationsFor(Orientation orientation) =>
+      switch (orientation) {
+        Orientation.portrait => const [DeviceOrientation.portraitUp],
+        Orientation.landscape => const [
+          DeviceOrientation.landscapeLeft,
+          DeviceOrientation.landscapeRight,
+        ],
+      };
 
   /// Al abrirlo por primera vez: desde el Do3, en la tesitura de la voz.
   static final initialFirstKey = PianoKeys.whiteKeys.indexOf(48);
@@ -145,125 +158,176 @@ class _PianoPanelState extends State<PianoPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final portrait = MediaQuery.orientationOf(context) == Orientation.portrait;
+    // Los arrastres horizontales no cierran el panel (solo se cierra con su
+    // botón o con «atrás»): al tocar es fácil arrastrar sin querer.
+    return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
+      gestures: {
+        HorizontalDragGestureRecognizer:
+            GestureRecognizerFactoryWithHandlers<
+              HorizontalDragGestureRecognizer
+            >(HorizontalDragGestureRecognizer.new, (recognizer) {
+              recognizer.onUpdate = (_) {};
+            }),
+      },
+      child: SafeArea(
+        child: ValueListenableBuilder<int>(
+          valueListenable: widget.portraitTurns,
+          builder: (context, turns, _) {
+            final quarterTurns = portrait ? turns : 0;
+            final media = MediaQuery.of(context);
+            return RotatedBox(
+              key: const Key('piano-rotation'),
+              quarterTurns: quarterTurns,
+              // Dentro, como si la pantalla estuviera en horizontal, y con
+              // los menús y las ayudas girados con el piano.
+              child: MediaQuery(
+                data: quarterTurns.isOdd
+                    ? media.copyWith(size: media.size.flipped)
+                    : media,
+                child: Overlay.wrap(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: _buildPanel(context, rotated: quarterTurns != 0),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context, {required bool rotated}) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final names = noteNames(l10n.noteNames);
     final lastKey = _lastKey;
-    return SafeArea(
-      child: Column(
-        children: [
-          // El título, la nota de la última tecla tocada (o cómo se usa) y
-          // el botón de cerrar, en una línea: el resto es para las teclas.
-          Padding(
-            padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 4, 4),
-            child: Row(
-              children: [
-                Text(l10n.piano, style: theme.textTheme.titleLarge),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _message != null
-                      ? Text(
-                          _message!,
-                          key: const Key('piano-message'),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium,
-                        )
-                      : lastKey == null
-                      ? Text(
-                          l10n.pianoHint,
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.outline,
-                          ),
-                        )
-                      // Si no cabe (p. ej. con el nombre de la grabación
-                      // que se acompaña), más pequeña.
-                      : FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                noteName(lastKey, names),
-                                key: const Key('piano-note'),
-                                style: theme.textTheme.headlineMedium,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
-                                ' Hz',
-                                style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                            ],
-                          ),
+    return Column(
+      children: [
+        // El título, la nota de la última tecla tocada (o cómo se usa) y
+        // el botón de cerrar, en una línea: el resto es para las teclas.
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 4, 4, 4),
+          child: Row(
+            children: [
+              Text(l10n.piano, style: theme.textTheme.titleLarge),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _message != null
+                    ? Text(
+                        _message!,
+                        key: const Key('piano-message'),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      )
+                    : lastKey == null
+                    ? Text(
+                        l10n.pianoHint,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
                         ),
-                ),
-                const SizedBox(width: 16),
-                _RecordControls(
-                  recorder: widget.recorder,
-                  mode: widget.mode,
-                  target: widget.target,
-                  onRecord: _record,
-                  onStop: _stop,
-                ),
-                const SizedBox(width: 4),
+                      )
+                    // Si no cabe (p. ej. con el nombre de la grabación
+                    // que se acompaña), más pequeña.
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              noteName(lastKey, names),
+                              key: const Key('piano-note'),
+                              style: theme.textTheme.headlineMedium,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              '${PianoKeys.frequency(lastKey).toStringAsFixed(1)}'
+                              ' Hz',
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+              ),
+              const SizedBox(width: 16),
+              _RecordControls(
+                recorder: widget.recorder,
+                mode: widget.mode,
+                target: widget.target,
+                onRecord: _record,
+                onStop: _stop,
+              ),
+              // Girado, para darle la vuelta si se ve al revés.
+              if (rotated)
                 IconButton(
-                  tooltip: l10n.close,
-                  icon: const Icon(Icons.close),
-                  onPressed: widget.onClose,
-                ),
-              ],
-            ),
+                  key: const Key('piano-turn'),
+                  tooltip: l10n.pianoTurnAround,
+                  icon: const Icon(Icons.screen_rotation),
+                  onPressed: () => widget.portraitTurns.value =
+                      (widget.portraitTurns.value + 2) % 4,
+                )
+              else
+                const SizedBox(width: 4),
+              IconButton(
+                tooltip: l10n.close,
+                icon: const Icon(Icons.close),
+                onPressed: widget.onClose,
+              ),
+            ],
           ),
-          // Las teclas, siempre de grave (izquierda) a agudo (derecha).
-          Expanded(
-            child: Directionality(
-              textDirection: TextDirection.ltr,
-              child: ValueListenableBuilder<int>(
-                valueListenable: widget.firstKey,
-                builder: (context, first, _) => Column(
-                  children: [
-                    Expanded(
-                      child: PianoKeyboard(
-                        key: const Key('piano-keyboard'),
-                        firstKey: first,
-                        whiteKeys: PianoPanel.visibleWhiteKeys,
-                        names: names,
-                        onPressed: _play,
-                        onReleased: widget.recorder.noteOff,
-                      ),
+        ),
+        // Las teclas, siempre de grave (izquierda) a agudo (derecha).
+        Expanded(
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: ValueListenableBuilder<int>(
+              valueListenable: widget.firstKey,
+              builder: (context, first, _) => Column(
+                children: [
+                  Expanded(
+                    child: PianoKeyboard(
+                      key: const Key('piano-keyboard'),
+                      firstKey: first,
+                      whiteKeys: PianoPanel.visibleWhiteKeys,
+                      names: names,
+                      onPressed: _play,
+                      onReleased: widget.recorder.noteOff,
                     ),
-                    const SizedBox(height: 8),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: PianoOverview(
-                        key: const Key('piano-overview'),
-                        firstKey: first,
-                        visibleWhiteKeys: PianoPanel.visibleWhiteKeys,
-                        onChanged: (value) => widget.firstKey.value = value,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: PianoOverview(
+                      key: const Key('piano-overview'),
+                      firstKey: first,
+                      visibleWhiteKeys: PianoPanel.visibleWhiteKeys,
+                      onChanged: (value) => widget.firstKey.value = value,
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-/// Qué grabar (solo el piano o también la voz) y el botón para grabar o,
+/// Qué grabar (el piano siempre y, si se elige, también la voz) y el botón para grabar o,
 /// mientras se graba, para parar con el tiempo grabado.
 class _RecordControls extends StatelessWidget {
   const _RecordControls({
@@ -305,14 +369,17 @@ class _RecordControls extends StatelessWidget {
                 ),
               )
             else
+              // El piano siempre se graba (está siempre marcado); la voz,
+              // si se marca.
               SegmentedButton<PianoRecordingMode>(
                 key: const Key('piano-mode'),
                 showSelectedIcon: false,
+                multiSelectionEnabled: true,
                 segments: [
                   ButtonSegment(
                     value: PianoRecordingMode.piano,
                     icon: const Icon(Icons.piano),
-                    tooltip: l10n.pianoOnly,
+                    tooltip: l10n.pianoAlwaysRecorded,
                   ),
                   ButtonSegment(
                     value: PianoRecordingMode.pianoAndVoice,
@@ -320,10 +387,17 @@ class _RecordControls extends StatelessWidget {
                     tooltip: l10n.pianoAndVoice,
                   ),
                 ],
-                selected: {mode.value},
+                selected: {
+                  PianoRecordingMode.piano,
+                  if (mode.value == PianoRecordingMode.pianoAndVoice)
+                    PianoRecordingMode.pianoAndVoice,
+                },
                 onSelectionChanged: recording || saving
                     ? null
-                    : (selected) => mode.value = selected.single,
+                    : (selected) => mode.value =
+                          selected.contains(PianoRecordingMode.pianoAndVoice)
+                          ? PianoRecordingMode.pianoAndVoice
+                          : PianoRecordingMode.piano,
               ),
             const SizedBox(width: 8),
             if (saving)

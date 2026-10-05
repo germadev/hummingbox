@@ -774,13 +774,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get close => 'Close';
 
   @override
-  String get pianoOnly => 'Piano only';
+  String get pianoAlwaysRecorded => 'The piano is always recorded';
 
   @override
   String get pianoAndVoice => 'Piano and voice';
 
   @override
   String get pianoNothingPlayed => 'Nothing to save: no notes were played';
+
+  @override
+  String get pianoTurnAround => 'Turn around';
+
+  @override
+  String get instrument => 'Instrument';
+
+  @override
+  String get instrumentPiano => 'Piano';
+
+  @override
+  String get instrumentOrgan => 'Organ';
+
+  @override
+  String get instrumentGuitar => 'Guitar';
+
+  @override
+  String get instrumentMarimba => 'Marimba';
+
+  @override
+  String get instrumentSynth => 'Synthesizer';
 
   @override
   String get stopPlayback => 'Stop playback';

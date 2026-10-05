@@ -775,7 +775,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get close => 'Chiudi';
 
   @override
-  String get pianoOnly => 'Solo pianoforte';
+  String get pianoAlwaysRecorded => 'Il pianoforte viene sempre registrato';
 
   @override
   String get pianoAndVoice => 'Pianoforte e voce';
@@ -783,6 +783,27 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get pianoNothingPlayed =>
       'Niente da salvare: non è stata suonata nessuna nota';
+
+  @override
+  String get pianoTurnAround => 'Capovolgi';
+
+  @override
+  String get instrument => 'Strumento';
+
+  @override
+  String get instrumentPiano => 'Pianoforte';
+
+  @override
+  String get instrumentOrgan => 'Organo';
+
+  @override
+  String get instrumentGuitar => 'Chitarra';
+
+  @override
+  String get instrumentMarimba => 'Marimba';
+
+  @override
+  String get instrumentSynth => 'Sintetizzatore';
 
   @override
   String get stopPlayback => 'Interrompi la riproduzione';

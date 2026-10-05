@@ -1412,11 +1412,11 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get close;
 
-  /// En el piano: grabar solo las notas
+  /// En el piano: lo que se toca se graba siempre (el botón del piano, siempre marcado, junto al de grabar también la voz)
   ///
   /// In en, this message translates to:
-  /// **'Piano only'**
-  String get pianoOnly;
+  /// **'The piano is always recorded'**
+  String get pianoAlwaysRecorded;
 
   /// En el piano: grabar las notas y la voz con el micrófono
   ///
@@ -1429,6 +1429,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing to save: no notes were played'**
   String get pianoNothingPlayed;
+
+  /// En el piano, girado con la pantalla en vertical: darle media vuelta si se ve al revés
+  ///
+  /// In en, this message translates to:
+  /// **'Turn around'**
+  String get pianoTurnAround;
+
+  /// En el piano: el menú para elegir con qué suenan las teclas
+  ///
+  /// In en, this message translates to:
+  /// **'Instrument'**
+  String get instrument;
+
+  /// Instrumento: piano
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get instrumentPiano;
+
+  /// Instrumento: órgano
+  ///
+  /// In en, this message translates to:
+  /// **'Organ'**
+  String get instrumentOrgan;
+
+  /// Instrumento: guitarra (de cuerdas de nailon)
+  ///
+  /// In en, this message translates to:
+  /// **'Guitar'**
+  String get instrumentGuitar;
+
+  /// Instrumento: marimba
+  ///
+  /// In en, this message translates to:
+  /// **'Marimba'**
+  String get instrumentMarimba;
+
+  /// Instrumento: sintetizador
+  ///
+  /// In en, this message translates to:
+  /// **'Synthesizer'**
+  String get instrumentSynth;
 
   /// No description provided for @stopPlayback.
   ///

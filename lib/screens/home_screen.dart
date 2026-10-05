@@ -129,6 +129,10 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Parte ampliada del piano: se conserva al cerrarlo.
   final _pianoFirstKey = ValueNotifier(PianoPanel.initialFirstKey);
 
+  /// Cómo se gira el piano con la pantalla en vertical: se conserva al
+  /// cerrarlo.
+  final _pianoPortraitTurns = ValueNotifier(1);
+
   /// Todas las grabaciones, de todas las carpetas, de la más antigua a la
   /// más reciente.
   List<Recording> _recordings = const [];
@@ -192,6 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocus.dispose();
     _pull.dispose();
     _pianoFirstKey.dispose();
+    _pianoPortraitTurns.dispose();
     _pianoMode.dispose();
     _pianoTarget.dispose();
     _pianoRecorder.dispose();
@@ -478,13 +483,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _pianoOpen = false;
 
-  /// El piano se ve siempre en horizontal: al abrirlo la pantalla gira y al
+  /// Mientras el piano está abierto, la pantalla no gira (en vertical, el
+  /// piano se dibuja girado para verlo en horizontal girando el móvil); al
   /// cerrarlo vuelve a girar como diga el sistema.
   void _onPianoChanged(bool opened) {
     _pianoOpen = opened;
     unawaited(
       SystemChrome.setPreferredOrientations(
-        opened ? PianoPanel.landscape : const [],
+        opened
+            ? PianoPanel.orientationsFor(MediaQuery.orientationOf(context))
+            : const [],
       ),
     );
     // Al cerrarlo mientras se graba, se guarda lo grabado.
@@ -1441,6 +1449,7 @@ class _HomeScreenState extends State<HomeScreen> {
           recorder: _pianoRecorder,
           mode: _pianoMode,
           target: _pianoTarget,
+          portraitTurns: _pianoPortraitTurns,
           onRecord: _startPianoRecording,
           onStop: _stopPianoRecording,
           onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),

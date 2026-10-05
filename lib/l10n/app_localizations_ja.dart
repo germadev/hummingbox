@@ -749,13 +749,34 @@ class AppLocalizationsJa extends AppLocalizations {
   String get close => '閉じる';
 
   @override
-  String get pianoOnly => 'ピアノのみ';
+  String get pianoAlwaysRecorded => 'ピアノは常に録音されます';
 
   @override
   String get pianoAndVoice => 'ピアノと声';
 
   @override
   String get pianoNothingPlayed => '保存するものがありません：音が弾かれていません';
+
+  @override
+  String get pianoTurnAround => '上下を反転';
+
+  @override
+  String get instrument => '楽器';
+
+  @override
+  String get instrumentPiano => 'ピアノ';
+
+  @override
+  String get instrumentOrgan => 'オルガン';
+
+  @override
+  String get instrumentGuitar => 'ギター';
+
+  @override
+  String get instrumentMarimba => 'マリンバ';
+
+  @override
+  String get instrumentSynth => 'シンセサイザー';
 
   @override
   String get stopPlayback => '再生を停止';

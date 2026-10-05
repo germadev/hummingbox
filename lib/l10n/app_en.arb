@@ -618,15 +618,43 @@
     "description": "Nombres de las siete notas naturales, de Do a Si, separados por espacios (solfeo o letras, según el idioma; en alemán, H para el Si)"
   },
   "close": "Close",
-  "pianoOnly": "Piano only",
-  "@pianoOnly": {
-    "description": "En el piano: grabar solo las notas"
+  "pianoAlwaysRecorded": "The piano is always recorded",
+  "@pianoAlwaysRecorded": {
+    "description": "En el piano: lo que se toca se graba siempre (el botón del piano, siempre marcado, junto al de grabar también la voz)"
   },
   "pianoAndVoice": "Piano and voice",
   "@pianoAndVoice": {
     "description": "En el piano: grabar las notas y la voz con el micrófono"
   },
   "pianoNothingPlayed": "Nothing to save: no notes were played",
+  "pianoTurnAround": "Turn around",
+  "@pianoTurnAround": {
+    "description": "En el piano, girado con la pantalla en vertical: darle media vuelta si se ve al revés"
+  },
+  "instrument": "Instrument",
+  "@instrument": {
+    "description": "En el piano: el menú para elegir con qué suenan las teclas"
+  },
+  "instrumentPiano": "Piano",
+  "@instrumentPiano": {
+    "description": "Instrumento: piano"
+  },
+  "instrumentOrgan": "Organ",
+  "@instrumentOrgan": {
+    "description": "Instrumento: órgano"
+  },
+  "instrumentGuitar": "Guitar",
+  "@instrumentGuitar": {
+    "description": "Instrumento: guitarra (de cuerdas de nailon)"
+  },
+  "instrumentMarimba": "Marimba",
+  "@instrumentMarimba": {
+    "description": "Instrumento: marimba"
+  },
+  "instrumentSynth": "Synthesizer",
+  "@instrumentSynth": {
+    "description": "Instrumento: sintetizador"
+  },
   "stopPlayback": "Stop playback",
   "playAll": "Play one after another",
   "@playAll": {

@@ -744,13 +744,34 @@ class AppLocalizationsZh extends AppLocalizations {
   String get close => '关闭';
 
   @override
-  String get pianoOnly => '仅钢琴';
+  String get pianoAlwaysRecorded => '始终录制钢琴';
 
   @override
   String get pianoAndVoice => '钢琴和人声';
 
   @override
   String get pianoNothingPlayed => '没有可保存的内容：未弹奏任何音符';
+
+  @override
+  String get pianoTurnAround => '翻转';
+
+  @override
+  String get instrument => '乐器';
+
+  @override
+  String get instrumentPiano => '钢琴';
+
+  @override
+  String get instrumentOrgan => '风琴';
+
+  @override
+  String get instrumentGuitar => '吉他';
+
+  @override
+  String get instrumentMarimba => '马林巴';
+
+  @override
+  String get instrumentSynth => '合成器';
 
   @override
   String get stopPlayback => '停止播放';
