@@ -662,4 +662,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get detectLanguageOption => '自動検出（Whisper のみ）';
+
+  @override
+  String get appearanceSection => '外観';
+
+  @override
+  String get theme => 'テーマ';
+
+  @override
+  String get themeSystem => '自動（システムに合わせる）';
+
+  @override
+  String get themeLight => 'ライト';
+
+  @override
+  String get themeDark => 'ダーク';
 }

@@ -83,7 +83,9 @@ francés, alemán, chino y japonés.
     [Google Drive](#google-drive)).
   - **Transcripción**: con qué se transcribe, el modelo de Whisper
     (descargarlo o borrarlo) y el idioma.
-- Tema claro y oscuro según el sistema, con los colores del icono (morado
+  - **Apariencia**: el tema.
+- **Tema** automático (el del sistema, por defecto), claro u oscuro
+  (*Opciones → Apariencia → Tema*), con los colores del icono (morado
   `#5B3FD9` y, para grabar, el rojo `#FF4D4D`).
 - **Ocho idiomas**: español, inglés, italiano, portugués, francés, alemán,
   chino y japonés. Se usa el del sistema y, si no es ninguno de ellos, el
@@ -379,7 +381,7 @@ formatos y de las traducciones, y tests de widgets de los flujos principales
 (menú inicial, grabar, desplegar el panel sin grabar, cuenta atrás, voz,
 saltar en la onda, editar y escuchar con el volumen, menú de carpetas y
 abrirlo deslizando, pantalla encendida, transcribir y ver la transcripción,
-opciones, descargar Whisper, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
+opciones, descargar Whisper, tema, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
 
 ## Integración continua (GitHub Actions)
 

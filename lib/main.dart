@@ -35,6 +35,9 @@ Future<void> main() async {
     ),
   );
 
+  // Con las opciones ya leídas, la app se abre con el tema elegido.
+  await sync.load();
+
   final whisper = PluginWhisperService();
 
   runApp(

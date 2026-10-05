@@ -189,5 +189,10 @@
   "cancelDownload": "ダウンロードをキャンセル",
   "transcriptionLanguage": "言語",
   "appLanguageOption": "アプリの言語（{language}）",
-  "detectLanguageOption": "自動検出（Whisper のみ）"
+  "detectLanguageOption": "自動検出（Whisper のみ）",
+  "appearanceSection": "外観",
+  "theme": "テーマ",
+  "themeSystem": "自動（システムに合わせる）",
+  "themeLight": "ライト",
+  "themeDark": "ダーク"
 }

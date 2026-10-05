@@ -696,4 +696,19 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get detectLanguageOption => 'Automatisch erkennen (nur Whisper)';
+
+  @override
+  String get appearanceSection => 'Darstellung';
+
+  @override
+  String get theme => 'Design';
+
+  @override
+  String get themeSystem => 'Automatisch (wie das System)';
+
+  @override
+  String get themeLight => 'Hell';
+
+  @override
+  String get themeDark => 'Dunkel';
 }

@@ -74,6 +74,14 @@ void main() {
     expect(const AppSettings().toJson().containsKey('transcription'), isFalse);
   });
 
+  test('guarda el tema; por defecto, el del sistema', () async {
+    expect((await store.load()).theme, AppTheme.system);
+
+    await store.save(const AppSettings(theme: AppTheme.dark));
+    expect((await store.load()).theme, AppTheme.dark);
+    expect(const AppSettings().toJson().containsKey('theme'), isFalse);
+  });
+
   test('mantiene la pantalla encendida salvo que se desactive', () async {
     expect((await store.load()).keepScreenOn, isTrue);
 

@@ -9,6 +9,7 @@ import 'services/audio_recorder_service.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/screen_awake.dart';
+import 'services/settings_store.dart';
 import 'services/storage_sync.dart';
 import 'services/transcriber.dart';
 
@@ -54,11 +55,24 @@ class VoiceRecorderApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // El tema elegido en las opciones.
+    return ListenableBuilder(
+      listenable: sync,
+      builder: (context, _) => _buildApp(context),
+    );
+  }
+
+  Widget _buildApp(BuildContext context) {
     return MaterialApp(
       onGenerateTitle: (context) => context.l10n.appTitle,
       debugShowCheckedModeBanner: false,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
+      themeMode: switch (sync.settings.theme) {
+        AppTheme.system => ThemeMode.system,
+        AppTheme.light => ThemeMode.light,
+        AppTheme.dark => ThemeMode.dark,
+      },
       locale: locale,
       supportedLocales: supportedLocales,
       localizationsDelegates: AppLocalizations.localizationsDelegates,

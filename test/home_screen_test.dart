@@ -1117,6 +1117,29 @@ void main() {
     });
   });
 
+  testWidgets('usa el tema elegido en las opciones', (tester) async {
+    ThemeMode themeMode() =>
+        tester.widget<MaterialApp>(find.byType(MaterialApp)).themeMode!;
+    store.settings = const AppSettings(
+      folder: testFolder,
+      theme: AppTheme.dark,
+    );
+    await pumpApp(tester);
+    expect(themeMode(), ThemeMode.dark);
+
+    await tester.tap(find.byKey(const Key('settings-button')));
+    await tester.pumpAndSettle();
+    final option = find.byKey(const Key('theme-option'));
+    await tester.scrollUntilVisible(option, 200);
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Claro'));
+    await tester.pumpAndSettle();
+
+    expect(themeMode(), ThemeMode.light);
+    expect(Theme.of(tester.element(option)).brightness, Brightness.light);
+  });
+
   testWidgets('abre las opciones desde la barra superior', (tester) async {
     await pumpApp(tester);
 

@@ -527,5 +527,16 @@
       }
     }
   },
-  "detectLanguageOption": "Detect automatically (Whisper only)"
+  "detectLanguageOption": "Detect automatically (Whisper only)",
+  "appearanceSection": "Appearance",
+  "@appearanceSection": {
+    "description": "Título de la sección de las opciones del aspecto de la app"
+  },
+  "theme": "Theme",
+  "@theme": {
+    "description": "Opción para elegir el tema claro u oscuro"
+  },
+  "themeSystem": "Automatic (the system's)",
+  "themeLight": "Light",
+  "themeDark": "Dark"
 }

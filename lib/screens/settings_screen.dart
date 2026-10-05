@@ -259,6 +259,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _sync.setTranscription(transcription.copyWith(language: language));
   }
 
+  Future<void> _chooseTheme() async {
+    final l10n = context.l10n;
+    final theme = await showChoiceDialog(
+      context,
+      title: l10n.theme,
+      selected: _sync.settings.theme,
+      choices: [
+        for (final theme in AppTheme.values)
+          Choice(theme, _themeTitle(theme, l10n)),
+      ],
+    );
+    if (theme == null) return;
+    await _sync.setTheme(theme);
+  }
+
+  static String _themeTitle(AppTheme theme, AppLocalizations l10n) =>
+      switch (theme) {
+        AppTheme.system => l10n.themeSystem,
+        AppTheme.light => l10n.themeLight,
+        AppTheme.dark => l10n.themeDark,
+      };
+
   String _languageTitle(String language, AppLocalizations l10n) =>
       switch (language) {
         TranscriptionSettings.appLanguage => l10n.appLanguageOption(
@@ -512,6 +534,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _languageTitle(settings.transcription.language, l10n),
                 ),
                 onTap: _chooseLanguage,
+              ),
+              const Divider(),
+              _SectionTitle(l10n.appearanceSection),
+              ListTile(
+                key: const Key('theme-option'),
+                leading: const Icon(Icons.brightness_6_outlined),
+                title: Text(l10n.theme),
+                subtitle: Text(_themeTitle(settings.theme, l10n)),
+                onTap: _chooseTheme,
               ),
             ],
           );

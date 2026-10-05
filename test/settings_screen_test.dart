@@ -212,6 +212,21 @@ void main() {
     });
   });
 
+  testWidgets('elige el tema', (tester) async {
+    await pumpSettings(tester);
+    final option = find.byKey(const Key('theme-option'));
+    await tester.scrollUntilVisible(option, 200);
+    expect(find.text('Automático (el del sistema)'), findsOneWidget);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Oscuro'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.theme, AppTheme.dark);
+    expect(find.text('Oscuro'), findsOneWidget);
+  });
+
   testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {
     await pumpSettings(tester);
 

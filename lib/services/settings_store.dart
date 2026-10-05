@@ -85,6 +85,14 @@ class DriveSettings {
 /// Dónde se guardan las grabaciones.
 enum StorageKind { folder, drive }
 
+/// Tema de la app.
+enum AppTheme {
+  /// Claro u oscuro según el sistema.
+  system,
+  light,
+  dark,
+}
+
 /// Opciones de la app.
 class AppSettings {
   const AppSettings({
@@ -96,6 +104,7 @@ class AppSettings {
     this.countdownSeconds = defaultCountdown,
     this.keepScreenOn = true,
     this.transcription = const TranscriptionSettings(),
+    this.theme = AppTheme.system,
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -141,6 +150,9 @@ class AppSettings {
   /// Con qué y en qué idioma se transcriben las grabaciones.
   final TranscriptionSettings transcription;
 
+  /// Tema de la app: el del sistema, claro u oscuro.
+  final AppTheme theme;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -161,6 +173,8 @@ class AppSettings {
   AppSettings withTranscription(TranscriptionSettings transcription) =>
       _copy(transcription: transcription);
 
+  AppSettings withTheme(AppTheme theme) => _copy(theme: theme);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -170,6 +184,7 @@ class AppSettings {
     int? countdownSeconds,
     bool? keepScreenOn,
     TranscriptionSettings? transcription,
+    AppTheme? theme,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -179,6 +194,7 @@ class AppSettings {
     countdownSeconds: countdownSeconds ?? this.countdownSeconds,
     keepScreenOn: keepScreenOn ?? this.keepScreenOn,
     transcription: transcription ?? this.transcription,
+    theme: theme ?? this.theme,
   );
 
   Map<String, dynamic> toJson() => {
@@ -191,6 +207,7 @@ class AppSettings {
     if (!keepScreenOn) 'keepScreenOn': false,
     if (transcription != const TranscriptionSettings())
       'transcription': transcription.toJson(),
+    if (theme != AppTheme.system) 'theme': theme.name,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -212,6 +229,7 @@ class AppSettings {
           : defaultCountdown,
       keepScreenOn: json['keepScreenOn'] != false,
       transcription: TranscriptionSettings.fromJson(json['transcription']),
+      theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
     );
   }
 
@@ -225,7 +243,8 @@ class AppSettings {
       other.openFolder == openFolder &&
       other.countdownSeconds == countdownSeconds &&
       other.keepScreenOn == keepScreenOn &&
-      other.transcription == transcription;
+      other.transcription == transcription &&
+      other.theme == theme;
 
   @override
   int get hashCode => Object.hash(
@@ -237,6 +256,7 @@ class AppSettings {
     countdownSeconds,
     keepScreenOn,
     transcription,
+    theme,
   );
 }
 

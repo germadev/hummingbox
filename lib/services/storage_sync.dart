@@ -365,6 +365,10 @@ class StorageSync extends ChangeNotifier {
   Future<void> setTranscription(TranscriptionSettings transcription) =>
       _change((settings) => settings.withTranscription(transcription));
 
+  /// Cambia el tema de la app.
+  Future<void> setTheme(AppTheme theme) =>
+      _change((settings) => settings.withTheme(theme));
+
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>
       _change((settings) => settings.withOpenFolder(name));

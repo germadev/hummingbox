@@ -657,4 +657,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get detectLanguageOption => '自动检测（仅限 Whisper）';
+
+  @override
+  String get appearanceSection => '外观';
+
+  @override
+  String get theme => '主题';
+
+  @override
+  String get themeSystem => '自动（跟随系统）';
+
+  @override
+  String get themeLight => '浅色';
+
+  @override
+  String get themeDark => '深色';
 }

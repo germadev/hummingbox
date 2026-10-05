@@ -1249,6 +1249,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detect automatically (Whisper only)'**
   String get detectLanguageOption;
+
+  /// Título de la sección de las opciones del aspecto de la app
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance'**
+  String get appearanceSection;
+
+  /// Opción para elegir el tema claro u oscuro
+  ///
+  /// In en, this message translates to:
+  /// **'Theme'**
+  String get theme;
+
+  /// No description provided for @themeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic (the system\'s)'**
+  String get themeSystem;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get themeLight;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get themeDark;
 }
 
 class _AppLocalizationsDelegate

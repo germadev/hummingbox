@@ -189,5 +189,10 @@
   "cancelDownload": "Cancelar descarga",
   "transcriptionLanguage": "Idioma",
   "appLanguageOption": "El de la app ({language})",
-  "detectLanguageOption": "Detectar automáticamente (solo Whisper)"
+  "detectLanguageOption": "Detectar automáticamente (solo Whisper)",
+  "appearanceSection": "Apariencia",
+  "theme": "Tema",
+  "themeSystem": "Automático (el del sistema)",
+  "themeLight": "Claro",
+  "themeDark": "Oscuro"
 }
