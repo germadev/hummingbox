@@ -151,6 +151,8 @@ class CopyState {
     required this.revision,
     required this.name,
     this.size,
+    this.checksum,
+    this.modified,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
@@ -169,12 +171,30 @@ class CopyState {
   /// se conoce. Si cambia, es que se ha modificado fuera de la app.
   final int? size;
 
-  CopyState withSize(int? size) => CopyState(
+  /// Suma MD5 (en hexadecimal) del contenido del archivo, si se conoce. Si
+  /// cambia, es que se ha modificado fuera de la app aunque tenga el mismo
+  /// tamaño.
+  final String? checksum;
+
+  /// Fecha de modificación del archivo la última vez que se leyó el destino,
+  /// si se conoce. En la carpeta del dispositivo, que no da la suma MD5 al
+  /// listarla, si cambia se lee el archivo para comprobar si cambió [checksum].
+  final DateTime? modified;
+
+  /// El mismo archivo con los datos indicados cambiados.
+  CopyState copyWith({
+    String? ref,
+    int? size,
+    String? checksum,
+    DateTime? modified,
+  }) => CopyState(
     destination: destination,
-    ref: ref,
+    ref: ref ?? this.ref,
     revision: revision,
     name: name,
-    size: size,
+    size: size ?? this.size,
+    checksum: checksum ?? this.checksum,
+    modified: modified ?? this.modified,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -184,6 +204,8 @@ class CopyState {
     final revision = json['revision'];
     final name = json['name'];
     final size = json['size'];
+    final checksum = json['md5'];
+    final modified = json['modified'];
     if (destination is! String ||
         ref is! String ||
         revision is! int ||
@@ -196,6 +218,10 @@ class CopyState {
       revision: revision,
       name: name,
       size: size is int ? size : null,
+      checksum: checksum is String ? checksum : null,
+      modified: modified is int
+          ? DateTime.fromMillisecondsSinceEpoch(modified)
+          : null,
     );
   }
 
@@ -205,6 +231,8 @@ class CopyState {
     'revision': revision,
     'name': name,
     if (size != null) 'size': size,
+    if (checksum != null) 'md5': checksum,
+    if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
   };
 
   @override
@@ -214,8 +242,19 @@ class CopyState {
       other.ref == ref &&
       other.revision == revision &&
       other.name == name &&
-      other.size == size;
+      other.size == size &&
+      other.checksum == checksum &&
+      other.modified?.millisecondsSinceEpoch ==
+          modified?.millisecondsSinceEpoch;
 
   @override
-  int get hashCode => Object.hash(destination, ref, revision, name, size);
+  int get hashCode => Object.hash(
+    destination,
+    ref,
+    revision,
+    name,
+    size,
+    checksum,
+    modified?.millisecondsSinceEpoch,
+  );
 }

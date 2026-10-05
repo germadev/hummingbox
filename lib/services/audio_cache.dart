@@ -77,6 +77,25 @@ class AudioCache {
     return path;
   }
 
+  /// Ruta temporal dentro de la caché donde leer el archivo de [recording]
+  /// (p. ej. para comprobar si ha cambiado). No cuenta para el tamaño de la
+  /// caché hasta que se guarda con [put].
+  Future<String> scratchPath(Recording recording) async {
+    final path = '${await pathFor(recording)}.check.part';
+    Directory(p.dirname(path)).createSync(recursive: true);
+    return path;
+  }
+
+  /// Guarda en la caché, como audio actual de [recording], el archivo de
+  /// [source] (que se mueve), y quita las revisiones anteriores.
+  Future<void> put(Recording recording, String source) async {
+    final path = await pathFor(recording);
+    Directory(p.dirname(path)).createSync(recursive: true);
+    File(source).renameSync(path);
+    await _forget(recording, except: path);
+    await trim(keep: path);
+  }
+
   /// Borra de la caché el audio de [recording].
   Future<void> forget(Recording recording) => _forget(recording);
 

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
@@ -265,6 +266,8 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
             revision: revision,
             name: newName,
             size: file.size,
+            checksum: file.checksum,
+            modified: file.modified,
           ),
         },
         audio: audioChanged ? null : current.audio,
@@ -536,7 +539,19 @@ class FakeFolderAccess implements FolderAccess {
       sizes[target] = file.lengthSync();
       contents[target] = file.readAsBytesSync();
     }
+    // Como en el sistema, escribir cambia la fecha de modificación.
+    modified[target] = DateTime.fromMillisecondsSinceEpoch(1000 * ++_writes);
     return target;
+  }
+
+  var _writes = 0;
+
+  /// Cambia el contenido de [ref] fuera de la app, como haría otra app: con
+  /// otra fecha de modificación.
+  void changeFile(String ref, List<int> bytes) {
+    contents[ref] = bytes;
+    sizes[ref] = bytes.length;
+    modified[ref] = DateTime.fromMillisecondsSinceEpoch(1000 * ++_writes);
   }
 
   @override
@@ -709,7 +724,15 @@ class FakeDriveService implements DriveService {
           FolderEntry(ref: 'dir:$name', name: name, isDirectory: true),
       for (final MapEntry(key: id, value: name) in files.entries)
         if ((fileFolders[id] ?? '') == subfolder)
-          FolderEntry(ref: id, name: name, size: sizes[id]),
+          FolderEntry(
+            ref: id,
+            name: name,
+            size: sizes[id],
+            checksum: switch (contents[id]) {
+              final bytes? => md5.convert(bytes).toString(),
+              null => null,
+            },
+          ),
     ];
   }
 

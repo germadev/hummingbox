@@ -343,6 +343,8 @@ class FileRecordingsRepository implements RecordingsRepository {
           revision: revision,
           name: metadata['name'] as String? ?? recording.name,
           size: file.size,
+          checksum: file.checksum,
+          modified: file.modified,
         ).toJson(),
       };
     });

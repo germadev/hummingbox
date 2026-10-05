@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../utils/files.dart';
 import 'audio_cache.dart';
 import 'folder_access.dart';
 import 'google_drive.dart';
@@ -641,23 +642,7 @@ class StorageSync extends ChangeNotifier {
         }
         continue;
       }
-      final size = file.entry.size;
-      if (size != null && stored.size != null && size != stored.size) {
-        // Se cambió fuera de la app.
-        if (fileExists(recording.path)) {
-          await repository.discard(recording.path);
-        }
-        await repository.updateStoredFile(
-          recording,
-          key,
-          stored.withSize(size),
-          audioChanged: true,
-        );
-        await cache.forget(recording);
-        changed++;
-      } else if (size != null && stored.size == null) {
-        await repository.setCopy(recording, key, stored.withSize(size));
-      }
+      if (await _compare(storage, recording, stored, file.entry)) changed++;
     }
 
     var added = 0;
@@ -667,30 +652,32 @@ class StorageSync extends ChangeNotifier {
       if (seen.contains(file.entry.ref)) continue;
       if (_disposed || !_isCurrent(storage, () => _storage)) return;
       final entry = file.entry;
-      final found = CopyState(
+      CopyState found(String? checksum) => CopyState(
         destination: storage.destination,
         ref: entry.ref,
         revision: 0,
         name: '',
         size: entry.size,
+        checksum: entry.checksum ?? checksum,
+        modified: entry.modified,
       );
 
-      // Renombrada fuera de la app: falta una con el mismo tamaño.
-      final renamed = missing
-          .where(
-            (r) =>
-                entry.size != null &&
-                r.folder == file.subfolder &&
-                r.format == RecordingFormat.fromPath(entry.name) &&
-                r.copies[key]!.size == entry.size,
-          )
-          .firstOrNull;
+      // Renombrada fuera de la app: falta una con el mismo tamaño (y la
+      // misma suma MD5, si se conoce).
+      final renamed = missing.where((r) {
+        final stored = r.copies[key]!;
+        return entry.size != null &&
+            r.folder == file.subfolder &&
+            r.format == RecordingFormat.fromPath(entry.name) &&
+            stored.size == entry.size &&
+            _sameChecksum(entry.checksum, stored.checksum);
+      }).firstOrNull;
       if (renamed != null) {
         missing.remove(renamed);
         await repository.updateStoredFile(
           renamed,
           key,
-          found,
+          found(renamed.copies[key]!.checksum),
           name: p.basenameWithoutExtension(entry.name),
         );
         changed++;
@@ -698,19 +685,21 @@ class StorageSync extends ChangeNotifier {
       }
 
       // Su propio archivo, aunque no estuviera enlazado (p. ej. al volver a
-      // elegir la misma carpeta): mismo nombre, subcarpeta y tamaño.
+      // elegir la misma carpeta): mismo nombre, subcarpeta y tamaño (y suma
+      // MD5, si se conoce).
       final own = others
           .where(
             (r) =>
                 entry.size != null &&
                 r.folder == file.subfolder &&
                 fileNameFor(r) == entry.name &&
-                _sizeOf(r) == entry.size,
+                _sizeOf(r) == entry.size &&
+                _sameChecksum(entry.checksum, _checksumOf(r)),
           )
           .firstOrNull;
       if (own != null) {
         others.remove(own);
-        await repository.updateStoredFile(own, key, found);
+        await repository.updateStoredFile(own, key, found(_checksumOf(own)));
         changed++;
         continue;
       }
@@ -761,6 +750,122 @@ class StorageSync extends ChangeNotifier {
     return null;
   }
 
+  /// Suma MD5 del audio actual de [recording], si se conoce.
+  String? _checksumOf(Recording recording) {
+    for (final file in recording.copies.values) {
+      if (file.revision == recording.revision && file.checksum != null) {
+        return file.checksum;
+      }
+    }
+    return null;
+  }
+
+  /// Indica si dos sumas MD5 pueden ser del mismo archivo (si falta alguna,
+  /// no se sabe).
+  static bool _sameChecksum(String? a, String? b) =>
+      a == null || b == null || a == b;
+
+  /// Compara el archivo [stored] de [recording] con lo que hay ahora en el
+  /// destino, [entry], y guarda lo que haya cambiado. Devuelve `true` si el
+  /// audio se cambió fuera de la app.
+  ///
+  /// Un archivo ha cambiado si cambia su tamaño o su suma MD5. Google Drive
+  /// da la suma al listar; la carpeta del dispositivo no, así que solo se
+  /// lee el archivo para calcularla si ha cambiado su fecha de modificación.
+  Future<bool> _compare(
+    SyncTarget storage,
+    Recording recording,
+    CopyState stored,
+    FolderEntry entry,
+  ) async {
+    var checksum = entry.checksum ?? stored.checksum;
+    final bool changed;
+    // Lo leído para calcular la suma, que se queda en la caché.
+    String? read;
+    if (entry.size != null &&
+        stored.size != null &&
+        entry.size != stored.size) {
+      changed = true;
+      checksum = entry.checksum;
+    } else if (entry.checksum != null && stored.checksum != null) {
+      changed = entry.checksum != stored.checksum;
+    } else if (entry.checksum == null &&
+        entry.modified != null &&
+        stored.modified != null &&
+        !entry.modified!.isAtSameMomentAs(stored.modified!)) {
+      final scratch = await cache.scratchPath(recording);
+      try {
+        await storage.download(entry.ref, scratch);
+        checksum = await md5OfFile(scratch);
+      } catch (_) {
+        _deleteQuietly(scratch);
+        // Se vuelve a comprobar en la siguiente pasada.
+        return false;
+      }
+      read = scratch;
+      // Sin la suma anterior no se sabe: se da por cambiado.
+      changed = stored.checksum == null || checksum != stored.checksum;
+    } else {
+      changed = false;
+    }
+
+    final current = stored.copyWith(
+      size: entry.size,
+      checksum: checksum,
+      modified: entry.modified,
+    );
+    if (changed) {
+      // Se cambió fuera de la app.
+      if (fileExists(recording.path)) await repository.discard(recording.path);
+      final updated = await repository.updateStoredFile(
+        recording,
+        storage.key,
+        CopyState(
+          destination: current.destination,
+          ref: current.ref,
+          revision: 0,
+          name: '',
+          size: entry.size,
+          checksum: checksum,
+          modified: entry.modified,
+        ),
+        audioChanged: true,
+      );
+      await cache.forget(recording);
+      if (read != null) await cache.put(updated, read);
+      return true;
+    }
+    final updated = current == stored
+        ? recording
+        : await repository.setCopy(recording, storage.key, current);
+    if (read != null) {
+      // Es el audio actual: ya no hará falta volver a leerlo.
+      await cache.put(updated, read);
+    }
+    return false;
+  }
+
+  static void _deleteQuietly(String path) {
+    try {
+      final file = File(path);
+      if (file.existsSync()) file.deleteSync();
+    } on FileSystemException {
+      // Es un temporal de la caché: lo borrará el sistema.
+    }
+  }
+
+  /// Suma MD5 del archivo de [path] o, si no se puede leer, `null`.
+  static Future<String?> _md5Of(String path) async {
+    // La consulta es instantánea: síncrona (así, en los tests de widgets, que
+    // no usan archivos de verdad, no se espera a una lectura).
+    if (!File(path).existsSync()) return null;
+    try {
+      return await md5OfFile(path);
+    } on FileSystemException {
+      return null;
+    }
+  }
+
   static int? _lengthOf(String path) {
     try {
       return File(path).lengthSync();
@@ -795,6 +900,8 @@ class StorageSync extends ChangeNotifier {
           revision: 0,
           name: name,
           size: entry.size,
+          checksum: entry.checksum,
+          modified: entry.modified,
         ),
       },
     );
@@ -812,36 +919,50 @@ class StorageSync extends ChangeNotifier {
     final sameDestination = stored?.destination == target.destination;
     final fileName = fileNameFor(recording);
 
-    /// Sube el audio y devuelve la referencia y el tamaño del archivo, o
-    /// `null` si no hay de dónde leer el audio (ver [_reconcile]).
-    Future<(String, int?)?> upload({String? ref}) async {
+    /// Sube el audio y devuelve el archivo subido, o `null` si no hay de
+    /// dónde leer el audio (ver [_reconcile]). Su fecha de modificación se
+    /// lee en la siguiente pasada.
+    Future<CopyState?> upload({String? ref}) async {
       final source = await audioPath(recording);
       if (!fileExists(source)) return null;
-      return (
-        await target.upload(
-          source,
-          fileName,
-          subfolder: recording.folder,
-          ref: ref,
-        ),
-        _lengthOf(source),
+      final uploaded = await target.upload(
+        source,
+        fileName,
+        subfolder: recording.folder,
+        ref: ref,
+      );
+      return CopyState(
+        destination: target.destination,
+        ref: uploaded,
+        revision: recording.revision,
+        name: recording.name,
+        size: _lengthOf(source),
+        checksum: await _md5Of(source),
       );
     }
 
-    final (String, int?)? result;
+    final CopyState? result;
     if (!sameDestination) {
       result = await upload();
     } else if (stored!.revision != recording.revision) {
       result = switch (await upload(ref: stored.ref)) {
-        (final ref, final size) when stored.name != recording.name => (
-          await target.rename(ref, fileName) ?? ref,
-          size,
+        final uploaded? when stored.name != recording.name => uploaded.copyWith(
+          ref: await target.rename(uploaded.ref, fileName),
         ),
         final uploaded => uploaded,
       };
     } else if (stored.name != recording.name) {
       result = switch (await target.rename(stored.ref, fileName)) {
-        final renamed? => (renamed, stored.size),
+        // El contenido no cambia: se conservan el tamaño, la suma y la fecha.
+        final renamed? => CopyState(
+          destination: target.destination,
+          ref: renamed,
+          revision: recording.revision,
+          name: recording.name,
+          size: stored.size,
+          checksum: stored.checksum,
+          modified: stored.modified,
+        ),
         // Ya no existe: se vuelve a crear.
         null => await upload(),
       };
@@ -850,24 +971,14 @@ class StorageSync extends ChangeNotifier {
       return;
     }
     if (result == null) return;
-    final (ref, size) = result;
+    final ref = result.ref;
 
     if (_deleted.contains(recording.id)) {
       // Se eliminó mientras se guardaba: que no quede en el destino.
       if (isStorage) await target.delete(ref);
       return;
     }
-    final saved = await repository.setCopy(
-      recording,
-      target.key,
-      CopyState(
-        destination: target.destination,
-        ref: ref,
-        revision: recording.revision,
-        name: recording.name,
-        size: size,
-      ),
-    );
+    final saved = await repository.setCopy(recording, target.key, result);
     if (isStorage) await _release(saved, target);
   }
 

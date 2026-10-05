@@ -355,7 +355,8 @@ class DriveApi {
             queryParameters: {
               'q': "'${_escape(folderId)}' in parents and trashed=false",
               'fields':
-                  'nextPageToken,files(id,name,mimeType,size,modifiedTime)',
+                  'nextPageToken,'
+                  'files(id,name,mimeType,size,modifiedTime,md5Checksum)',
               'pageSize': '1000',
               'spaces': 'drive',
               'pageToken': ?pageToken,
@@ -377,6 +378,10 @@ class DriveApi {
             isDirectory: file['mimeType'] == folderMimeType,
             size: int.tryParse('${file['size']}'),
             modified: DateTime.tryParse('${file['modifiedTime']}')?.toLocal(),
+            checksum: switch (file['md5Checksum']) {
+              final String checksum => checksum,
+              _ => null,
+            },
           ),
         );
       }

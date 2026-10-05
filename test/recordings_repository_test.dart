@@ -411,7 +411,7 @@ void main() {
         recording = await repository.updateStoredFile(
           recording,
           'folder',
-          file.withSize(10),
+          file.copyWith(size: 10),
           audioChanged: true,
         );
 
@@ -422,6 +422,24 @@ void main() {
         expect(recording.isSavedIn('folder'), isTrue);
       },
     );
+
+    test('guarda la suma MD5 y la fecha de cada archivo', () async {
+      final modified = DateTime(2026, 10, 5, 12, 30);
+      final added = (await repository.add(
+        path: await repository.createRecordingPath(),
+        duration: Duration.zero,
+        name: 'Idea',
+        copies: {
+          'folder': file.copyWith(checksum: 'abc123', modified: modified),
+        },
+      ))!;
+
+      final loaded = (await repository.loadAll()).single;
+
+      expect(loaded.copies['folder'], added.copies['folder']);
+      expect(loaded.copies['folder']!.checksum, 'abc123');
+      expect(loaded.copies['folder']!.modified, modified);
+    });
 
     test(
       'al renombrarse fuera de la app, cambia el nombre y el archivo',
