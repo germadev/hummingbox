@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 import '../utils/files.dart';
 import 'audio_cache.dart';
 import 'folder_access.dart';
@@ -359,6 +360,10 @@ class StorageSync extends ChangeNotifier {
   /// Elige si la pantalla se mantiene encendida mientras se graba.
   Future<void> setKeepScreenOn(bool keepScreenOn) =>
       _change((settings) => settings.withKeepScreenOn(keepScreenOn));
+
+  /// Cambia con qué y en qué idioma se transcriben las grabaciones.
+  Future<void> setTranscription(TranscriptionSettings transcription) =>
+      _change((settings) => settings.withTranscription(transcription));
 
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>

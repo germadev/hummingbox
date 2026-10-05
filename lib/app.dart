@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'controllers/whisper_controller.dart';
 import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'services/audio_player_service.dart';
@@ -9,6 +10,7 @@ import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/screen_awake.dart';
 import 'services/storage_sync.dart';
+import 'services/transcriber.dart';
 
 /// Morado del icono (`docs/icono.svg`), del que sale el tema de la app.
 const brandPurple = Color(0xFF5B3FD9);
@@ -24,6 +26,8 @@ class VoiceRecorderApp extends StatelessWidget {
     required this.playerFactory,
     required this.editor,
     required this.sync,
+    required this.transcriber,
+    required this.whisper,
     this.screen = const PlatformScreenAwake(),
     this.locale,
   });
@@ -41,6 +45,8 @@ class VoiceRecorderApp extends StatelessWidget {
   final AudioPlayerService Function() playerFactory;
   final RecordingEditor editor;
   final StorageSync sync;
+  final Transcriber transcriber;
+  final WhisperController whisper;
   final ScreenAwake screen;
 
   /// Idioma fijo (para los tests); si es `null`, el del sistema.
@@ -68,6 +74,8 @@ class VoiceRecorderApp extends StatelessWidget {
         playerFactory: playerFactory,
         editor: editor,
         sync: sync,
+        transcriber: transcriber,
+        whisper: whisper,
         screen: screen,
       ),
     );

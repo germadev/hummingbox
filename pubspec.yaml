@@ -47,6 +47,8 @@ dependencies:
   google_sign_in: ^7.2.0
   http: ^1.6.0
   crypto: ^3.0.7
+  # Transcripción con Whisper en el dispositivo (whisper.cpp).
+  whisper_cpp_flutter_plus: ^0.4.1
 
 dev_dependencies:
   flutter_test:

@@ -513,4 +513,174 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get syncNowSubtitle =>
       'Salva o que estiver pendente e procura mudanças onde as gravações são salvas';
+
+  @override
+  String get transcribe => 'Transcrever';
+
+  @override
+  String get viewTranscript => 'Ver transcrição';
+
+  @override
+  String transcribingProgress(String percent) {
+    return 'Transcrevendo… $percent';
+  }
+
+  @override
+  String get preparingTranscription => 'Preparando a transcrição…';
+
+  @override
+  String get waitingToTranscribe => 'Aguardando para transcrever…';
+
+  @override
+  String get cancelTranscription => 'Cancelar transcrição';
+
+  @override
+  String get transcriptReady => 'Transcrição pronta';
+
+  @override
+  String get view => 'Ver';
+
+  @override
+  String get transcriptionFailed => 'Não foi possível transcrever a gravação';
+
+  @override
+  String get noSpeechRecognized => 'Nenhuma palavra foi reconhecida';
+
+  @override
+  String get stopToTranscribe => 'Pare a gravação para transcrever';
+
+  @override
+  String get systemSpeechUnavailableTitle =>
+      'O reconhecimento de voz não está disponível';
+
+  @override
+  String get systemSpeechUnavailableMessage =>
+      'Este dispositivo não consegue transcrever com o reconhecimento de voz do sistema (no Android, é preciso a versão 13 ou superior). Você pode instalar o Whisper nas configurações.';
+
+  @override
+  String unsupportedLanguageMessage(String language) {
+    return 'O reconhecimento de voz do sistema não suporta “$language” neste dispositivo. Você pode instalar o Whisper ou escolher outro idioma nas configurações.';
+  }
+
+  @override
+  String get openSettings => 'Abrir configurações';
+
+  @override
+  String downloadLanguageTitle(String language) {
+    return 'Baixar “$language”?';
+  }
+
+  @override
+  String get downloadLanguageMessage =>
+      'O reconhecimento de voz do sistema precisa baixar este idioma para transcrever no dispositivo. Tente novamente quando o download terminar.';
+
+  @override
+  String get download => 'Baixar';
+
+  @override
+  String get languageDownloading =>
+      'O idioma ainda está sendo baixado. Tente novamente quando terminar.';
+
+  @override
+  String get speechPermission =>
+      'Permita o reconhecimento de voz nas configurações para transcrever';
+
+  @override
+  String get whisperNotInstalledTitle => 'O Whisper não está instalado';
+
+  @override
+  String get whisperNotInstalledMessage =>
+      'Para transcrever com o Whisper, baixe um modelo nas configurações.';
+
+  @override
+  String get copy => 'Copiar';
+
+  @override
+  String get copied => 'Copiado para a área de transferência';
+
+  @override
+  String get transcribeAgain => 'Transcrever de novo';
+
+  @override
+  String get deleteTranscript => 'Excluir transcrição';
+
+  @override
+  String get transcriptDeleted => 'Transcrição excluída';
+
+  @override
+  String get transcriptOutdated => 'A gravação mudou desde que foi transcrita.';
+
+  @override
+  String get transcriptionSection => 'Transcrição';
+
+  @override
+  String get transcriptionEngine => 'Transcrever com';
+
+  @override
+  String get systemSpeechRecognition => 'Reconhecimento de voz do sistema';
+
+  @override
+  String get systemSpeechDescription =>
+      'Sem downloads. No Android, precisa da versão 13 ou superior';
+
+  @override
+  String get whisperDescription =>
+      'No dispositivo, sem conexão. É preciso baixar um modelo';
+
+  @override
+  String get whisperModel => 'Modelo do Whisper';
+
+  @override
+  String get whisperNotInstalled => 'Não instalado. Toque para baixar um';
+
+  @override
+  String whisperInstalled(String model, String size) {
+    return 'Instalado: $model ($size)';
+  }
+
+  @override
+  String whisperDownloading(String model, String percent, String size) {
+    return 'Baixando $model… $percent de $size';
+  }
+
+  @override
+  String get whisperDownloadFailed => 'Não foi possível baixar o modelo';
+
+  @override
+  String get chooseWhisperModel => 'Baixar um modelo';
+
+  @override
+  String whisperTinyDescription(String size) {
+    return '$size · Mais rápido, menos preciso';
+  }
+
+  @override
+  String whisperBaseDescription(String size) {
+    return '$size · Mais preciso, mais lento';
+  }
+
+  @override
+  String get deleteWhisperModel => 'Excluir o modelo';
+
+  @override
+  String get deleteWhisperModelTitle => 'Excluir o modelo do Whisper?';
+
+  @override
+  String deleteWhisperModelMessage(String size) {
+    return 'Isso libera $size. Você pode baixá-lo de novo depois.';
+  }
+
+  @override
+  String get cancelDownload => 'Cancelar download';
+
+  @override
+  String get transcriptionLanguage => 'Idioma';
+
+  @override
+  String appLanguageOption(String language) {
+    return 'O do app ($language)';
+  }
+
+  @override
+  String get detectLanguageOption => 'Detectar automaticamente (só Whisper)';
 }

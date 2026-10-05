@@ -705,6 +705,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
+  whisper_cpp_flutter_plus:
+    dependency: "direct main"
+    description:
+      name: whisper_cpp_flutter_plus
+      sha256: "8c43d7303fb6a30c7b5a364a7b0a9f5719ea54cf5599e7f2b59892deae383039"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.1"
   win32:
     dependency: transitive
     description:

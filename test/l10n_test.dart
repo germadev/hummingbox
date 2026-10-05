@@ -74,6 +74,8 @@ void main() {
           playerFactory: FakeAudioPlayerService.new,
           editor: FakeRecordingEditor(repository: repository),
           sync: fakeStorageSync(repository),
+          transcriber: FakeTranscriber(),
+          whisper: fakeWhisperController(),
         ),
       );
       await tester.pumpAndSettle();

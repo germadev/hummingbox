@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
 void main() {
@@ -422,6 +423,40 @@ void main() {
         expect(recording.isSavedIn('folder'), isTrue);
       },
     );
+
+    test('guarda la transcripción y la conserva al editar', () async {
+      final transcript = Transcript(
+        text: 'Hola',
+        engine: TranscriptionEngine.whisper,
+        model: WhisperModel.base,
+        language: 'es',
+        revision: 0,
+        createdAt: DateTime(2026, 10, 5, 10, 30),
+      );
+      final path = await repository.createRecordingPath();
+      await File(path).writeAsBytes([1]);
+      var recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+
+      recording = await repository.setTranscript(recording, transcript);
+      expect((await repository.loadAll()).single.transcript, transcript);
+      expect(recording.isTranscriptOutdated, isFalse);
+
+      final edited = p.join(directory.path, 'edited.m4a');
+      await File(edited).writeAsBytes([2]);
+      recording = await repository.replaceAudio(
+        recording,
+        sourcePath: edited,
+        duration: Duration.zero,
+      );
+      expect(recording.transcript, transcript);
+      expect(recording.isTranscriptOutdated, isTrue);
+
+      recording = await repository.setTranscript(recording, null);
+      expect((await repository.loadAll()).single.transcript, isNull);
+    });
 
     test('guarda la suma MD5 y la fecha de cada archivo', () async {
       final modified = DateTime(2026, 10, 5, 12, 30);

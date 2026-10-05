@@ -494,4 +494,167 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get syncNowSubtitle => '保存待处理的内容，并检查录音保存位置的更改';
+
+  @override
+  String get transcribe => '转写';
+
+  @override
+  String get viewTranscript => '查看转写';
+
+  @override
+  String transcribingProgress(String percent) {
+    return '正在转写… $percent';
+  }
+
+  @override
+  String get preparingTranscription => '正在准备转写…';
+
+  @override
+  String get waitingToTranscribe => '等待转写…';
+
+  @override
+  String get cancelTranscription => '取消转写';
+
+  @override
+  String get transcriptReady => '转写完成';
+
+  @override
+  String get view => '查看';
+
+  @override
+  String get transcriptionFailed => '无法转写录音';
+
+  @override
+  String get noSpeechRecognized => '未识别到任何文字';
+
+  @override
+  String get stopToTranscribe => '停止录音后才能转写';
+
+  @override
+  String get systemSpeechUnavailableTitle => '语音识别不可用';
+
+  @override
+  String get systemSpeechUnavailableMessage =>
+      '此设备无法使用系统语音识别进行转写（Android 需要 13 或更高版本）。你可以在设置中安装 Whisper。';
+
+  @override
+  String unsupportedLanguageMessage(String language) {
+    return '此设备上的系统语音识别不支持“$language”。你可以安装 Whisper，或在设置中选择其他语言。';
+  }
+
+  @override
+  String get openSettings => '打开设置';
+
+  @override
+  String downloadLanguageTitle(String language) {
+    return '下载“$language”？';
+  }
+
+  @override
+  String get downloadLanguageMessage => '系统语音识别需要下载此语言才能在设备上转写。下载完成后请重试。';
+
+  @override
+  String get download => '下载';
+
+  @override
+  String get languageDownloading => '语言仍在下载中。下载完成后请重试。';
+
+  @override
+  String get speechPermission => '请在设置中允许语音识别以进行转写';
+
+  @override
+  String get whisperNotInstalledTitle => '未安装 Whisper';
+
+  @override
+  String get whisperNotInstalledMessage => '要使用 Whisper 转写，请在设置中下载模型。';
+
+  @override
+  String get copy => '复制';
+
+  @override
+  String get copied => '已复制到剪贴板';
+
+  @override
+  String get transcribeAgain => '重新转写';
+
+  @override
+  String get deleteTranscript => '删除转写';
+
+  @override
+  String get transcriptDeleted => '已删除转写';
+
+  @override
+  String get transcriptOutdated => '录音在转写后已更改。';
+
+  @override
+  String get transcriptionSection => '转写';
+
+  @override
+  String get transcriptionEngine => '转写方式';
+
+  @override
+  String get systemSpeechRecognition => '系统语音识别';
+
+  @override
+  String get systemSpeechDescription => '无需下载。Android 需要 13 或更高版本';
+
+  @override
+  String get whisperDescription => '在设备上离线运行。需要下载模型';
+
+  @override
+  String get whisperModel => 'Whisper 模型';
+
+  @override
+  String get whisperNotInstalled => '未安装。点按以下载';
+
+  @override
+  String whisperInstalled(String model, String size) {
+    return '已安装：$model（$size）';
+  }
+
+  @override
+  String whisperDownloading(String model, String percent, String size) {
+    return '正在下载 $model… $size 中的 $percent';
+  }
+
+  @override
+  String get whisperDownloadFailed => '无法下载模型';
+
+  @override
+  String get chooseWhisperModel => '下载模型';
+
+  @override
+  String whisperTinyDescription(String size) {
+    return '$size · 更快，准确度较低';
+  }
+
+  @override
+  String whisperBaseDescription(String size) {
+    return '$size · 更准确，速度较慢';
+  }
+
+  @override
+  String get deleteWhisperModel => '删除模型';
+
+  @override
+  String get deleteWhisperModelTitle => '删除 Whisper 模型？';
+
+  @override
+  String deleteWhisperModelMessage(String size) {
+    return '这将释放 $size。之后可以重新下载。';
+  }
+
+  @override
+  String get cancelDownload => '取消下载';
+
+  @override
+  String get transcriptionLanguage => '语言';
+
+  @override
+  String appLanguageOption(String language) {
+    return '应用语言（$language）';
+  }
+
+  @override
+  String get detectLanguageOption => '自动检测（仅限 Whisper）';
 }

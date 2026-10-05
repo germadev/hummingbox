@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
 class FolderSettings {
@@ -94,6 +95,7 @@ class AppSettings {
     this.openFolder = '',
     this.countdownSeconds = defaultCountdown,
     this.keepScreenOn = true,
+    this.transcription = const TranscriptionSettings(),
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -136,6 +138,9 @@ class AppSettings {
   /// empezar), para que el sistema no pare la app al apagarse.
   final bool keepScreenOn;
 
+  /// Con qué y en qué idioma se transcriben las grabaciones.
+  final TranscriptionSettings transcription;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -153,6 +158,9 @@ class AppSettings {
   AppSettings withKeepScreenOn(bool keepScreenOn) =>
       _copy(keepScreenOn: keepScreenOn);
 
+  AppSettings withTranscription(TranscriptionSettings transcription) =>
+      _copy(transcription: transcription);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -161,6 +169,7 @@ class AppSettings {
     String? openFolder,
     int? countdownSeconds,
     bool? keepScreenOn,
+    TranscriptionSettings? transcription,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -169,6 +178,7 @@ class AppSettings {
     openFolder: openFolder ?? this.openFolder,
     countdownSeconds: countdownSeconds ?? this.countdownSeconds,
     keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+    transcription: transcription ?? this.transcription,
   );
 
   Map<String, dynamic> toJson() => {
@@ -179,6 +189,8 @@ class AppSettings {
     if (openFolder.isNotEmpty) 'openFolder': openFolder,
     if (countdownSeconds != defaultCountdown) 'countdown': countdownSeconds,
     if (!keepScreenOn) 'keepScreenOn': false,
+    if (transcription != const TranscriptionSettings())
+      'transcription': transcription.toJson(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -199,6 +211,7 @@ class AppSettings {
           ? countdown as int
           : defaultCountdown,
       keepScreenOn: json['keepScreenOn'] != false,
+      transcription: TranscriptionSettings.fromJson(json['transcription']),
     );
   }
 
@@ -211,7 +224,8 @@ class AppSettings {
       listEquals(other.folders, folders) &&
       other.openFolder == openFolder &&
       other.countdownSeconds == countdownSeconds &&
-      other.keepScreenOn == keepScreenOn;
+      other.keepScreenOn == keepScreenOn &&
+      other.transcription == transcription;
 
   @override
   int get hashCode => Object.hash(
@@ -222,6 +236,7 @@ class AppSettings {
     openFolder,
     countdownSeconds,
     keepScreenOn,
+    transcription,
   );
 }
 

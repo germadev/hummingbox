@@ -400,5 +400,132 @@
   },
   "readDriveFailed": "Couldn't read Google Drive",
   "syncNow": "Sync now",
-  "syncNowSubtitle": "Saves anything pending and looks for changes where recordings are saved"
+  "syncNowSubtitle": "Saves anything pending and looks for changes where recordings are saved",
+  "transcribe": "Transcribe",
+  "@transcribe": {
+    "description": "Acción del menú de una grabación para pasar su audio a texto"
+  },
+  "viewTranscript": "View transcript",
+  "transcribingProgress": "Transcribing… {percent}",
+  "@transcribingProgress": {
+    "description": "Mientras se transcribe; percent es el porcentaje ya formateado («45 %»)",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingTranscription": "Preparing the transcription…",
+  "waitingToTranscribe": "Waiting to transcribe…",
+  "cancelTranscription": "Cancel transcription",
+  "transcriptReady": "Transcript ready",
+  "view": "View",
+  "transcriptionFailed": "Couldn't transcribe the recording",
+  "noSpeechRecognized": "No words were recognized",
+  "stopToTranscribe": "Stop recording to transcribe",
+  "systemSpeechUnavailableTitle": "Speech recognition isn't available",
+  "systemSpeechUnavailableMessage": "This device can't transcribe with the system's speech recognition (on Android it needs version 13 or later). You can install Whisper in the settings.",
+  "unsupportedLanguageMessage": "The system's speech recognition doesn't support “{language}” on this device. You can install Whisper or choose another language in the settings.",
+  "@unsupportedLanguageMessage": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "openSettings": "Open settings",
+  "downloadLanguageTitle": "Download “{language}”?",
+  "@downloadLanguageTitle": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "downloadLanguageMessage": "The system's speech recognition needs to download this language to transcribe on the device. Try again when the download finishes.",
+  "download": "Download",
+  "languageDownloading": "The language is still downloading. Try again when it finishes.",
+  "speechPermission": "Allow speech recognition in settings to transcribe",
+  "whisperNotInstalledTitle": "Whisper isn't installed",
+  "whisperNotInstalledMessage": "To transcribe with Whisper, download a model in the settings.",
+  "copy": "Copy",
+  "copied": "Copied to the clipboard",
+  "transcribeAgain": "Transcribe again",
+  "deleteTranscript": "Delete transcript",
+  "transcriptDeleted": "Transcript deleted",
+  "transcriptOutdated": "The recording has changed since it was transcribed.",
+  "transcriptionSection": "Transcription",
+  "@transcriptionSection": {
+    "description": "Título de la sección de las opciones de la transcripción"
+  },
+  "transcriptionEngine": "Transcribe with",
+  "systemSpeechRecognition": "System speech recognition",
+  "systemSpeechDescription": "No downloads. On Android, needs version 13 or later",
+  "whisperDescription": "On the device, offline. Needs a model download",
+  "whisperModel": "Whisper model",
+  "whisperNotInstalled": "Not installed. Tap to download one",
+  "whisperInstalled": "Installed: {model} ({size})",
+  "@whisperInstalled": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "whisperDownloading": "Downloading {model}… {percent} of {size}",
+  "@whisperDownloading": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      },
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "whisperDownloadFailed": "Couldn't download the model",
+  "chooseWhisperModel": "Download a model",
+  "whisperTinyDescription": "{size} · Faster, less accurate",
+  "@whisperTinyDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "whisperBaseDescription": "{size} · More accurate, slower",
+  "@whisperBaseDescription": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteWhisperModel": "Delete the model",
+  "deleteWhisperModelTitle": "Delete the Whisper model?",
+  "deleteWhisperModelMessage": "This frees {size}. You can download it again later.",
+  "@deleteWhisperModelMessage": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "cancelDownload": "Cancel download",
+  "transcriptionLanguage": "Language",
+  "appLanguageOption": "The app's language ({language})",
+  "@appLanguageOption": {
+    "placeholders": {
+      "language": {
+        "type": "String"
+      }
+    }
+  },
+  "detectLanguageOption": "Detect automatically (Whisper only)"
 }

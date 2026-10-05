@@ -9,6 +9,7 @@ import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 import '../utils/files.dart';
 
 /// Almacén de las grabaciones del usuario.
@@ -64,6 +65,9 @@ abstract interface class RecordingsRepository {
     Duration? duration,
     AudioInfo? audio,
   });
+
+  /// Guarda (o borra, si es `null`) la transcripción de [recording].
+  Future<Recording> setTranscript(Recording recording, Transcript? transcript);
 
   /// Guarda (o borra, si [state] es `null`) el estado de la copia de
   /// [recording] en el destino [target].
@@ -293,6 +297,17 @@ class FileRecordingsRepository implements RecordingsRepository {
       if (waveform != null) metadata['waveform'] = encodeWaveform(waveform);
       if (duration != null) metadata['durationMs'] = duration.inMilliseconds;
       if (audio != null) metadata['audio'] = audio.toJson();
+    });
+  }
+
+  @override
+  Future<Recording> setTranscript(Recording recording, Transcript? transcript) {
+    return _update(recording, (metadata) {
+      if (transcript == null) {
+        metadata.remove('transcript');
+      } else {
+        metadata['transcript'] = transcript.toJson();
+      }
     });
   }
 

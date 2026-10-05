@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -8,9 +9,12 @@ import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/audio_cache.dart';
 import 'package:voicerecorder/services/audio_codec.dart';
 import 'package:voicerecorder/services/audio_player_service.dart';
+import 'package:voicerecorder/audio/wav.dart';
+import 'package:voicerecorder/controllers/whisper_controller.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
 import 'package:voicerecorder/services/folder_access.dart';
 import 'package:voicerecorder/services/google_drive.dart';
@@ -18,7 +22,10 @@ import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 import 'package:voicerecorder/services/screen_awake.dart';
 import 'package:voicerecorder/services/settings_store.dart';
+import 'package:voicerecorder/services/speech_recognition.dart';
 import 'package:voicerecorder/services/storage_sync.dart';
+import 'package:voicerecorder/services/transcriber.dart';
+import 'package:voicerecorder/services/whisper_service.dart';
 
 class FakeAudioRecorderService implements AudioRecorderService {
   FakeAudioRecorderService({
@@ -207,6 +214,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         copies: current.copies,
         audio: audio,
         folder: current.folder,
+        transcript: current.transcript,
       ),
     );
   }
@@ -221,6 +229,13 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
     byId(recording.id)
         .copyWith(waveform: waveform, duration: duration, audio: audio),
   );
+
+  @override
+  Future<Recording> setTranscript(
+    Recording recording,
+    Transcript? transcript,
+  ) async =>
+      _replace(byId(recording.id).copyWith(transcript: () => transcript));
 
   @override
   Future<Recording> setCopy(
@@ -272,6 +287,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         },
         audio: audioChanged ? null : current.audio,
         folder: current.folder,
+        transcript: current.transcript,
       ),
     );
   }
@@ -791,3 +807,216 @@ StorageSync fakeStorageSync(
     fileExists: fileExists ?? (_) => true,
   );
 }
+
+class FakeSystemSpeech implements SystemSpeech {
+  /// Lo que responde [check].
+  SystemSpeechSupport support = const SystemSpeechSupport(
+    SystemSpeechStatus.available,
+    language: 'es-ES',
+  );
+
+  @override
+  Duration? maxLength;
+
+  /// Idiomas comprobados.
+  final checked = <String>[];
+
+  /// Idiomas cuya descarga se ha pedido.
+  final downloads = <String>[];
+
+  /// Lo transcrito: muestras de cada archivo e idioma.
+  final transcribed = <(int frames, String language)>[];
+
+  /// Texto de cada transcripción, en orden; si se acaban, «Hola».
+  final texts = <String>[];
+
+  /// Si se indica, transcribir falla con este error.
+  PlatformException? error;
+
+  /// Si se indica, transcribir espera a que se complete.
+  Completer<void>? gate;
+  bool cancelled = false;
+
+  @override
+  Future<SystemSpeechSupport> check(String language) async {
+    checked.add(language);
+    return support;
+  }
+
+  @override
+  Future<void> download(String language) async => downloads.add(language);
+
+  @override
+  Future<String> transcribe(
+    String path, {
+    required WavInfo info,
+    required String language,
+  }) async {
+    transcribed.add((info.frameCount, language));
+    if (gate case final gate?) await gate.future;
+    if (cancelled) throw PlatformException(code: 'canceled');
+    if (error case final error?) throw error;
+    return texts.isEmpty ? 'Hola' : texts.removeAt(0);
+  }
+
+  @override
+  Future<double> progress() async => 0.5;
+
+  @override
+  Future<void> cancel() async {
+    cancelled = true;
+    if (gate case final gate? when !gate.isCompleted) gate.complete();
+  }
+}
+
+class FakeWhisperService implements WhisperService {
+  WhisperModel? installed;
+
+  /// Modelos cuya descarga se ha pedido.
+  final installs = <WhisperModel>[];
+
+  /// Descarga en curso: el test emite el progreso y la termina con
+  /// [finishInstall].
+  StreamController<double?>? installing;
+  int cancelledInstalls = 0;
+  int uninstalls = 0;
+
+  /// Muestras de cada tramo transcrito.
+  final chunks = <int>[];
+
+  /// Idioma de cada tramo transcrito.
+  final languages = <String>[];
+
+  /// Texto de cada tramo, en orden; si se acaban, «Hola».
+  final texts = <String>[];
+  int opened = 0;
+  int closed = 0;
+
+  /// Si se indica, transcribir falla con este error.
+  Object? error;
+
+  @override
+  Future<WhisperModel?> installedModel() async => installed;
+
+  @override
+  Stream<double?> install(WhisperModel model) {
+    installs.add(model);
+    final controller = installing = StreamController<double?>(
+      onCancel: () => cancelledInstalls++,
+    );
+    return controller.stream;
+  }
+
+  /// Termina la descarga en curso.
+  Future<void> finishInstall() async {
+    installed = installs.last;
+    await installing!.close();
+  }
+
+  @override
+  Future<void> uninstall() async {
+    uninstalls++;
+    installed = null;
+  }
+
+  @override
+  Future<WhisperSession> open() async {
+    final model = installed;
+    if (model == null) throw StateError('Sin modelo');
+    opened++;
+    return _FakeWhisperSession(model, this);
+  }
+}
+
+class _FakeWhisperSession implements WhisperSession {
+  _FakeWhisperSession(this.model, this.service);
+
+  @override
+  final WhisperModel model;
+  final FakeWhisperService service;
+
+  @override
+  Future<WhisperText> transcribe(
+    Float32List samples, {
+    required String language,
+    void Function(double fraction)? onProgress,
+  }) async {
+    service.chunks.add(samples.length);
+    service.languages.add(language);
+    onProgress?.call(0.5);
+    if (service.error case final error?) throw error;
+    return WhisperText(
+      service.texts.isEmpty ? 'Hola' : service.texts.removeAt(0),
+      language: language == 'auto' ? 'es' : language,
+    );
+  }
+
+  @override
+  void cancel() {}
+
+  @override
+  Future<void> close() async => service.closed++;
+}
+
+/// Transcriptor de los tests de widgets: no toca archivos.
+class FakeTranscriber implements Transcriber {
+  FakeTranscriber({FakeSystemSpeech? system, FakeWhisperService? whisper})
+    : system = system ?? FakeSystemSpeech(),
+      whisper = whisper ?? FakeWhisperService();
+
+  @override
+  final FakeSystemSpeech system;
+
+  @override
+  final FakeWhisperService whisper;
+
+  @override
+  AudioCodec get codec => CopyingAudioCodec();
+
+  @override
+  bool get useIsolates => false;
+
+  /// Transcripciones pedidas: id de la grabación, motor e idioma.
+  final calls = <(String, TranscriptionEngine, String)>[];
+
+  /// Texto que se devuelve.
+  String text = 'Hola, esto es una prueba.';
+
+  /// Si se indica, transcribir falla con este error.
+  Object? error;
+
+  /// Si se indica, transcribir espera a que se complete.
+  Completer<void>? gate;
+
+  @override
+  Future<Transcript> transcribe(
+    Recording recording, {
+    required TranscriptionEngine engine,
+    required String language,
+    void Function(double? progress)? onProgress,
+    TranscriptionCancel? cancel,
+  }) async {
+    calls.add((recording.id, engine, language));
+    onProgress?.call(null);
+    if (gate case final gate?) {
+      onProgress?.call(0.25);
+      await gate.future;
+    }
+    if (cancel?.isCancelled ?? false) {
+      throw const TranscriptionException(TranscriptionError.canceled);
+    }
+    if (error case final error?) throw error;
+    return Transcript(
+      text: text,
+      engine: engine,
+      model: engine == TranscriptionEngine.whisper ? WhisperModel.base : null,
+      language: language,
+      revision: recording.revision,
+      createdAt: DateTime(2026, 10, 5, 10, 30),
+    );
+  }
+}
+
+/// Instalación de Whisper de los tests de widgets.
+WhisperController fakeWhisperController([FakeWhisperService? service]) =>
+    WhisperController(service ?? FakeWhisperService());

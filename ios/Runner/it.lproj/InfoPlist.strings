@@ -1,3 +1,4 @@
-/* Nombre de la app y aviso del permiso del micrófono. */
+/* Nombre de la app y avisos de los permisos del micrófono y del reconocimiento de voz. */
 "CFBundleDisplayName" = "Registratore";
 "NSMicrophoneUsageDescription" = "Serve l'accesso al microfono per registrare l'audio.";
+"NSSpeechRecognitionUsageDescription" = "Il riconoscimento vocale serve per trascrivere le tue registrazioni.";

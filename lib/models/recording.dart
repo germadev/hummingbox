@@ -1,6 +1,7 @@
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import 'recording_options.dart';
+import 'transcription.dart';
 
 /// Una grabación de audio: dentro de la app o, si se eligió una, en la
 /// carpeta del dispositivo.
@@ -16,6 +17,7 @@ class Recording {
     this.copies = const {},
     this.audio,
     this.folder = '',
+    this.transcript,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -43,6 +45,7 @@ class Recording {
       revision: json['revision'] as int? ?? 0,
       audio: AudioInfo.fromJson(json['audio']),
       folder: json['folder'] as String? ?? '',
+      transcript: Transcript.fromJson(json['transcript']),
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -88,6 +91,14 @@ class Recording {
   /// vacío si está en la principal.
   final String folder;
 
+  /// Texto de la grabación, si se ha transcrito.
+  final Transcript? transcript;
+
+  /// Indica si la transcripción es de otra versión del audio (si se editó o
+  /// se cambió fuera de la app después de transcribirla).
+  bool get isTranscriptOutdated =>
+      transcript != null && transcript!.revision != revision;
+
   /// Formato del archivo según su extensión.
   RecordingFormat get format =>
       RecordingFormat.fromPath(path) ?? RecordingFormat.aac;
@@ -113,6 +124,7 @@ class Recording {
     if (revision != 0) 'revision': revision,
     if (audio != null) 'audio': audio!.toJson(),
     if (folder.isNotEmpty) 'folder': folder,
+    if (transcript != null) 'transcript': transcript!.toJson(),
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -126,6 +138,7 @@ class Recording {
     int? revision,
     Map<String, CopyState>? copies,
     AudioInfo? audio,
+    Transcript? Function()? transcript,
   }) {
     return Recording(
       id: id,
@@ -138,6 +151,7 @@ class Recording {
       copies: copies ?? this.copies,
       audio: audio ?? this.audio,
       folder: folder,
+      transcript: transcript == null ? this.transcript : transcript(),
     );
   }
 }

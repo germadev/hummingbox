@@ -80,6 +80,10 @@ String formatSampleRate(int hertz) =>
 String formatBitRate(int bitsPerSecond) =>
     '${(bitsPerSecond / 1000).round()} kbps';
 
+/// Porcentaje sin decimales, con el formato del idioma: `45 %` o `45%`.
+String formatPercent(double fraction) =>
+    NumberFormat.percentPattern().format(fraction.clamp(0.0, 1.0));
+
 /// Tamaño en megabytes, con una decimal como mucho: `0,5 MB`, `5,3 MB`.
 String formatMegabytes(int bytes) =>
     '${NumberFormat('0.#').format(bytes / 1000000)} MB';

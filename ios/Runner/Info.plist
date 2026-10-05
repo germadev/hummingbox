@@ -51,6 +51,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>The microphone is needed to record audio.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Speech recognition is used to transcribe your recordings.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

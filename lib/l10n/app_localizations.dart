@@ -961,6 +961,294 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saves anything pending and looks for changes where recordings are saved'**
   String get syncNowSubtitle;
+
+  /// Acción del menú de una grabación para pasar su audio a texto
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe'**
+  String get transcribe;
+
+  /// No description provided for @viewTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'View transcript'**
+  String get viewTranscript;
+
+  /// Mientras se transcribe; percent es el porcentaje ya formateado («45 %»)
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribing… {percent}'**
+  String transcribingProgress(String percent);
+
+  /// No description provided for @preparingTranscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing the transcription…'**
+  String get preparingTranscription;
+
+  /// No description provided for @waitingToTranscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to transcribe…'**
+  String get waitingToTranscribe;
+
+  /// No description provided for @cancelTranscription.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel transcription'**
+  String get cancelTranscription;
+
+  /// No description provided for @transcriptReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcript ready'**
+  String get transcriptReady;
+
+  /// No description provided for @view.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get view;
+
+  /// No description provided for @transcriptionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t transcribe the recording'**
+  String get transcriptionFailed;
+
+  /// No description provided for @noSpeechRecognized.
+  ///
+  /// In en, this message translates to:
+  /// **'No words were recognized'**
+  String get noSpeechRecognized;
+
+  /// No description provided for @stopToTranscribe.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop recording to transcribe'**
+  String get stopToTranscribe;
+
+  /// No description provided for @systemSpeechUnavailableTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition isn\'t available'**
+  String get systemSpeechUnavailableTitle;
+
+  /// No description provided for @systemSpeechUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This device can\'t transcribe with the system\'s speech recognition (on Android it needs version 13 or later). You can install Whisper in the settings.'**
+  String get systemSpeechUnavailableMessage;
+
+  /// No description provided for @unsupportedLanguageMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The system\'s speech recognition doesn\'t support “{language}” on this device. You can install Whisper or choose another language in the settings.'**
+  String unsupportedLanguageMessage(String language);
+
+  /// No description provided for @openSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get openSettings;
+
+  /// No description provided for @downloadLanguageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download “{language}”?'**
+  String downloadLanguageTitle(String language);
+
+  /// No description provided for @downloadLanguageMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The system\'s speech recognition needs to download this language to transcribe on the device. Try again when the download finishes.'**
+  String get downloadLanguageMessage;
+
+  /// No description provided for @download.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get download;
+
+  /// No description provided for @languageDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'The language is still downloading. Try again when it finishes.'**
+  String get languageDownloading;
+
+  /// No description provided for @speechPermission.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow speech recognition in settings to transcribe'**
+  String get speechPermission;
+
+  /// No description provided for @whisperNotInstalledTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Whisper isn\'t installed'**
+  String get whisperNotInstalledTitle;
+
+  /// No description provided for @whisperNotInstalledMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'To transcribe with Whisper, download a model in the settings.'**
+  String get whisperNotInstalledMessage;
+
+  /// No description provided for @copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copy;
+
+  /// No description provided for @copied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to the clipboard'**
+  String get copied;
+
+  /// No description provided for @transcribeAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe again'**
+  String get transcribeAgain;
+
+  /// No description provided for @deleteTranscript.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete transcript'**
+  String get deleteTranscript;
+
+  /// No description provided for @transcriptDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcript deleted'**
+  String get transcriptDeleted;
+
+  /// No description provided for @transcriptOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'The recording has changed since it was transcribed.'**
+  String get transcriptOutdated;
+
+  /// Título de la sección de las opciones de la transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'Transcription'**
+  String get transcriptionSection;
+
+  /// No description provided for @transcriptionEngine.
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe with'**
+  String get transcriptionEngine;
+
+  /// No description provided for @systemSpeechRecognition.
+  ///
+  /// In en, this message translates to:
+  /// **'System speech recognition'**
+  String get systemSpeechRecognition;
+
+  /// No description provided for @systemSpeechDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads. On Android, needs version 13 or later'**
+  String get systemSpeechDescription;
+
+  /// No description provided for @whisperDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'On the device, offline. Needs a model download'**
+  String get whisperDescription;
+
+  /// No description provided for @whisperModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Whisper model'**
+  String get whisperModel;
+
+  /// No description provided for @whisperNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed. Tap to download one'**
+  String get whisperNotInstalled;
+
+  /// No description provided for @whisperInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed: {model} ({size})'**
+  String whisperInstalled(String model, String size);
+
+  /// No description provided for @whisperDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading {model}… {percent} of {size}'**
+  String whisperDownloading(String model, String percent, String size);
+
+  /// No description provided for @whisperDownloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t download the model'**
+  String get whisperDownloadFailed;
+
+  /// No description provided for @chooseWhisperModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Download a model'**
+  String get chooseWhisperModel;
+
+  /// No description provided for @whisperTinyDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · Faster, less accurate'**
+  String whisperTinyDescription(String size);
+
+  /// No description provided for @whisperBaseDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'{size} · More accurate, slower'**
+  String whisperBaseDescription(String size);
+
+  /// No description provided for @deleteWhisperModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the model'**
+  String get deleteWhisperModel;
+
+  /// No description provided for @deleteWhisperModelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the Whisper model?'**
+  String get deleteWhisperModelTitle;
+
+  /// No description provided for @deleteWhisperModelMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This frees {size}. You can download it again later.'**
+  String deleteWhisperModelMessage(String size);
+
+  /// No description provided for @cancelDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel download'**
+  String get cancelDownload;
+
+  /// No description provided for @transcriptionLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get transcriptionLanguage;
+
+  /// No description provided for @appLanguageOption.
+  ///
+  /// In en, this message translates to:
+  /// **'The app\'s language ({language})'**
+  String appLanguageOption(String language);
+
+  /// No description provided for @detectLanguageOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Detect automatically (Whisper only)'**
+  String get detectLanguageOption;
 }
 
 class _AppLocalizationsDelegate

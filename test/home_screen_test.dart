@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -5,6 +7,8 @@ import 'package:voicerecorder/app.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/transcription.dart';
+import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 
@@ -21,6 +25,8 @@ void main() {
   late FakeFolderAccess folders;
   late FakeDriveService drive;
   late FakeScreenAwake screen;
+  late FakeTranscriber transcriber;
+  late FakeWhisperService whisper;
 
   setUpAll(() => initializeDateFormatting('es'));
 
@@ -32,6 +38,8 @@ void main() {
     folders = FakeFolderAccess();
     drive = FakeDriveService();
     screen = FakeScreenAwake();
+    whisper = FakeWhisperService();
+    transcriber = FakeTranscriber(whisper: whisper);
   });
 
   Recording sample(
@@ -70,6 +78,8 @@ void main() {
           drive: drive,
           fileExists: fileExists,
         ),
+        transcriber: transcriber,
+        whisper: fakeWhisperController(whisper),
         screen: screen,
       ),
     );
@@ -762,6 +772,209 @@ void main() {
 
     expect(find.text('Detén la grabación para poder editar'), findsOneWidget);
     expect(find.text('Editar grabación'), findsNothing);
+  });
+
+  group('transcripción', () {
+    Future<void> chooseInMenu(WidgetTester tester, String item) async {
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item));
+    }
+
+    testWidgets('transcribe desde el menú y muestra el principio del texto', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pumpAndSettle();
+
+      expect(transcriber.calls, [('a', TranscriptionEngine.system, 'es')]);
+      expect(find.text('Hola, esto es una prueba.'), findsOneWidget);
+      expect(find.text('Transcripción lista'), findsOneWidget);
+      expect(
+        repository.byId('a').transcript!.text,
+        'Hola, esto es una prueba.',
+      );
+
+      // Ahora el menú lleva a la transcripción.
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('Transcribir'), findsNothing);
+      expect(find.text('Ver transcripción'), findsOneWidget);
+    });
+
+    testWidgets('con Whisper, usa el idioma elegido', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        transcription: TranscriptionSettings(
+          engine: TranscriptionEngine.whisper,
+          language: TranscriptionSettings.detectLanguage,
+        ),
+      );
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pumpAndSettle();
+
+      expect(transcriber.calls, [('a', TranscriptionEngine.whisper, 'auto')]);
+    });
+
+    testWidgets('muestra el progreso y deja cancelar', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      final gate = transcriber.gate = Completer<void>();
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Transcribiendo… 25\u00a0%'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Cancelar transcripción'));
+      gate.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('transcription-progress')), findsNothing);
+      expect(repository.byId('a').transcript, isNull);
+      // Cancelar no es un error.
+      expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('si el sistema no puede, ofrece abrir las opciones', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      transcriber.error = const TranscriptionException(
+        TranscriptionError.systemUnavailable,
+      );
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pumpAndSettle();
+      expect(
+        find.text('El reconocimiento de voz no está disponible'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Abrir opciones'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Opciones'), findsOneWidget);
+    });
+
+    testWidgets('pide descargar el idioma si hace falta', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      transcriber.error = const TranscriptionException(
+        TranscriptionError.needsDownload,
+        language: 'es-ES',
+      );
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pumpAndSettle();
+      expect(find.text('¿Descargar «Español»?'), findsOneWidget);
+      await tester.tap(find.text('Descargar'));
+      await tester.pumpAndSettle();
+
+      expect(transcriber.system.downloads, ['es-ES']);
+    });
+
+    testWidgets('sin Whisper instalado, ofrece abrir las opciones', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      transcriber.error = const TranscriptionException(
+        TranscriptionError.whisperNotInstalled,
+      );
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir');
+      await tester.pumpAndSettle();
+
+      expect(find.text('Whisper no está instalado'), findsOneWidget);
+    });
+
+    testWidgets('no deja transcribir mientras se graba', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(record());
+      await pumpAnimations(tester);
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await pumpAnimations(tester);
+      await tester.tap(find.text('Transcribir'));
+      await pumpAnimations(tester);
+
+      expect(
+        find.text('Detén la grabación para poder transcribir'),
+        findsOneWidget,
+      );
+      expect(transcriber.calls, isEmpty);
+    });
+
+    Recording transcribed({int revision = 0}) => Recording(
+      id: 'a',
+      path: '/fake/a.m4a',
+      name: 'Entrevista',
+      createdAt: DateTime(2026, 9, 28, 8, 30),
+      duration: const Duration(seconds: 83),
+      revision: revision,
+      transcript: Transcript(
+        text: 'Buenos días a todos.',
+        engine: TranscriptionEngine.whisper,
+        model: WhisperModel.base,
+        language: 'es',
+        revision: 0,
+        createdAt: DateTime(2026, 9, 28, 9),
+      ),
+    );
+
+    testWidgets('abre la transcripción y la elimina', (tester) async {
+      repository = InMemoryRecordingsRepository([transcribed()]);
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('transcript-a')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('transcript-text')), findsOneWidget);
+      expect(find.textContaining('Whisper (Base) · Español'), findsOneWidget);
+      expect(
+        find.text('La grabación ha cambiado desde que se transcribió.'),
+        findsNothing,
+      );
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar transcripción'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Transcripción eliminada'), findsOneWidget);
+      expect(find.text('Buenos días a todos.'), findsNothing);
+      expect(repository.byId('a').transcript, isNull);
+    });
+
+    testWidgets('avisa si la grabación cambió y deja volver a transcribir', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([transcribed(revision: 1)]);
+      await pumpApp(tester);
+
+      await tester.tap(find.byKey(const Key('transcript-a')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('La grabación ha cambiado desde que se transcribió.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Volver a transcribir'));
+      await tester.pumpAndSettle();
+
+      expect(transcriber.calls, hasLength(1));
+      expect(repository.byId('a').transcript!.revision, 1);
+      expect(find.text('Hola, esto es una prueba.'), findsOneWidget);
+    });
   });
 
   group('carpetas', () {

@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
+import '../controllers/transcription_controller.dart';
+import '../controllers/whisper_controller.dart';
 import '../l10n/l10n.dart';
 import '../audio/audio_info.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/recording_editor.dart';
@@ -16,6 +19,8 @@ import '../services/screen_awake.dart';
 import '../services/settings_store.dart';
 import '../services/share_service.dart';
 import '../services/storage_sync.dart';
+import '../services/transcriber.dart';
+import '../utils/languages.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/folder_drawer.dart';
 import '../widgets/record_panel.dart';
@@ -23,6 +28,7 @@ import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
 import 'settings_screen.dart';
 import 'storage_setup_screen.dart';
+import 'transcript_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -32,6 +38,8 @@ class HomeScreen extends StatefulWidget {
     required this.playerFactory,
     required this.editor,
     required this.sync,
+    required this.transcriber,
+    required this.whisper,
     this.screen = const PlatformScreenAwake(),
   });
 
@@ -43,6 +51,13 @@ class HomeScreen extends StatefulWidget {
   /// Dónde se guardan las grabaciones (la carpeta del dispositivo o Google
   /// Drive) y el resto de las opciones.
   final StorageSync sync;
+
+  /// Transcribe las grabaciones (con el reconocimiento del sistema o con
+  /// Whisper).
+  final Transcriber transcriber;
+
+  /// Instalación de Whisper.
+  final WhisperController whisper;
 
   /// Mantiene la pantalla encendida mientras se graba (si está activado en
   /// las opciones).
@@ -62,6 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
     audioPath: widget.sync.audioPath,
+  );
+  late final TranscriptionController _transcriptions = TranscriptionController(
+    transcriber: widget.transcriber,
+    repository: widget.repository,
   );
 
   late final AppLifecycleListener _lifecycle;
@@ -85,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _recorder.addListener(_updateScreen);
     widget.sync.addListener(_updateScreen);
     widget.sync.load();
+    widget.whisper.load();
     _loadRecordings();
   }
 
@@ -103,6 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
     _recorder.dispose();
     _player.dispose();
+    _transcriptions.dispose();
     super.dispose();
   }
 
@@ -409,6 +430,10 @@ class _HomeScreenState extends State<HomeScreen> {
         await _edit(recording);
       case RecordingAction.rename:
         await _rename(recording);
+      case RecordingAction.transcribe:
+        await _transcribe(recording);
+      case RecordingAction.viewTranscript:
+        await _viewTranscript(recording);
       case RecordingAction.share:
         await _share(recording, tileContext);
       case RecordingAction.delete:
@@ -482,6 +507,159 @@ class _HomeScreenState extends State<HomeScreen> {
     unawaited(_addMissingDetails());
   }
 
+  // --- Transcripción ---
+
+  /// Idioma con el que se transcribe: el elegido en las opciones o el de la
+  /// app.
+  String _transcriptionLanguage(TranscriptionSettings settings) {
+    final app = Localizations.localeOf(context).languageCode;
+    return switch (settings.language) {
+      TranscriptionSettings.appLanguage => app,
+      // Solo Whisper sabe detectarlo.
+      TranscriptionSettings.detectLanguage =>
+        settings.engine == TranscriptionEngine.whisper
+            ? TranscriptionSettings.detectLanguage
+            : app,
+      final language => language,
+    };
+  }
+
+  /// Transcribe [recording] con lo elegido en las opciones. Si no se puede,
+  /// explica por qué y qué hacer.
+  Future<void> _transcribe(Recording recording) async {
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToTranscribe);
+      return;
+    }
+    await widget.sync.load();
+    if (!mounted) return;
+    final settings = widget.sync.settings.transcription;
+    try {
+      final transcribed = await _transcriptions.transcribe(
+        recording,
+        engine: settings.engine,
+        language: _transcriptionLanguage(settings),
+      );
+      if (!mounted) return;
+      _replaceRecording(transcribed);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.transcriptReady),
+            action: SnackBarAction(
+              label: context.l10n.view,
+              onPressed: () => _viewTranscript(transcribed),
+            ),
+          ),
+        );
+    } on TranscriptionException catch (e) {
+      await _explainTranscriptionError(e);
+    } catch (_) {
+      _showMessage((l10n) => l10n.transcriptionFailed);
+    }
+  }
+
+  Future<void> _explainTranscriptionError(TranscriptionException e) async {
+    if (!mounted) return;
+    final l10n = context.l10n;
+    Future<void> offerSettings(String title, String message) async {
+      final open = await showConfirmDialog(
+        context,
+        title: title,
+        message: message,
+        confirmLabel: l10n.openSettings,
+      );
+      if (open && mounted) await _openSettings();
+    }
+
+    switch (e.error) {
+      case TranscriptionError.canceled:
+        return;
+      case TranscriptionError.systemUnavailable:
+        await offerSettings(
+          l10n.systemSpeechUnavailableTitle,
+          l10n.systemSpeechUnavailableMessage,
+        );
+      case TranscriptionError.unsupportedLanguage:
+        await offerSettings(
+          l10n.systemSpeechUnavailableTitle,
+          l10n.unsupportedLanguageMessage(
+            languageName(
+              e.language ??
+                  _transcriptionLanguage(widget.sync.settings.transcription),
+            ),
+          ),
+        );
+      case TranscriptionError.needsDownload:
+        final language = e.language;
+        if (language == null) return;
+        final download = await showConfirmDialog(
+          context,
+          title: l10n.downloadLanguageTitle(languageName(language)),
+          message: l10n.downloadLanguageMessage,
+          confirmLabel: l10n.download,
+        );
+        if (!download) return;
+        try {
+          await widget.transcriber.system.download(language);
+        } catch (_) {
+          _showMessage((l10n) => l10n.transcriptionFailed);
+        }
+      case TranscriptionError.downloading:
+        _showMessage((l10n) => l10n.languageDownloading);
+      case TranscriptionError.denied:
+        _showMessage((l10n) => l10n.speechPermission);
+      case TranscriptionError.microphone:
+        _showMessage((l10n) => l10n.microphonePermission);
+      case TranscriptionError.whisperNotInstalled:
+        await offerSettings(
+          l10n.whisperNotInstalledTitle,
+          l10n.whisperNotInstalledMessage,
+        );
+      case TranscriptionError.noSpeech:
+        _showMessage((l10n) => l10n.noSpeechRecognized);
+      case TranscriptionError.failed:
+        _showMessage((l10n) => l10n.transcriptionFailed);
+    }
+  }
+
+  Future<void> _viewTranscript(Recording recording) async {
+    // La de la lista puede tener la transcripción más al día.
+    final current =
+        _recordings.where((r) => r.id == recording.id).firstOrNull ?? recording;
+    if (current.transcript == null) return;
+    final action = await Navigator.push<TranscriptAction>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TranscriptScreen(recording: current),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case TranscriptAction.transcribeAgain:
+        await _transcribe(current);
+      case TranscriptAction.delete:
+        try {
+          _replaceRecording(
+            await widget.repository.setTranscript(current, null),
+          );
+          _showMessage((l10n) => l10n.transcriptDeleted);
+        } catch (_) {
+          _showMessage((l10n) => l10n.deleteFailed);
+        }
+    }
+  }
+
+  void _replaceRecording(Recording recording) {
+    if (!mounted) return;
+    setState(() {
+      _recordings = [
+        for (final r in _recordings) r.id == recording.id ? recording : r,
+      ];
+    });
+  }
+
   Future<void> _delete(Recording recording) async {
     final l10n = context.l10n;
     final settings = widget.sync.settings;
@@ -499,6 +677,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!confirmed) return;
 
+    _transcriptions.cancel(recording);
     if (_player.isCurrent(recording)) await _player.stop();
     try {
       await widget.sync.delete(recording);
@@ -528,7 +707,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (context) => SettingsScreen(sync: widget.sync),
+        builder: (context) =>
+            SettingsScreen(sync: widget.sync, whisper: widget.whisper),
       ),
     );
   }
@@ -648,6 +828,8 @@ class _HomeScreenState extends State<HomeScreen> {
           key: ValueKey(recording.id),
           recording: recording,
           player: _player,
+          transcriptions: _transcriptions,
+          onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
           onSeek: (position) => _seek(recording, position),
           onAction: (action, tileContext) =>

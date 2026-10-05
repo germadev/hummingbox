@@ -1,11 +1,12 @@
 import Flutter
 import UIKit
 
-/// Registra los canales de conversión de audio, de acceso a carpetas y de la
-/// pantalla.
+/// Registra los canales de conversión de audio, de acceso a carpetas, de la
+/// pantalla y del reconocimiento de voz.
 public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
   private let codec = AudioCodecHandler()
   private let folders = FolderAccessHandler()
+  private let speech = SpeechHandler()
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = VoicerecorderNativePlugin()
@@ -38,6 +39,13 @@ public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+
+    let speechChannel = FlutterMethodChannel(
+      name: "es.germade.voicerecorder/speech",
+      binaryMessenger: registrar.messenger())
+    speechChannel.setMethodCallHandler { call, result in
+      instance.speech.handle(call, result: result)
     }
   }
 }

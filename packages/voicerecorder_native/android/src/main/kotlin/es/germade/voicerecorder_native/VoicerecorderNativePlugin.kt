@@ -10,14 +10,16 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 /**
- * Registra los canales de conversión de audio, de acceso a carpetas y de la
- * pantalla.
+ * Registra los canales de conversión de audio, de acceso a carpetas, de la
+ * pantalla y del reconocimiento de voz.
  */
 class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
     private var codecChannel: MethodChannel? = null
     private var foldersChannel: MethodChannel? = null
     private var screenChannel: MethodChannel? = null
+    private var speechChannel: MethodChannel? = null
     private var folders: FolderAccess? = null
+    private var speech: SpeechTranscriber? = null
     private val screen = ScreenAwake()
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -32,6 +34,11 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         screenChannel = MethodChannel(binding.binaryMessenger, SCREEN_CHANNEL).apply {
             setMethodCallHandler(screen)
         }
+        val transcriber = SpeechTranscriber(binding.applicationContext)
+        speech = transcriber
+        speechChannel = MethodChannel(binding.binaryMessenger, SPEECH_CHANNEL).apply {
+            setMethodCallHandler(transcriber)
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -42,6 +49,10 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         folders = null
         screenChannel?.setMethodCallHandler(null)
         screenChannel = null
+        speechChannel?.setMethodCallHandler(null)
+        speechChannel = null
+        speech?.dispose()
+        speech = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -68,6 +79,7 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         const val CODEC_CHANNEL = "es.germade.voicerecorder/audio_codec"
         const val FOLDERS_CHANNEL = "es.germade.voicerecorder/folders"
         const val SCREEN_CHANNEL = "es.germade.voicerecorder/screen"
+        const val SPEECH_CHANNEL = "es.germade.voicerecorder/speech"
     }
 }
 
