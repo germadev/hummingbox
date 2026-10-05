@@ -52,6 +52,7 @@ void main() {
   Future<void> pumpApp(
     WidgetTester tester, [
     void Function(FakeRecordingEditor editor)? setUpEditor,
+    bool Function(String path)? fileExists,
   ]) async {
     editor = FakeRecordingEditor(repository: repository);
     setUpEditor?.call(editor);
@@ -67,6 +68,7 @@ void main() {
           store: store,
           folders: folders,
           drive: drive,
+          fileExists: fileExists,
         ),
         screen: screen,
       ),
@@ -680,6 +682,46 @@ void main() {
 
       expect(editor.extracted, ['a']);
       expect(repository.byId('a').waveform, [0.2, 0.6, 1.0]);
+    });
+
+    testWidgets('con Drive, no descarga nada para la onda hasta escucharla', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: 'Idea',
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: Duration.zero,
+          copies: const {
+            'drive': CopyState(
+              destination: 'folder1',
+              ref: 'file0',
+              revision: 0,
+              name: 'Idea',
+            ),
+          },
+        ),
+      ]);
+      drive.addFile('Idea.m4a');
+      store.settings = const AppSettings(
+        drive: DriveSettings(email: 'ana@example.com', folderId: 'folder1'),
+      );
+      // Ningún audio está en el dispositivo.
+      final local = <String>{};
+      await pumpApp(tester, null, local.contains);
+
+      expect(find.text('Idea'), findsOneWidget);
+      expect(editor.extracted, isEmpty);
+      expect(drive.calls, isEmpty);
+
+      // Al escucharla se descarga (aquí, se simula que ya está).
+      local.add('/fake/a.m4a');
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+
+      expect(editor.extracted, ['a']);
     });
   });
 

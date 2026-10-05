@@ -110,6 +110,13 @@ void main() {
       expect(writes(), hasLength(2));
     });
 
+    test('lee el audio de la carpeta sin considerarlo una descarga', () async {
+      folders.addFile(folder.id, 'Idea.m4a');
+      await sync.sync();
+
+      expect(await sync.hasLocalAudio(await single()), isTrue);
+    });
+
     test('lee el audio de la carpeta cuando no está en la caché', () async {
       final recording = await addRecording(bytes: [7, 8, 9]);
       await sync.sync();
@@ -562,6 +569,18 @@ void main() {
       final renamed = await single();
       expect(renamed.name, 'B2');
       expect(renamed.id, before['B']);
+    });
+
+    test('solo tiene el audio sin descargar si está en la app o en la '
+        'caché', () async {
+      drive.addFile('Idea.m4a', bytes: [1, 2]);
+      await sync.sync();
+      final idea = await single();
+      expect(await sync.hasLocalAudio(idea), isFalse);
+      expect(drive.calls, isEmpty);
+
+      await sync.audioPath(idea);
+      expect(await sync.hasLocalAudio(idea), isTrue);
     });
 
     test('eliminarla la manda a la papelera de Drive', () async {

@@ -37,6 +37,10 @@ class AudioCache {
     '${recording.id}.${recording.revision}${recording.format.extension}',
   );
 
+  /// Indica si el audio actual de [recording] está en la caché.
+  Future<bool> contains(Recording recording) async =>
+      File(await pathFor(recording)).existsSync();
+
   /// Ruta local del audio actual de [recording]. Si no está en la caché, lo
   /// guarda en ella con [read], que lo copia a la ruta que se le indica.
   Future<String> fetch(

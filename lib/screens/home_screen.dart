@@ -129,8 +129,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Calcula lo que les falta a las grabaciones hechas con versiones
   /// anteriores de la app o añadidas desde el destino: la onda (decodificando
-  /// el audio), el formato y, si no se conoce, la duración. Si algo falla
-  /// (p. ej. no se puede descargar), se reintenta al volver a abrir la app.
+  /// el audio), el formato y, si no se conoce, la duración. Si algo falla,
+  /// se reintenta al volver a abrir la app.
+  ///
+  /// Las que están en Google Drive y no se han descargado se dejan para
+  /// cuando se descarguen (p. ej. al escucharlas): no se descarga nada solo
+  /// para mostrar la lista.
   Future<void> _addMissingDetails() async {
     if (_addingDetails) {
       // Se repite al terminar para incluir las que han llegado entretanto.
@@ -148,6 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ];
         for (final recording in pending) {
           if (!mounted) return;
+          if (!await widget.sync.hasLocalAudio(recording)) continue;
           await _addDetails(recording);
         }
       } while (_detailsPending && mounted);
@@ -388,7 +393,10 @@ class _HomeScreenState extends State<HomeScreen> {
       await play();
     } catch (_) {
       _showMessage((l10n) => l10n.playFailed);
+      return;
     }
+    // Si se ha descargado, ya se puede calcular lo que le falte.
+    unawaited(_addMissingDetails());
   }
 
   Future<void> _onAction(
@@ -469,7 +477,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (_) {
       _showMessage((l10n) => l10n.shareFailed);
+      return;
     }
+    unawaited(_addMissingDetails());
   }
 
   Future<void> _delete(Recording recording) async {

@@ -433,6 +433,19 @@ class StorageSync extends ChangeNotifier {
     return recording.path;
   }
 
+  /// Indica si el audio de [recording] se puede leer sin descargarlo de
+  /// Google Drive: si está dentro de la app o en la caché, o si las
+  /// grabaciones se guardan en la carpeta del dispositivo.
+  ///
+  /// Con Drive como destino no se descarga nada para mostrar la lista: el
+  /// audio se descarga (y se queda en la caché) al escucharlo, compartirlo o
+  /// editarlo.
+  Future<bool> hasLocalAudio(Recording recording) async {
+    if (fileExists(recording.path)) return true;
+    if (_settings.storage != StorageKind.drive) return true;
+    return cache.contains(recording);
+  }
+
   Future<void> _changeTarget(
     AppSettings Function(AppSettings settings) change,
   ) async {

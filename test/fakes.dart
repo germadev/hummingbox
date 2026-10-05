@@ -779,6 +779,7 @@ StorageSync fakeStorageSync(
   SettingsStore? store,
   FolderAccess? folders,
   DriveService? drive,
+  bool Function(String path)? fileExists,
 }) {
   return StorageSync(
     repository: repository,
@@ -787,6 +788,6 @@ StorageSync fakeStorageSync(
     folders: folders ?? FakeFolderAccess(),
     drive: drive ?? FakeDriveService(),
     cache: AudioCache(directory: () async => Directory('/fake/cache')),
-    fileExists: (_) => true,
+    fileExists: fileExists ?? (_) => true,
   );
 }
