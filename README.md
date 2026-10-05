@@ -175,6 +175,23 @@ El texto se guarda en el índice de la app con el motor, el idioma y la
 revisión del audio: si la grabación se edita o cambia después, la
 transcripción avisa de que puede no corresponder.
 
+**En el destino, como `.txt`**: la transcripción se guarda también en un
+archivo de texto (UTF-8) junto al audio y con su mismo nombre
+(`Clases/Tema 1.txt` junto a `Clases/Tema 1.m4a`), en la carpeta del
+dispositivo o en Drive (y en la copia de Drive, si la hay). Se mantiene en
+los dos sentidos:
+
+- Volver a transcribir lo sobrescribe, renombrar la grabación lo renombra, y
+  eliminar la transcripción o la grabación lo borra.
+- Si el `.txt` se **edita fuera de la app** (con cualquier editor), la app
+  recoge el texto nuevo; si se borra fuera, la transcripción desaparece de la
+  app. Los cambios se detectan como los del audio (tamaño y suma MD5).
+- Los `.txt` que ya hay junto a un audio se leen como su transcripción: al
+  **reinstalar la app** o desde otro dispositivo, las transcripciones
+  vuelven. Con Drive, eso supone descargar esos `.txt` (son pequeños).
+- Si el texto cambió en la app sin guardarse todavía y también fuera, gana el
+  más reciente. Un `.txt` sin audio con su nombre no cuenta.
+
 ### Dónde se guardan las grabaciones
 
 Las grabaciones **viven en el destino elegido**: en la carpeta del
@@ -556,8 +573,9 @@ identificador del paquete y Google Drive no funcionaría.
   superior; en iOS, los idiomas que no admite en el dispositivo se
   reconocen en los servidores de Apple. Whisper tarda más con audios largos
   y en móviles antiguos (Base, más que Tiny) y no funciona en emuladores
-  x86. La transcripción se guarda en el índice de la app, no en el destino:
-  si se reinstala la app, se pierde.
+  x86. El `.txt` de la transcripción se empareja con el audio por el nombre:
+  si el sistema le añade un sufijo al crearlo («Idea (1).m4a» porque ya
+  había otro), el `.txt` se llama como la grabación, no como el archivo.
 - No hay forma de mover una grabación a otra subcarpeta desde la app.
 - Guardar en el destino y leerlo se hace con la app abierta; no hay subida
   en segundo plano.

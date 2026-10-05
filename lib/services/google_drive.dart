@@ -485,8 +485,10 @@ class DriveApi {
     return _json(response)['id'] as String;
   }
 
-  static String _mimeTypeOf(String path) =>
-      (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
+  static String _mimeTypeOf(String path) => path.toLowerCase().endsWith('.txt')
+      // La transcripción de una grabación.
+      ? 'text/plain'
+      : (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
 
   /// Hace la petición y, si el token ha caducado, la repite una vez con uno
   /// nuevo.

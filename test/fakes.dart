@@ -283,6 +283,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
             size: file.size,
             checksum: file.checksum,
             modified: file.modified,
+            transcript: file.transcript,
           ),
         },
         audio: audioChanged ? null : current.audio,
@@ -805,6 +806,7 @@ StorageSync fakeStorageSync(
     drive: drive ?? FakeDriveService(),
     cache: AudioCache(directory: () async => Directory('/fake/cache')),
     fileExists: fileExists ?? (_) => true,
+    workDirectory: () async => Directory.systemTemp,
   );
 }
 

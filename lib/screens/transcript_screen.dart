@@ -21,12 +21,13 @@ class TranscriptScreen extends StatelessWidget {
 
   /// Con qué se transcribió: `Whisper (Base) · Español · Hoy, 10:30`.
   static String details(Transcript transcript, AppLocalizations l10n) => [
-    switch (transcript.engine) {
+    ?switch (transcript.engine) {
       TranscriptionEngine.system => l10n.systemSpeechRecognition,
       TranscriptionEngine.whisper => switch (transcript.model) {
         final model? => 'Whisper (${whisperModelName(model)})',
         null => 'Whisper',
       },
+      null => null,
     },
     if (transcript.language case final language?) languageName(language),
     formatRecordingDate(transcript.createdAt, l10n),

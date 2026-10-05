@@ -167,6 +167,7 @@ class CopyState {
     this.size,
     this.checksum,
     this.modified,
+    this.transcript,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
@@ -195,6 +196,10 @@ class CopyState {
   /// listarla, si cambia se lee el archivo para comprobar si cambió [checksum].
   final DateTime? modified;
 
+  /// Archivo `.txt` con la transcripción, junto al audio en el mismo
+  /// destino, si se ha guardado o leído.
+  final TranscriptFile? transcript;
+
   /// El mismo archivo con los datos indicados cambiados.
   CopyState copyWith({
     String? ref,
@@ -209,6 +214,20 @@ class CopyState {
     size: size ?? this.size,
     checksum: checksum ?? this.checksum,
     modified: modified ?? this.modified,
+    transcript: transcript,
+  );
+
+  /// El mismo archivo con [file] como archivo de la transcripción (o sin él,
+  /// si es `null`).
+  CopyState withTranscript(TranscriptFile? file) => CopyState(
+    destination: destination,
+    ref: ref,
+    revision: revision,
+    name: name,
+    size: size,
+    checksum: checksum,
+    modified: modified,
+    transcript: file,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -236,6 +255,7 @@ class CopyState {
       modified: modified is int
           ? DateTime.fromMillisecondsSinceEpoch(modified)
           : null,
+      transcript: TranscriptFile.fromJson(json['transcript']),
     );
   }
 
@@ -247,6 +267,7 @@ class CopyState {
     if (size != null) 'size': size,
     if (checksum != null) 'md5': checksum,
     if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
+    if (transcript != null) 'transcript': transcript!.toJson(),
   };
 
   @override
@@ -259,7 +280,8 @@ class CopyState {
       other.size == size &&
       other.checksum == checksum &&
       other.modified?.millisecondsSinceEpoch ==
-          modified?.millisecondsSinceEpoch;
+          modified?.millisecondsSinceEpoch &&
+      other.transcript == transcript;
 
   @override
   int get hashCode => Object.hash(
@@ -270,5 +292,85 @@ class CopyState {
     size,
     checksum,
     modified?.millisecondsSinceEpoch,
+    transcript,
   );
+}
+
+/// Archivo de texto con la transcripción de una grabación, junto a su audio
+/// y con el mismo nombre («Idea.txt» junto a «Idea.m4a»).
+class TranscriptFile {
+  const TranscriptFile({
+    required this.ref,
+    required this.name,
+    this.size,
+    this.checksum,
+    this.modified,
+  });
+
+  /// Referencia del archivo en el destino.
+  final String ref;
+
+  /// Nombre con el que se guardó, con la extensión.
+  final String name;
+
+  /// Tamaño, suma MD5 y fecha de modificación del archivo la última vez que
+  /// se guardó o se leyó (para saber si se ha cambiado fuera de la app).
+  final int? size;
+  final String? checksum;
+  final DateTime? modified;
+
+  TranscriptFile copyWith({
+    String? ref,
+    String? name,
+    int? size,
+    String? checksum,
+    DateTime? modified,
+  }) => TranscriptFile(
+    ref: ref ?? this.ref,
+    name: name ?? this.name,
+    size: size ?? this.size,
+    checksum: checksum ?? this.checksum,
+    modified: modified ?? this.modified,
+  );
+
+  static TranscriptFile? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final ref = json['ref'];
+    final name = json['name'];
+    final size = json['size'];
+    final checksum = json['md5'];
+    final modified = json['modified'];
+    if (ref is! String || name is! String) return null;
+    return TranscriptFile(
+      ref: ref,
+      name: name,
+      size: size is int ? size : null,
+      checksum: checksum is String ? checksum : null,
+      modified: modified is int
+          ? DateTime.fromMillisecondsSinceEpoch(modified)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'ref': ref,
+    'name': name,
+    if (size != null) 'size': size,
+    if (checksum != null) 'md5': checksum,
+    if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is TranscriptFile &&
+      other.ref == ref &&
+      other.name == name &&
+      other.size == size &&
+      other.checksum == checksum &&
+      other.modified?.millisecondsSinceEpoch ==
+          modified?.millisecondsSinceEpoch;
+
+  @override
+  int get hashCode =>
+      Object.hash(ref, name, size, checksum, modified?.millisecondsSinceEpoch);
 }

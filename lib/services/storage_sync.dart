@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' show ClientException;
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../models/recording.dart';
 import '../models/recording_options.dart';
@@ -276,7 +280,9 @@ class StorageSync extends ChangeNotifier {
     required this.drive,
     AudioCache? cache,
     this.fileExists = _fileExists,
-  }) : cache = cache ?? AudioCache();
+    Future<Directory> Function()? workDirectory,
+  }) : cache = cache ?? AudioCache(),
+       _workDirectory = workDirectory ?? getTemporaryDirectory;
 
   final RecordingsRepository repository;
   final SettingsStore store;
@@ -289,6 +295,10 @@ class StorageSync extends ChangeNotifier {
   final bool Function(String path) fileExists;
 
   static bool _fileExists(String path) => File(path).existsSync();
+
+  /// Carpeta temporal para los `.txt` de las transcripciones que se suben o
+  /// se leen.
+  final Future<Directory> Function() _workDirectory;
 
   AppSettings _settings = const AppSettings();
   AppSettings get settings => _settings;
@@ -407,6 +417,13 @@ class StorageSync extends ChangeNotifier {
       final stored = current.copies[storage.key];
       if (stored != null && stored.destination == storage.destination) {
         await storage.delete(stored.ref);
+        if (stored.transcript case final text?) {
+          try {
+            await storage.delete(text.ref);
+          } catch (_) {
+            // El audio ya no está: el texto solo queda huérfano.
+          }
+        }
       }
     }
     _deleted.add(current.id);
@@ -615,17 +632,21 @@ class StorageSync extends ChangeNotifier {
       for (final entry in root)
         if (entry.isDirectory && !entry.name.startsWith('.')) entry.name,
     ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    final files =
-        <_StoredFile>[
-          for (final entry in root) (subfolder: '', entry: entry),
-          for (final subfolder in subfolders)
-            for (final entry in await storage.list(subfolder: subfolder))
-              (subfolder: subfolder, entry: entry),
-        ]..retainWhere(
-          (file) =>
-              !file.entry.isDirectory &&
-              RecordingFormat.fromPath(file.entry.name) != null,
-        );
+    final listed = <_StoredFile>[
+      for (final entry in root) (subfolder: '', entry: entry),
+      for (final subfolder in subfolders)
+        for (final entry in await storage.list(subfolder: subfolder))
+          (subfolder: subfolder, entry: entry),
+    ]..removeWhere((file) => file.entry.isDirectory);
+    final files = [
+      for (final file in listed)
+        if (RecordingFormat.fromPath(file.entry.name) != null) file,
+    ];
+    // Las transcripciones, junto a su audio y con el mismo nombre.
+    final texts = [
+      for (final file in listed)
+        if (_isTextFile(file.entry.name)) file,
+    ];
     if (_disposed || !_isCurrent(storage, () => _storage)) return;
     if (!listEquals(subfolders, _storageFolders)) {
       _storageFolders = subfolders;
@@ -749,8 +770,270 @@ class StorageSync extends ChangeNotifier {
       }
     }
 
+    changed += await _reconcileTranscripts(storage, files, texts);
+
     if ((added > 0 || changed > 0) && !_disposed) _changes.add(added);
     if (failed > 0) throw _ImportFailure(failed, lastError);
+  }
+
+  static bool _isTextFile(String name) =>
+      p.extension(name).toLowerCase() == '.txt';
+
+  /// Clave de un archivo para emparejar el audio con su `.txt`: subcarpeta y
+  /// nombre sin extensión (sin distinguir mayúsculas).
+  static (String, String) _pairKey(_StoredFile file) => (
+    file.subfolder,
+    p.basenameWithoutExtension(file.entry.name).toLowerCase(),
+  );
+
+  /// Compara las transcripciones de las grabaciones guardadas en [storage]
+  /// con los `.txt` que hay junto a su audio: lee las que la app no tiene,
+  /// recoge las que se cambiaron fuera y quita las que se borraron allí. Las
+  /// de la app que faltan en el destino se guardan después (ver [_save]).
+  /// Devuelve cuántas han cambiado.
+  Future<int> _reconcileTranscripts(
+    SyncTarget storage,
+    List<_StoredFile> audio,
+    List<_StoredFile> texts,
+  ) async {
+    final audioByRef = {for (final file in audio) file.entry.ref: file};
+    final textByRef = {for (final file in texts) file.entry.ref: file};
+    final textByPair = {for (final file in texts) _pairKey(file): file};
+    var changed = 0;
+    for (final recording in await repository.loadAll()) {
+      if (_disposed || !_isCurrent(storage, () => _storage)) break;
+      final stored = recording.copies[storage.key];
+      if (stored == null || stored.destination != storage.destination) {
+        continue;
+      }
+      final audioFile = audioByRef[stored.ref];
+      if (audioFile == null) continue;
+      final linked = stored.transcript;
+      // Primero el que ya tenía (aunque se haya renombrado fuera) y, si no,
+      // el que tiene el mismo nombre que el audio.
+      final text =
+          (linked == null ? null : textByRef[linked.ref]) ??
+          textByPair[_pairKey(audioFile)];
+      try {
+        if (await _reconcileTranscript(storage, recording, stored, text)) {
+          changed++;
+        }
+      } catch (_) {
+        // Se vuelve a intentar en la siguiente pasada.
+      }
+    }
+    return changed;
+  }
+
+  /// Compara la transcripción de [recording] con su `.txt` del destino,
+  /// [text] (o su falta). Devuelve `true` si ha cambiado la transcripción.
+  Future<bool> _reconcileTranscript(
+    SyncTarget storage,
+    Recording recording,
+    CopyState stored,
+    _StoredFile? text,
+  ) async {
+    final key = storage.key;
+    final linked = stored.transcript;
+    final transcript = recording.transcript;
+    if (text == null) {
+      if (linked == null) return false;
+      // Se borró fuera de la app.
+      final updated = await repository.setCopy(
+        recording,
+        key,
+        stored.withTranscript(null),
+      );
+      if (transcript != null) await repository.setTranscript(updated, null);
+      return transcript != null;
+    }
+
+    final entry = text.entry;
+    if (linked != null && !_textChanged(linked, entry)) {
+      // Sin cambios: solo se guardan los datos nuevos (fecha, referencia…).
+      final current = linked.copyWith(
+        ref: entry.ref,
+        name: entry.name,
+        size: entry.size,
+        checksum: entry.checksum,
+        modified: entry.modified,
+      );
+      if (current != linked) {
+        await repository.setCopy(
+          recording,
+          key,
+          stored.withTranscript(current),
+        );
+      }
+      return false;
+    }
+
+    // Es nuevo o ha cambiado (o puede haber cambiado): se lee.
+    final bytes = await _readText(storage, entry.ref);
+    final checksum = md5.convert(bytes).toString();
+    final file = TranscriptFile(
+      ref: entry.ref,
+      name: entry.name,
+      size: bytes.length,
+      checksum: checksum,
+      modified: entry.modified,
+    );
+    final content = _decodeText(bytes);
+    final saved = await repository.setCopy(
+      recording,
+      key,
+      stored.withTranscript(file),
+    );
+    if (transcript != null) {
+      if (transcript.text == content || linked?.checksum == checksum) {
+        return false;
+      }
+      // La app la cambió sin guardarla todavía (p. ej. al volver a
+      // transcribir) y el archivo no es más reciente: gana la de la app, que
+      // se guardará encima.
+      final changedInApp =
+          linked == null || _checksumOfText(transcript.text) != linked.checksum;
+      final fileIsNewer =
+          entry.modified != null &&
+          entry.modified!.isAfter(transcript.createdAt);
+      if (changedInApp && !fileIsNewer) return false;
+    }
+    await repository.setTranscript(
+      saved,
+      Transcript(
+        text: content,
+        // Si se ha editado el texto, se conserva con qué se transcribió.
+        engine: transcript?.engine,
+        model: transcript?.model,
+        language: transcript?.language,
+        revision: transcript?.revision ?? recording.revision,
+        createdAt: entry.modified ?? DateTime.now(),
+      ),
+    );
+    return true;
+  }
+
+  /// Indica si el `.txt` [entry] puede haber cambiado desde [linked]: por el
+  /// tamaño, la suma MD5 (Drive) o la fecha (la carpeta, que no da la suma;
+  /// al leerlo se comprueba).
+  static bool _textChanged(TranscriptFile linked, FolderEntry entry) {
+    if (entry.size != null &&
+        linked.size != null &&
+        entry.size != linked.size) {
+      return true;
+    }
+    if (entry.checksum != null && linked.checksum != null) {
+      return entry.checksum != linked.checksum;
+    }
+    return entry.checksum == null &&
+        entry.modified != null &&
+        linked.modified != null &&
+        !entry.modified!.isAtSameMomentAs(linked.modified!);
+  }
+
+  static String _checksumOfText(String text) =>
+      md5.convert(utf8.encode(text)).toString();
+
+  /// Texto de un `.txt` en UTF-8, sin la marca de orden de bytes que añaden
+  /// algunos editores.
+  static String _decodeText(List<int> bytes) {
+    final text = utf8.decode(bytes, allowMalformed: true);
+    return text.startsWith('\uFEFF') ? text.substring(1) : text;
+  }
+
+  /// Ruta temporal para un `.txt` de transcripción.
+  Future<File> _temporaryText() async {
+    final directory = Directory(
+      p.join((await _workDirectory()).path, 'transcripts'),
+    )..createSync(recursive: true);
+    return File(
+      p.join(directory.path, '${DateTime.now().microsecondsSinceEpoch}.txt'),
+    );
+  }
+
+  /// Contenido del archivo [ref] del destino (un `.txt`, que es pequeño).
+  Future<List<int>> _readText(SyncTarget storage, String ref) async {
+    final file = await _temporaryText();
+    try {
+      await storage.download(ref, file.path);
+      return file.readAsBytesSync();
+    } finally {
+      _deleteQuietly(file.path);
+    }
+  }
+
+  /// Guarda en [target], junto al audio y con su nombre, un `.txt` con la
+  /// transcripción de [recording]: lo crea, lo actualiza o lo renombra si
+  /// hace falta, y lo borra si ya no tiene transcripción. Devuelve la
+  /// grabación con el estado del archivo.
+  Future<Recording> _saveTranscript(
+    Recording recording,
+    SyncTarget target,
+  ) async {
+    final stored = recording.copies[target.key];
+    if (stored == null || stored.destination != target.destination) {
+      return recording;
+    }
+    final linked = stored.transcript;
+    final transcript = recording.transcript;
+    if (transcript == null) {
+      if (linked == null) return recording;
+      await target.delete(linked.ref);
+      return repository.setCopy(
+        recording,
+        target.key,
+        stored.withTranscript(null),
+      );
+    }
+
+    final name = textFileNameFor(recording);
+    final bytes = utf8.encode(transcript.text);
+    final checksum = md5.convert(bytes).toString();
+    if (linked != null && linked.checksum == checksum) {
+      if (linked.name == name) return recording;
+      final renamed = await target.rename(linked.ref, name);
+      if (renamed != null) {
+        return repository.setCopy(
+          recording,
+          target.key,
+          stored.withTranscript(linked.copyWith(ref: renamed, name: name)),
+        );
+      }
+      // Ya no existe: se vuelve a crear.
+    }
+
+    final source = await _temporaryText();
+    try {
+      source.writeAsBytesSync(bytes);
+      var ref = await target.upload(
+        source.path,
+        name,
+        subfolder: recording.folder,
+        ref: linked?.ref,
+      );
+      if (linked != null && linked.name != name) {
+        ref = await target.rename(ref, name) ?? ref;
+      }
+      if (_deleted.contains(recording.id)) {
+        // Se eliminó mientras se guardaba: que no quede en el destino.
+        await target.delete(ref);
+        return recording;
+      }
+      return await repository.setCopy(
+        recording,
+        target.key,
+        stored.withTranscript(
+          TranscriptFile(
+            ref: ref,
+            name: name,
+            size: bytes.length,
+            checksum: checksum,
+          ),
+        ),
+      );
+    } finally {
+      _deleteQuietly(source.path);
+    }
   }
 
   /// Indica si se puede guardar [recording] en el destino: si tiene el audio
@@ -929,14 +1212,30 @@ class StorageSync extends ChangeNotifier {
     );
   }
 
-  /// Guarda en [target] el audio y el nombre actuales de [recording], si no
-  /// los tiene ya. Si [isStorage], después saca su audio de la app.
+  /// Guarda en [target] el audio, el nombre y la transcripción actuales de
+  /// [recording], si no los tiene ya. Si [isStorage], después saca su audio
+  /// de la app.
   Future<void> _save(
     Recording recording,
     SyncTarget target, {
     required bool isStorage,
   }) async {
     if (_deleted.contains(recording.id)) return;
+    var saved = await _saveAudio(recording, target, isStorage: isStorage);
+    if (saved == null || _deleted.contains(recording.id)) return;
+    saved = await _saveTranscript(saved, target);
+    if (isStorage) await _release(saved, target);
+  }
+
+  /// Guarda en [target] el audio y el nombre actuales de [recording], si no
+  /// los tiene ya. Devuelve la grabación con su archivo en [target], o `null`
+  /// si no se ha podido guardar (no hay de dónde leer el audio, o se eliminó
+  /// entretanto).
+  Future<Recording?> _saveAudio(
+    Recording recording,
+    SyncTarget target, {
+    required bool isStorage,
+  }) async {
     final stored = recording.copies[target.key];
     final sameDestination = stored?.destination == target.destination;
     final fileName = fileNameFor(recording);
@@ -960,6 +1259,8 @@ class StorageSync extends ChangeNotifier {
         name: recording.name,
         size: _lengthOf(source),
         checksum: await _md5Of(source),
+        // En el mismo destino, el `.txt` sigue siendo el mismo.
+        transcript: sameDestination ? stored!.transcript : null,
       );
     }
 
@@ -984,24 +1285,23 @@ class StorageSync extends ChangeNotifier {
           size: stored.size,
           checksum: stored.checksum,
           modified: stored.modified,
+          transcript: stored.transcript,
         ),
         // Ya no existe: se vuelve a crear.
         null => await upload(),
       };
     } else {
-      if (isStorage) await _release(recording, target);
-      return;
+      return recording;
     }
-    if (result == null) return;
+    if (result == null) return null;
     final ref = result.ref;
 
     if (_deleted.contains(recording.id)) {
       // Se eliminó mientras se guardaba: que no quede en el destino.
       if (isStorage) await target.delete(ref);
-      return;
+      return null;
     }
-    final saved = await repository.setCopy(recording, target.key, result);
-    if (isStorage) await _release(saved, target);
+    return repository.setCopy(recording, target.key, result);
   }
 
   /// Saca de la app el audio de [recording], ya guardado en [storage], y lo
@@ -1023,6 +1323,11 @@ class StorageSync extends ChangeNotifier {
   static String fileNameFor(Recording recording) =>
       '${safeFileName(recording.name, fallback: recording.id)}'
       '${recording.format.extension}';
+
+  /// Nombre del `.txt` con la transcripción de una grabación: el de su audio
+  /// con la extensión `.txt`.
+  static String textFileNameFor(Recording recording) =>
+      '${safeFileName(recording.name, fallback: recording.id)}.txt';
 
   void _notify() {
     if (!_disposed) notifyListeners();

@@ -581,6 +581,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       _replaceRecording(transcribed);
+      // Se guarda como .txt junto al audio.
+      _syncStorage();
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -683,6 +685,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _replaceRecording(
             await widget.repository.setTranscript(current, null),
           );
+          // También su .txt del destino.
+          _syncStorage();
           _showMessage((l10n) => l10n.transcriptDeleted);
         } catch (_) {
           _showMessage((l10n) => l10n.deleteFailed);
