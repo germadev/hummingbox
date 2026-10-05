@@ -5,15 +5,20 @@ and transcribe voice notes, and keep them in a folder on your device or in
 Google Drive.
 
 <p>
-  <img src="docs/list.png" width="200" alt="Recordings list with each recording's format and waveform, one of them playing">
+  <img src="docs/start.png" width="200" alt="First-run menu to choose where recordings are stored: a device folder or Google Drive">
+  <img src="docs/list.png" width="200" alt="Recordings list, oldest to newest: a recording with piano notes over its voice, a piano-only one and the one playing with its transcript">
   <img src="docs/ready.png" width="200" alt="Record panel open and ready, with the countdown and start-on-voice buttons">
   <img src="docs/recording.png" width="200" alt="Recording in progress: the waveform is coloured from the point where it started">
 </p>
 <p>
-  <img src="docs/folders.png" width="200" alt="Side menu with the main folder, its subfolders and how many recordings each has">
+  <img src="docs/folders.png" width="200" alt="Side menu with the main folder, its subfolders, how many recordings each has and the piano button">
   <img src="docs/editor.png" width="200" alt="Editing mode with the trimmed selection, volume and fades">
-  <img src="docs/start.png" width="200" alt="First-run menu to choose where recordings are stored: a device folder or Google Drive">
-  <img src="docs/settings.png" width="200" alt="Recording settings (format, quality and countdown) and where recordings are stored">
+  <img src="docs/settings.png" width="200" alt="Recording settings (format, quality, countdown and keeping the screen on) and where recordings are stored">
+  <img src="docs/settings-more.png" width="200" alt="More settings: Google Drive, transcription, similar words in search and the theme">
+</p>
+<p>
+  <img src="docs/piano.png" width="400" alt="Landscape piano playing a C major chord, with the note names and the whole keyboard below">
+  <img src="docs/synth.png" width="400" alt="The synthesizer above the keys: a screen, four keys to pick what the X and Y knobs change, and the two knobs">
 </p>
 
 ## Features
