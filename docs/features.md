@@ -60,6 +60,10 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 
 - Sorted from oldest to newest: new recordings appear at the bottom, and the
   list scrolls to the end when the app opens and when one is added.
+- **Compact or detailed view**: the button to the left of Settings switches
+  the list between the detailed view and a compact one (one line with the
+  date and duration, and the waveform only on the selected recording). The
+  choice is remembered.
 - Each one shows the date ("Today", "Yesterday"…), duration, **format and
   quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**. **Tap the name** to rename it.
 - **Names**: a new recording is called after its date and time
@@ -140,14 +144,15 @@ The recording goes to the open folder, like any other.
 
 ## Search
 
-The magnifier (in the middle of the top bar), or **pulling the list down**
+The magnifier (at the left of the top bar, next to the folders button), or **pulling the list down**
 when it is already at the top, opens a search field that spans the top bar,
-from the folder button to ⚙, with the magnifier on the left and an X on the
-right. While pulling, the list moves down, a light grey circle appears behind
+from the folder button to ⚙, with the magnifier in the same place and an X
+where the view button was. While pulling, the list moves down, a light grey circle appears behind
 the bar's magnifier and "Pull to search" shows in the gap above the list;
 past a certain point the circle turns purple, the text changes to "Release
 to search" and the phone gives a short vibration, and **releasing** there
-opens the search (going back up before releasing cancels it). If the search
+opens the search: the circle disappears at once, without following the list
+back up (going back up before releasing cancels it). If the search
 field already has the focus, pulling shows the keyboard again (for example
 after hiding it with Back on Android). Tapping the list's background (outside
 the recordings) takes the focus away from the field and hides the keyboard

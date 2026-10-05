@@ -635,5 +635,13 @@
   "repeat": "Repeat",
   "@repeat": {
     "description": "Interruptor del dock: al terminar, volver a empezar (la grabación o, con la lista, la lista)"
+  },
+  "compactView": "Compact view",
+  "@compactView": {
+    "description": "Botón de la barra: pasar a la vista compacta de la lista"
+  },
+  "detailedView": "Detailed view",
+  "@detailedView": {
+    "description": "Botón de la barra: pasar a la vista detallada de la lista"
   }
 }

@@ -222,5 +222,7 @@
   "pianoNothingPlayed": "保存するものがありません：音が弾かれていません",
   "stopPlayback": "再生を停止",
   "playAll": "続けて再生",
-  "repeat": "リピート"
+  "repeat": "リピート",
+  "compactView": "コンパクト表示",
+  "detailedView": "詳細表示"
 }

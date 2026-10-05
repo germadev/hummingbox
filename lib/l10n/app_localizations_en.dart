@@ -790,4 +790,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get repeat => 'Repeat';
+
+  @override
+  String get compactView => 'Compact view';
+
+  @override
+  String get detailedView => 'Detailed view';
 }

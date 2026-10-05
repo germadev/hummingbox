@@ -222,5 +222,7 @@
   "pianoNothingPlayed": "Nichts zu speichern: Es wurden keine Töne gespielt",
   "stopPlayback": "Wiedergabe beenden",
   "playAll": "Nacheinander abspielen",
-  "repeat": "Wiederholen"
+  "repeat": "Wiederholen",
+  "compactView": "Kompakte Ansicht",
+  "detailedView": "Detaillierte Ansicht"
 }

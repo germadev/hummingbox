@@ -106,6 +106,7 @@ class AppSettings {
     this.transcription = const TranscriptionSettings(),
     this.searchSimilarWords = true,
     this.theme = AppTheme.system,
+    this.compactList = false,
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -158,6 +159,10 @@ class AppSettings {
   /// Tema de la app: el del sistema, claro u oscuro.
   final AppTheme theme;
 
+  /// Si la lista es compacta: cada grabación en poco espacio, con su onda
+  /// solo mientras está seleccionada.
+  final bool compactList;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -183,6 +188,8 @@ class AppSettings {
 
   AppSettings withTheme(AppTheme theme) => _copy(theme: theme);
 
+  AppSettings withCompactList(bool compact) => _copy(compactList: compact);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -194,6 +201,7 @@ class AppSettings {
     TranscriptionSettings? transcription,
     bool? searchSimilarWords,
     AppTheme? theme,
+    bool? compactList,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -205,6 +213,7 @@ class AppSettings {
     transcription: transcription ?? this.transcription,
     searchSimilarWords: searchSimilarWords ?? this.searchSimilarWords,
     theme: theme ?? this.theme,
+    compactList: compactList ?? this.compactList,
   );
 
   Map<String, dynamic> toJson() => {
@@ -219,6 +228,7 @@ class AppSettings {
       'transcription': transcription.toJson(),
     if (!searchSimilarWords) 'searchSimilarWords': false,
     if (theme != AppTheme.system) 'theme': theme.name,
+    if (compactList) 'compactList': true,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -242,6 +252,7 @@ class AppSettings {
       transcription: TranscriptionSettings.fromJson(json['transcription']),
       searchSimilarWords: json['searchSimilarWords'] != false,
       theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
+      compactList: json['compactList'] == true,
     );
   }
 
@@ -257,7 +268,8 @@ class AppSettings {
       other.keepScreenOn == keepScreenOn &&
       other.transcription == transcription &&
       other.searchSimilarWords == searchSimilarWords &&
-      other.theme == theme;
+      other.theme == theme &&
+      other.compactList == compactList;
 
   @override
   int get hashCode => Object.hash(
@@ -271,6 +283,7 @@ class AppSettings {
     transcription,
     searchSimilarWords,
     theme,
+    compactList,
   );
 }
 

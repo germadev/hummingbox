@@ -804,4 +804,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get repeat => 'Wiederholen';
+
+  @override
+  String get compactView => 'Kompakte Ansicht';
+
+  @override
+  String get detailedView => 'Detaillierte Ansicht';
 }

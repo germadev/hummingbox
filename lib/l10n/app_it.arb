@@ -222,5 +222,7 @@
   "pianoNothingPlayed": "Niente da salvare: non è stata suonata nessuna nota",
   "stopPlayback": "Interrompi la riproduzione",
   "playAll": "Riproduci una dopo l’altra",
-  "repeat": "Ripeti"
+  "repeat": "Ripeti",
+  "compactView": "Vista compatta",
+  "detailedView": "Vista dettagliata"
 }

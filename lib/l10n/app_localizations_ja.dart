@@ -765,4 +765,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get repeat => 'リピート';
+
+  @override
+  String get compactView => 'コンパクト表示';
+
+  @override
+  String get detailedView => '詳細表示';
 }

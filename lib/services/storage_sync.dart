@@ -383,6 +383,10 @@ class StorageSync extends ChangeNotifier {
   Future<void> setTheme(AppTheme theme) =>
       _change((settings) => settings.withTheme(theme));
 
+  /// Elige si la lista es compacta o detallada.
+  Future<void> setCompactList(bool compact) =>
+      _change((settings) => settings.withCompactList(compact));
+
   /// Abre la subcarpeta [name] (vacío para la principal).
   Future<void> openFolder(String name) =>
       _change((settings) => settings.withOpenFolder(name));

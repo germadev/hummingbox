@@ -792,4 +792,10 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get repeat => 'Ripeti';
+
+  @override
+  String get compactView => 'Vista compatta';
+
+  @override
+  String get detailedView => 'Vista dettagliata';
 }

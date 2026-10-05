@@ -1267,43 +1267,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        // El botón de carpetas y, en una subcarpeta, su nombre (en la
-        // principal, nada), hasta la lupa.
-        leadingWidth: searching || folder.isEmpty
-            ? null
-            : MediaQuery.sizeOf(context).width / 2 - 32,
+        // El botón de carpetas.
         leading: Padding(
           padding: const EdgeInsetsDirectional.only(start: 4),
-          child: Row(
-            children: [
-              // Abre el menú de carpetas (mientras se graba no se cambia de
-              // carpeta).
-              IconButton(
-                key: const Key('folders-button'),
-                tooltip: context.l10n.folders,
-                icon: const Icon(Icons.folder_outlined),
-                onPressed: _recorder.isBusy
-                    ? null
-                    : () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              if (!searching && folder.isNotEmpty)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 12),
-                    child: Text(
-                      folder,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-            ],
+          // Mientras se graba no se cambia de carpeta.
+          child: IconButton(
+            key: const Key('folders-button'),
+            tooltip: context.l10n.folders,
+            icon: const Icon(Icons.folder_outlined),
+            onPressed: _recorder.isBusy
+                ? null
+                : () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        // La lupa, en el centro. Mientras se busca, el campo ocupa desde las
-        // carpetas hasta las opciones, con la lupa a la izquierda.
-        centerTitle: !searching,
+        // La lupa, siempre a la izquierda, junto a las carpetas, y en una
+        // subcarpeta su nombre. Al buscar, el campo ocupa desde ahí hasta las
+        // opciones, con la lupa en el mismo sitio.
+        centerTitle: false,
         titleSpacing: 0,
         title: searching
             ? _SearchField(
@@ -1312,7 +1292,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 pull: _pull,
                 onClear: _closeSearch,
               )
-            : _SearchButton(pull: _pull, onPressed: _startSearch),
+            : Row(
+                children: [
+                  _SearchButton(pull: _pull, onPressed: _startSearch),
+                  if (folder.isNotEmpty)
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 4),
+                        child: Text(
+                          folder,
+                          key: const Key('folder-title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
@@ -1326,6 +1323,23 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: _recorder.isBusy
                   ? null
                   : () => _scaffoldKey.currentState?.openEndDrawer(),
+            ),
+          // Vista compacta o detallada de la lista, donde al buscar está la
+          // X del campo. Muestra la vista a la que cambia.
+          if (!searching)
+            IconButton(
+              key: const Key('view-mode-button'),
+              tooltip: sync.settings.compactList
+                  ? context.l10n.detailedView
+                  : context.l10n.compactView,
+              icon: Icon(
+                sync.settings.compactList
+                    ? Icons.view_agenda_outlined
+                    : Icons.view_headline,
+              ),
+              onPressed: () => unawaited(
+                widget.sync.setCompactList(!sync.settings.compactList),
+              ),
             ),
           IconButton(
             key: const Key('settings-button'),
@@ -1533,6 +1547,7 @@ class _HomeScreenState extends State<HomeScreen> {
           search: query,
           // En los resultados de una búsqueda, su subcarpeta.
           showFolder: query != null,
+          compact: widget.sync.settings.compactList,
           onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
           onSeek: (position) => _seek(recording, position),
@@ -1812,6 +1827,10 @@ class _PullToSearchState extends State<_PullToSearch> {
 
   bool get _armed => widget.pull.value.armed;
 
+  /// Si ya se ha buscado al soltar: mientras la lista vuelve a su sitio, la
+  /// lupa ya no indica nada (pasa directamente a no tener fondo).
+  bool _searched = false;
+
   bool _onScroll(ScrollNotification notification) {
     if (notification.depth != 0) return false;
     final metrics = notification.metrics;
@@ -1832,8 +1851,13 @@ class _PullToSearchState extends State<_PullToSearch> {
         if (_dragging) _release();
         _pulling = false;
         armed = false;
+        _searched = false;
       default:
         break;
+    }
+    if (_searched) {
+      widget.pull.value = _Pull.none;
+      return false;
     }
     if (armed && !_armed) unawaited(HapticFeedback.mediumImpact());
     // El color de la lupa se mantiene mientras la lista vuelve a su sitio.
@@ -1841,10 +1865,19 @@ class _PullToSearchState extends State<_PullToSearch> {
     return false;
   }
 
+  void _onPointerUp() {
+    if (!_dragging) return;
+    _release();
+    _pulling = false;
+  }
+
   /// Al soltar tras pasar el punto, se busca.
   void _release() {
     _dragging = false;
-    if (_armed) widget.onPull();
+    if (!_armed) return;
+    _searched = true;
+    widget.pull.value = _Pull.none;
+    widget.onPull();
   }
 
   /// Margen de la lista sobre la primera grabación: el texto no pasa de ahí.
@@ -1854,46 +1887,52 @@ class _PullToSearchState extends State<_PullToSearch> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onScroll,
-      child: Stack(
-        children: [
-          widget.child,
-          // En el hueco que deja la lista al bajar, sin tapar nada.
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ValueListenableBuilder<_Pull>(
-                valueListenable: widget.pull,
-                builder: (context, pull, _) {
-                  if (pull.distance <= 0) return const SizedBox.shrink();
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      height: pull.distance + _listPadding,
-                      child: ClipRect(
-                        child: Center(
-                          child: Opacity(
-                            opacity: pull.progress,
-                            child: Text(
-                              pull.armed
-                                  ? l10n.releaseToSearch
-                                  : l10n.pullToSearch,
-                              key: const Key('pull-to-search-hint'),
-                              maxLines: 1,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.outline,
+    // Al levantar el dedo se busca ya, sin esperar a que la lista empiece a
+    // volver a su sitio.
+    return Listener(
+      onPointerUp: (_) => _onPointerUp(),
+      onPointerCancel: (_) => _onPointerUp(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Stack(
+          children: [
+            widget.child,
+            // En el hueco que deja la lista al bajar, sin tapar nada.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<_Pull>(
+                  valueListenable: widget.pull,
+                  builder: (context, pull, _) {
+                    if (pull.distance <= 0) return const SizedBox.shrink();
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: pull.distance + _listPadding,
+                        child: ClipRect(
+                          child: Center(
+                            child: Opacity(
+                              opacity: pull.progress,
+                              child: Text(
+                                pull.armed
+                                    ? l10n.releaseToSearch
+                                    : l10n.pullToSearch,
+                                key: const Key('pull-to-search-hint'),
+                                maxLines: 1,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

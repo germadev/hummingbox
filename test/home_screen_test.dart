@@ -1471,11 +1471,28 @@ void main() {
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
     });
 
-    testWidgets('la lupa está en el centro de la barra', (tester) async {
+    testWidgets('la lupa está a la izquierda, junto a las carpetas, y no se '
+        'mueve al buscar', (tester) async {
+      store.settings = const AppSettings(
+        folder: testFolder,
+        openFolder: 'Clases',
+        transcription: manual,
+      );
       await pumpApp(tester);
+      final folders = tester.getRect(find.byKey(const Key('folders-button')));
       final search = tester.getCenter(find.byKey(const Key('search-button')));
+      final title = tester.getRect(find.byKey(const Key('folder-title')));
 
-      expect(search.dx, tester.getSize(find.byType(AppBar)).width / 2);
+      expect(search.dx, greaterThan(folders.right));
+      expect(search.dx, lessThan(title.left));
+      expect(search.dy, moreOrLessEquals(folders.center.dy, epsilon: 0.5));
+
+      await tester.tap(find.byKey(const Key('search-button')));
+      await tester.pumpAndSettle();
+      final magnifier = tester.getCenter(
+        find.descendant(of: searchField(), matching: find.byIcon(Icons.search)),
+      );
+      expect(magnifier, search);
     });
 
     testWidgets('el campo tiene la lupa a la izquierda y la X a la derecha, '
@@ -1506,6 +1523,40 @@ void main() {
         tester.widget<TextField>(searchField()).textAlign,
         TextAlign.start,
       );
+    });
+
+    testWidgets('el botón de la vista, a la izquierda de las opciones, cambia '
+        'entre la vista detallada y la compacta, y se recuerda', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      final view = find.byKey(const Key('view-mode-button'));
+      final settings = tester.getRect(find.byKey(const Key('settings-button')));
+      expect(tester.getRect(view).right, settings.left);
+      // Detallada: el formato y la onda.
+      expect(find.byKey(const Key('audio-info-a')), findsOneWidget);
+      expect(find.byKey(const Key('waveform-a')), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Vista compacta'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.compactList, isTrue);
+      expect(find.byKey(const Key('audio-info-a')), findsNothing);
+      expect(find.byKey(const Key('waveform-a')), findsNothing);
+      expect(find.byTooltip('Vista detallada'), findsOneWidget);
+
+      // La seleccionada sí tiene la onda, para saltar.
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('waveform-a')), findsOneWidget);
+
+      // Al buscar, en su sitio está la X del campo.
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      expect(view, findsNothing);
+      final clear = tester.getCenter(find.byTooltip('Borrar la búsqueda'));
+      expect(clear.dx, lessThan(settings.left));
     });
 
     testWidgets('mientras se graba no se abre el menú de carpetas', (
@@ -1878,7 +1929,7 @@ void main() {
               tester.getTopLeft(find.byKey(const ValueKey('a'))).dy + 1e-6,
             ),
           );
-          expect(text.center.dx, atRest.dx);
+          expect(text.center.dx, tester.getSize(find.byType(AppBar)).width / 2);
         }
       }
       expect(haptics, ['HapticFeedbackType.mediumImpact']);
@@ -1900,8 +1951,23 @@ void main() {
       expect(background, findsNothing);
       expect(hint, findsNothing);
 
-      // Pasándolo y soltando, sí.
-      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      // Pasándolo y soltando, sí, y la lupa pasa directamente a no tener
+      // fondo (sin seguir a la lista mientras vuelve a su sitio).
+      final again = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      await again.moveBy(const Offset(0, 150));
+      await tester.pump();
+      await again.moveBy(const Offset(0, 150));
+      await tester.pump();
+      expect(color(), colors.primary);
+      await again.up();
+      // Desde el primer fotograma tras soltar, y mientras la lista vuelve.
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(background, findsNothing);
+        expect(hint, findsNothing);
+      }
       await tester.pumpAndSettle();
       expect(searchField(), findsOneWidget);
       expect(haptics, hasLength(2));

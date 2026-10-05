@@ -222,5 +222,7 @@
   "pianoNothingPlayed": "Rien à enregistrer : aucune note n’a été jouée",
   "stopPlayback": "Arrêter la lecture",
   "playAll": "Lire à la suite",
-  "repeat": "Répéter"
+  "repeat": "Répéter",
+  "compactView": "Vue compacte",
+  "detailedView": "Vue détaillée"
 }

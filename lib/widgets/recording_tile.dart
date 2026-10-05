@@ -24,6 +24,9 @@ enum RecordingAction {
 /// mientras se escucha o si coincide con la búsqueda, su transcripción, y lo
 /// que lleva transcrito si se ha pedido transcribirla (las de segundo plano,
 /// solo mientras se escucha).
+///
+/// En la vista compacta ([compact]) solo tiene una línea de datos (sin el
+/// formato) y la onda solo se ve mientras está seleccionada.
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
@@ -36,6 +39,7 @@ class RecordingTile extends StatelessWidget {
     this.onCancelTranscription,
     this.search,
     this.showFolder = false,
+    this.compact = false,
   });
 
   final Recording recording;
@@ -51,6 +55,9 @@ class RecordingTile extends StatelessWidget {
   /// Si se muestra la subcarpeta en la que está (en los resultados de una
   /// búsqueda, que incluye todas las carpetas).
   final bool showFolder;
+
+  /// Si se muestra en la vista compacta.
+  final bool compact;
   final VoidCallback onTogglePlay;
 
   /// Salta a una posición, empezando a reproducir si hace falta.
@@ -106,7 +113,7 @@ class RecordingTile extends StatelessWidget {
               children: [
                 ListTile(
                   contentPadding: const EdgeInsets.only(left: 12, right: 4),
-                  isThreeLine: true,
+                  isThreeLine: !compact,
                   onTap: onTogglePlay,
                   leading: IconButton.filled(
                     // ListTile tiñe los iconos de `leading`; se fija el color
@@ -161,16 +168,19 @@ class RecordingTile extends StatelessWidget {
                           formatRecordingDate(recording.createdAt, l10n),
                           duration,
                         ].join(' · '),
+                        maxLines: compact ? 1 : null,
+                        overflow: compact ? TextOverflow.ellipsis : null,
                       ),
-                      Text(
-                        audio == null
-                            ? formatName(recording.format)
-                            : formatAudioInfo(audio, l10n),
-                        key: Key('audio-info-${recording.id}'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: mutedStyle,
-                      ),
+                      if (!compact)
+                        Text(
+                          audio == null
+                              ? formatName(recording.format)
+                              : formatAudioInfo(audio, l10n),
+                          key: Key('audio-info-${recording.id}'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: mutedStyle,
+                        ),
                     ],
                   ),
                   trailing: Builder(
@@ -238,20 +248,22 @@ class RecordingTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: WaveformSeekBar(
-                    key: Key('waveform-${recording.id}'),
-                    levels: recording.waveform,
-                    duration: isCurrent && player.duration > Duration.zero
-                        ? player.duration
-                        : recording.duration,
-                    position: isCurrent ? player.position : null,
-                    notes: recording.notes,
-                    showWaveform: recording.hasVoice,
-                    onSeek: onSeek,
+                // En la vista compacta, solo la seleccionada.
+                if (!compact || isCurrent)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: WaveformSeekBar(
+                      key: Key('waveform-${recording.id}'),
+                      levels: recording.waveform,
+                      duration: isCurrent && player.duration > Duration.zero
+                          ? player.duration
+                          : recording.duration,
+                      position: isCurrent ? player.position : null,
+                      notes: recording.notes,
+                      showWaveform: recording.hasVoice,
+                      onSeek: onSeek,
+                    ),
                   ),
-                ),
                 if (showProgress)
                   _TranscriptionProgress(
                     progress: transcriptions.progressOf(recording),

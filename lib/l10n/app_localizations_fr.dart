@@ -800,4 +800,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get repeat => 'Répéter';
+
+  @override
+  String get compactView => 'Vue compacte';
+
+  @override
+  String get detailedView => 'Vue détaillée';
 }

@@ -790,4 +790,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get repeat => 'Repetir';
+
+  @override
+  String get compactView => 'Visualização compacta';
+
+  @override
+  String get detailedView => 'Visualização detalhada';
 }

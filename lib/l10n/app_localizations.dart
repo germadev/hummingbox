@@ -1447,6 +1447,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Repeat'**
   String get repeat;
+
+  /// Botón de la barra: pasar a la vista compacta de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Compact view'**
+  String get compactView;
+
+  /// Botón de la barra: pasar a la vista detallada de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed view'**
+  String get detailedView;
 }
 
 class _AppLocalizationsDelegate

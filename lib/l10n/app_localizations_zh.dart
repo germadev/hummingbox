@@ -760,4 +760,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get repeat => '重复播放';
+
+  @override
+  String get compactView => '紧凑视图';
+
+  @override
+  String get detailedView => '详细视图';
 }

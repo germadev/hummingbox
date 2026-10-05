@@ -222,5 +222,7 @@
   "pianoNothingPlayed": "没有可保存的内容：未弹奏任何音符",
   "stopPlayback": "停止播放",
   "playAll": "连续播放",
-  "repeat": "重复播放"
+  "repeat": "重复播放",
+  "compactView": "紧凑视图",
+  "detailedView": "详细视图"
 }
