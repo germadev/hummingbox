@@ -6,7 +6,7 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-// Clave de firma de release (opcional). Ver README → "Firma del APK".
+// Clave de firma de release (opcional). Ver docs/releases.md → "APK signing".
 val keystorePropertiesFile = rootProject.file("key.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {

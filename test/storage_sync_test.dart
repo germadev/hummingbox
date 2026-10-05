@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/audio_cache.dart';
 import 'package:voicerecorder/services/google_drive.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
@@ -47,6 +49,20 @@ void main() {
 
   Future<List<Recording>> all() => repository.loadAll();
 
+  Future<Recording> transcribe(Recording recording, String text) =>
+      repository.setTranscript(
+        recording,
+        Transcript(
+          text: text,
+          engine: TranscriptionEngine.system,
+          revision: recording.revision,
+          createdAt: DateTime(2026, 10, 5),
+        ),
+      );
+
+  String textOf(FakeFolderAccess folders, String ref) =>
+      utf8.decode(folders.contents[ref]!);
+
   Future<Recording> single() async => (await all()).single;
 
   List<String> writes() =>
@@ -69,6 +85,7 @@ void main() {
       folders: folders,
       drive: drive,
       cache: cache,
+      workDirectory: () async => directory,
     );
     changes = [];
     sync.changes.listen(changes.add);
@@ -294,6 +311,145 @@ void main() {
       // Con la fecha al día, ya no se vuelve a leer.
       await sync.sync();
       expect(folders.calls.where((c) => c.startsWith('read')), hasLength(1));
+    });
+
+    group('transcripción en un .txt', () {
+      test('se guarda junto al audio, con su nombre', () async {
+        await addRecording(folder: 'Clases');
+        await sync.sync();
+        await transcribe(await single(), 'Hola, mundo.');
+
+        await sync.sync();
+
+        expect(writes().last, 'write Clases/Grabación 1.txt');
+        final file = (await single()).copies['folder']!.transcript!;
+        expect(folders.files[file.ref], 'Grabación 1.txt');
+        expect(textOf(folders, file.ref), 'Hola, mundo.');
+        expect(
+          file.checksum,
+          md5.convert(utf8.encode('Hola, mundo.')).toString(),
+        );
+
+        await sync.sync();
+        expect(writes(), hasLength(2));
+      });
+
+      test(
+        'se sobrescribe, se renombra y se borra con la transcripción',
+        () async {
+          await addRecording();
+          await sync.sync();
+          await transcribe(await single(), 'Primera');
+          await sync.sync();
+          final ref = (await single()).copies['folder']!.transcript!.ref;
+
+          await transcribe(await single(), 'Segunda');
+          await sync.sync();
+          expect(writes().last, 'write Grabación 1.txt ($ref)');
+          expect(textOf(folders, ref), 'Segunda');
+
+          await repository.rename(await single(), 'Clase');
+          await sync.sync();
+          expect(folders.files[ref], 'Clase.txt');
+          expect(folders.files.values, contains('Clase.m4a'));
+
+          await repository.setTranscript(await single(), null);
+          await sync.sync();
+          expect(folders.calls.last, 'delete $ref');
+          expect((await single()).copies['folder']!.transcript, isNull);
+        },
+      );
+
+      test('al eliminar la grabación, se borra también', () async {
+        await addRecording();
+        await sync.sync();
+        await transcribe(await single(), 'Hola');
+        await sync.sync();
+
+        await sync.delete(await single());
+
+        expect(folders.files, isEmpty);
+      });
+
+      test('se leen las de la carpeta (p. ej. al reinstalar la app)', () async {
+        final date = DateTime(2026, 10, 1, 9);
+        folders.addFile(folder.id, 'Idea.m4a');
+        folders.addFile(
+          folder.id,
+          'Idea.txt',
+          bytes: utf8.encode('Texto guardado'),
+          modified: date,
+        );
+        // Un .txt sin audio no es una transcripción.
+        folders.addFile(folder.id, 'Notas.txt');
+
+        await sync.sync();
+
+        final idea = await single();
+        expect(idea.transcript!.text, 'Texto guardado');
+        expect(idea.transcript!.engine, isNull);
+        expect(idea.transcript!.createdAt, date);
+        expect(idea.copies['folder']!.transcript!.name, 'Idea.txt');
+
+        await sync.sync();
+        expect(writes(), isEmpty);
+      });
+
+      test('si se edita fuera, recoge el texto nuevo', () async {
+        folders.addFile(folder.id, 'Idea.m4a');
+        final text = folders.addFile(
+          folder.id,
+          'Idea.txt',
+          bytes: utf8.encode('Con erratas'),
+          modified: DateTime(2026, 10, 1),
+        );
+        await sync.sync();
+
+        folders.changeFile(text, utf8.encode('Corregido'));
+        await sync.sync();
+
+        expect((await single()).transcript!.text, 'Corregido');
+        expect(writes(), isEmpty);
+        expect(changes, [1, 0]);
+      });
+
+      test('si se borra fuera, quita la transcripción', () async {
+        folders.addFile(folder.id, 'Idea.m4a');
+        final text = folders.addFile(
+          folder.id,
+          'Idea.txt',
+          bytes: utf8.encode('Hola'),
+        );
+        await sync.sync();
+
+        folders.files.remove(text);
+        await sync.sync();
+
+        final idea = await single();
+        expect(idea.transcript, isNull);
+        expect(idea.copies['folder']!.transcript, isNull);
+      });
+
+      test('si la app la cambió sin guardar y el archivo es más antiguo, gana '
+          'la de la app', () async {
+        await addRecording();
+        await sync.sync();
+        await transcribe(await single(), 'Primera');
+        await sync.sync();
+        await sync.sync();
+        final ref = (await single()).copies['folder']!.transcript!.ref;
+
+        // A la vez: se edita fuera (antes) y se vuelve a transcribir.
+        folders.changeFile(ref, utf8.encode('Editada fuera'));
+        await repository.setTranscript(
+          await single(),
+          Transcript(text: 'Nueva', revision: 0, createdAt: DateTime.now()),
+        );
+        await sync.sync();
+
+        expect((await single()).transcript!.text, 'Nueva');
+        expect(textOf(folders, ref), 'Nueva');
+      });
     });
 
     test('si se renombra en la carpeta, conserva sus datos', () async {
@@ -583,6 +739,22 @@ void main() {
       expect(await sync.hasLocalAudio(idea), isTrue);
     });
 
+    test('guarda la transcripción en un .txt y recoge los cambios', () async {
+      await addRecording();
+      await sync.sync();
+      await transcribe(await single(), 'Hola');
+      await sync.sync();
+      final file = (await single()).copies['drive']!.transcript!;
+      expect(drive.files[file.ref], 'Grabación 1.txt');
+      expect(utf8.decode(drive.contents[file.ref]!), 'Hola');
+
+      drive.contents[file.ref] = utf8.encode('Adiós');
+      drive.sizes[file.ref] = 6;
+      await sync.sync();
+
+      expect((await single()).transcript!.text, 'Adiós');
+    });
+
     test('eliminarla la manda a la papelera de Drive', () async {
       drive.addFile('Idea.m4a');
       await sync.sync();
@@ -647,6 +819,21 @@ void main() {
       expect(writes(), ['write Clases/Grabación 1.m4a']);
       expect(drive.calls, ['upload Clases/Grabación 1.m4a']);
       expect((await single()).copies.keys.toSet(), {'folder', 'drive'});
+    });
+
+    test('la copia de Drive también lleva el .txt', () async {
+      await addRecording();
+      await sync.sync();
+      await transcribe(await single(), 'Hola');
+
+      await sync.sync();
+
+      final saved = await single();
+      expect(saved.copies['folder']!.transcript, isNotNull);
+      expect(
+        drive.files[saved.copies['drive']!.transcript!.ref],
+        'Grabación 1.txt',
+      );
     });
 
     test('al eliminarla, la copia de Drive se conserva', () async {

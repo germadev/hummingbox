@@ -10,7 +10,7 @@ class AppLocalizationsZh extends AppLocalizations {
   AppLocalizationsZh([String locale = 'zh']) : super(locale);
 
   @override
-  String get appTitle => '录音机';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => '取消';
@@ -119,6 +119,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get folders => '文件夹';
+
+  @override
+  String get search => '搜索';
+
+  @override
+  String get searchHint => '名称或转写内容';
+
+  @override
+  String get clearSearch => '清除搜索';
+
+  @override
+  String get noSearchResultsTitle => '无结果';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return '没有录音的名称或转写内容包含“$query”。';
+  }
 
   @override
   String get play => '播放';

@@ -458,6 +458,32 @@ void main() {
       expect((await repository.loadAll()).single.transcript, isNull);
     });
 
+    test('guarda el .txt de la transcripción y una sin motor', () async {
+      final text = TranscriptFile(
+        ref: 'doc9',
+        name: 'Idea.txt',
+        size: 4,
+        checksum: 'abc',
+        modified: DateTime(2026, 10, 5, 12),
+      );
+      final added = (await repository.add(
+        path: await repository.createRecordingPath(),
+        duration: Duration.zero,
+        name: 'Idea',
+        copies: {'folder': file.withTranscript(text)},
+      ))!;
+      await repository.setTranscript(
+        added,
+        Transcript(text: 'Hola', revision: 0, createdAt: DateTime(2026, 10, 5)),
+      );
+
+      final loaded = (await repository.loadAll()).single;
+
+      expect(loaded.copies['folder']!.transcript, text);
+      expect(loaded.transcript!.text, 'Hola');
+      expect(loaded.transcript!.engine, isNull);
+    });
+
     test('guarda la suma MD5 y la fecha de cada archivo', () async {
       final modified = DateTime(2026, 10, 5, 12, 30);
       final added = (await repository.add(

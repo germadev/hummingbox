@@ -5,6 +5,7 @@ import '../controllers/transcription_controller.dart';
 import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../utils/formatters.dart';
+import '../utils/search.dart';
 import 'waveform_seek_bar.dart';
 
 enum RecordingAction { edit, rename, transcribe, viewTranscript, share, delete }
@@ -23,12 +24,22 @@ class RecordingTile extends StatelessWidget {
     required this.onSeek,
     required this.onAction,
     this.onCancelTranscription,
+    this.highlight = const [],
+    this.showFolder = false,
   });
 
   final Recording recording;
   final PlayerController player;
   final TranscriptionController transcriptions;
   final VoidCallback? onCancelTranscription;
+
+  /// Palabras buscadas (normalizadas): se resaltan en el nombre y en la
+  /// transcripción, que se muestra desde la primera que aparece.
+  final List<String> highlight;
+
+  /// Si se muestra la subcarpeta en la que está (en los resultados de una
+  /// búsqueda, que incluye todas las carpetas).
+  final bool showFolder;
   final VoidCallback onTogglePlay;
 
   /// Salta a una posición, empezando a reproducir si hace falta.
@@ -52,6 +63,10 @@ class RecordingTile extends StatelessWidget {
         final audio = recording.audio;
         final mutedStyle = theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
+        );
+        final highlightStyle = TextStyle(
+          fontWeight: FontWeight.bold,
+          color: theme.colorScheme.primary,
         );
 
         return Card.filled(
@@ -95,8 +110,12 @@ class RecordingTile extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                         onTap: () =>
                             onAction(RecordingAction.rename, titleContext),
-                        child: Text(
-                          recording.name,
+                        child: Text.rich(
+                          _highlighted(
+                            recording.name,
+                            highlight,
+                            highlightStyle,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -109,8 +128,12 @@ class RecordingTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '${formatRecordingDate(recording.createdAt, l10n)} · '
-                      '$duration',
+                      [
+                        if (showFolder && recording.folder.isNotEmpty)
+                          recording.folder,
+                        formatRecordingDate(recording.createdAt, l10n),
+                        duration,
+                      ].join(' · '),
                     ),
                     Text(
                       audio == null
@@ -217,8 +240,12 @@ class RecordingTile extends StatelessWidget {
                           ),
                         ),
                         Expanded(
-                          child: Text(
-                            transcript.text,
+                          child: Text.rich(
+                            _highlighted(
+                              searchExcerpt(transcript.text, highlight),
+                              highlight,
+                              highlightStyle,
+                            ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: mutedStyle,
@@ -234,6 +261,27 @@ class RecordingTile extends StatelessWidget {
       },
     );
   }
+}
+
+/// [text] con las palabras de [terms] en el estilo [style].
+InlineSpan _highlighted(String text, List<String> terms, TextStyle style) {
+  final matches = findMatches(text, terms);
+  if (matches.isEmpty) return TextSpan(text: text);
+  final spans = <TextSpan>[];
+  var position = 0;
+  for (final match in matches) {
+    if (match.start > position) {
+      spans.add(TextSpan(text: text.substring(position, match.start)));
+    }
+    spans.add(
+      TextSpan(text: text.substring(match.start, match.end), style: style),
+    );
+    position = match.end;
+  }
+  if (position < text.length) {
+    spans.add(TextSpan(text: text.substring(position)));
+  }
+  return TextSpan(children: spans);
 }
 
 /// Lo que lleva transcrito una grabación, con un botón para cancelarlo.

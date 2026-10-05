@@ -79,15 +79,18 @@ class TranscriptionSettings {
 class Transcript {
   const Transcript({
     required this.text,
-    required this.engine,
     required this.revision,
     required this.createdAt,
+    this.engine,
     this.model,
     this.language,
   });
 
   final String text;
-  final TranscriptionEngine engine;
+
+  /// Con qué se transcribió, o `null` si no se sabe (p. ej. si se leyó del
+  /// archivo `.txt` del destino).
+  final TranscriptionEngine? engine;
 
   /// Modelo de Whisper con el que se transcribió, si fue con Whisper.
   final WhisperModel? model;
@@ -108,7 +111,7 @@ class Transcript {
     final engine = TranscriptionEngine.values.asNameMap()[json['engine']];
     final revision = json['revision'];
     final language = json['language'];
-    if (text is! String || engine == null || revision is! int) return null;
+    if (text is! String || revision is! int) return null;
     return Transcript(
       text: text,
       engine: engine,
@@ -123,7 +126,7 @@ class Transcript {
 
   Map<String, dynamic> toJson() => {
     'text': text,
-    'engine': engine.name,
+    if (engine != null) 'engine': engine!.name,
     if (model != null) 'model': model!.name,
     if (language != null) 'language': language,
     'revision': revision,

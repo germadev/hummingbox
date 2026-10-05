@@ -10,7 +10,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get appTitle => 'Recorder';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => 'Cancel';
@@ -121,6 +121,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get folders => 'Folders';
+
+  @override
+  String get search => 'Search';
+
+  @override
+  String get searchHint => 'Name or transcript';
+
+  @override
+  String get clearSearch => 'Clear search';
+
+  @override
+  String get noSearchResultsTitle => 'No results';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'No recording has “$query” in its name or transcript.';
+  }
 
   @override
   String get play => 'Play';

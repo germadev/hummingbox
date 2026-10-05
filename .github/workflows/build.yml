@@ -125,7 +125,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [[ -z "$KEYSTORE_BASE64" ]]; then
-            echo "::warning title=APK firmado con la clave de depuración::Configura los secretos ANDROID_* para firmar con tu clave (ver README)."
+            echo "::warning title=APK firmado con la clave de depuración::Configura los secretos ANDROID_* para firmar con tu clave (ver docs/releases.md)."
             exit 0
           fi
           keystore="$RUNNER_TEMP/upload-keystore.jks"
@@ -142,13 +142,13 @@ jobs:
           GOOGLE_SERVER_CLIENT_ID: ${{ vars.GOOGLE_SERVER_CLIENT_ID }}
         run: |
           if [[ -z "$GOOGLE_SERVER_CLIENT_ID" ]]; then
-            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_SERVER_CLIENT_ID para activarlo (ver README)."
+            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_SERVER_CLIENT_ID para activarlo (ver docs/google-drive.md)."
           fi
           flutter build apk --release \
             --build-name "$BUILD_NAME" --build-number "$BUILD_NUMBER" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="$GOOGLE_SERVER_CLIENT_ID"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk "dist/voicerecorder-$BUILD_NAME.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/hummingbox-$BUILD_NAME.apk"
 
       - uses: actions/upload-artifact@v5
         with:
@@ -178,7 +178,7 @@ jobs:
           GOOGLE_IOS_CLIENT_ID: ${{ vars.GOOGLE_IOS_CLIENT_ID }}
         run: |
           if [[ -z "$GOOGLE_IOS_CLIENT_ID" ]]; then
-            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_IOS_CLIENT_ID para activarlo (ver README)."
+            echo "::notice title=Google Drive desactivado::Define la variable GOOGLE_IOS_CLIENT_ID para activarlo (ver docs/google-drive.md)."
             exit 0
           fi
           # 1234-abc.apps.googleusercontent.com → com.googleusercontent.apps.1234-abc
@@ -199,7 +199,7 @@ jobs:
         run: |
           mkdir -p dist build/ipa/Payload
           cp -R build/ios/iphoneos/Runner.app build/ipa/Payload/
-          (cd build/ipa && zip -qry "../../dist/voicerecorder-$BUILD_NAME.ipa" Payload)
+          (cd build/ipa && zip -qry "../../dist/hummingbox-$BUILD_NAME.ipa" Payload)
 
       - uses: actions/upload-artifact@v5
         with:

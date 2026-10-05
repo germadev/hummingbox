@@ -110,10 +110,10 @@ abstract class AppLocalizations {
     Locale('zh'),
   ];
 
-  /// Nombre de la app (también el de su carpeta en Google Drive)
+  /// Nombre de la app, una marca que no se traduce (también el de su carpeta en Google Drive)
   ///
   /// In en, this message translates to:
-  /// **'Recorder'**
+  /// **'HummingBox'**
   String get appTitle;
 
   /// Botón para cancelar
@@ -319,6 +319,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Folders'**
   String get folders;
+
+  /// Botón de la lupa, para buscar grabaciones
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get search;
+
+  /// Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)
+  ///
+  /// In en, this message translates to:
+  /// **'Name or transcript'**
+  String get searchHint;
+
+  /// No description provided for @clearSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get clearSearch;
+
+  /// No description provided for @noSearchResultsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No results'**
+  String get noSearchResultsTitle;
+
+  /// No description provided for @noSearchResultsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No recording has “{query}” in its name or transcript.'**
+  String noSearchResultsHint(String query);
 
   /// No description provided for @play.
   ///

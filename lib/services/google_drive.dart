@@ -36,7 +36,7 @@ class DriveException implements Exception {
 /// Abstraído para poder sustituirlo en los tests.
 abstract interface class DriveService {
   /// Indica si la app tiene configurado el acceso a Google en esta
-  /// plataforma (ver README → «Google Drive»).
+  /// plataforma (ver docs/google-drive.md).
   bool get isAvailable;
 
   /// Inicia sesión, pide permiso para crear archivos en Drive y prepara la
@@ -485,8 +485,10 @@ class DriveApi {
     return _json(response)['id'] as String;
   }
 
-  static String _mimeTypeOf(String path) =>
-      (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
+  static String _mimeTypeOf(String path) => path.toLowerCase().endsWith('.txt')
+      // La transcripción de una grabación.
+      ? 'text/plain'
+      : (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
 
   /// Hace la petición y, si el token ha caducado, la repite una vez con uno
   /// nuevo.

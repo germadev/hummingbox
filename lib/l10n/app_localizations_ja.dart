@@ -10,7 +10,7 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
-  String get appTitle => 'ボイスレコーダー';
+  String get appTitle => 'HummingBox';
 
   @override
   String get cancel => 'キャンセル';
@@ -119,6 +119,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get folders => 'フォルダ';
+
+  @override
+  String get search => '検索';
+
+  @override
+  String get searchHint => '名前または文字起こし';
+
+  @override
+  String get clearSearch => '検索をクリア';
+
+  @override
+  String get noSearchResultsTitle => '結果なし';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return '名前や文字起こしに「$query」を含む録音はありません。';
+  }
 
   @override
   String get play => '再生';

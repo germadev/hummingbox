@@ -21,6 +21,7 @@ import '../services/share_service.dart';
 import '../services/storage_sync.dart';
 import '../services/transcriber.dart';
 import '../utils/languages.dart';
+import '../utils/search.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/folder_drawer.dart';
 import '../widgets/record_panel.dart';
@@ -87,6 +88,14 @@ class _HomeScreenState extends State<HomeScreen> {
   late final StreamSubscription<int> _changes;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Búsqueda en los nombres y las transcripciones.
+  final _search = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  /// Si se muestra el campo de búsqueda (al pulsar la lupa o tirar de la
+  /// lista hacia abajo; se cierra al perder el foco sin nada escrito).
+  bool _searchOpen = false;
+
   /// Todas las grabaciones, de todas las carpetas.
   List<Recording> _recordings = const [];
   bool _loading = true;
@@ -103,6 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _changes = widget.sync.changes.listen(_onStorageChanged);
     _recorder.addListener(_updateScreen);
     widget.sync.addListener(_updateScreen);
+    _search.addListener(_onSearchChanged);
+    _searchFocus.addListener(_onSearchFocusChanged);
     widget.sync.load();
     widget.whisper.load();
     _loadRecordings();
@@ -119,6 +130,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _lifecycle.dispose();
     _changes.cancel();
+    _search.dispose();
+    _searchFocus.dispose();
     widget.sync.removeListener(_updateScreen);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
     _recorder.dispose();
@@ -267,6 +280,32 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _recordings = recordings);
     if (added > 0) _showMessage((l10n) => l10n.newRecordingsFound(added));
     unawaited(_addMissingDetails());
+  }
+
+  // --- Búsqueda ---
+
+  /// Abre el campo de búsqueda con el foco (o le da el foco, si ya está).
+  void _startSearch() {
+    if (_searchOpen) {
+      _searchFocus.requestFocus();
+    } else {
+      setState(() => _searchOpen = true);
+    }
+  }
+
+  void _closeSearch() {
+    _search.clear();
+    _searchFocus.unfocus();
+    setState(() => _searchOpen = false);
+  }
+
+  void _onSearchChanged() => setState(() {});
+
+  /// Sin nada escrito, el campo se cierra al perder el foco.
+  void _onSearchFocusChanged() {
+    if (!_searchFocus.hasFocus && _search.text.trim().isEmpty && _searchOpen) {
+      setState(() => _searchOpen = false);
+    }
   }
 
   // --- Carpetas ---
@@ -542,6 +581,8 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       _replaceRecording(transcribed);
+      // Se guarda como .txt junto al audio.
+      _syncStorage();
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
@@ -644,6 +685,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _replaceRecording(
             await widget.repository.setTranscript(current, null),
           );
+          // También su .txt del destino.
+          _syncStorage();
           _showMessage((l10n) => l10n.transcriptDeleted);
         } catch (_) {
           _showMessage((l10n) => l10n.deleteFailed);
@@ -734,13 +777,41 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final folder = _folder;
     final folderNames = _folderNames;
+    final searching = _searchOpen;
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        // Nombre de la carpeta abierta, arriba a la izquierda.
-        title: Text(folder.isEmpty ? context.l10n.appTitle : folder),
+        // Abre el menú de carpetas (mientras se graba no se cambia de
+        // carpeta).
+        leading: IconButton(
+          key: const Key('folders-button'),
+          tooltip: context.l10n.folders,
+          icon: const Icon(Icons.folder_outlined),
+          onPressed: _recorder.isBusy
+              ? null
+              : () => _scaffoldKey.currentState?.openDrawer(),
+        ),
+        // Mientras se busca, el campo ocupa desde las carpetas hasta las
+        // opciones. Si no, el nombre de la subcarpeta abierta (en la
+        // principal, nada).
+        titleSpacing: searching ? 8 : null,
+        title: searching
+            ? _SearchField(
+                controller: _search,
+                focusNode: _searchFocus,
+                onClear: _closeSearch,
+              )
+            : (folder.isEmpty ? null : Text(folder)),
         actions: [
-          _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
+          if (!searching) ...[
+            _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
+            IconButton(
+              key: const Key('search-button'),
+              tooltip: context.l10n.search,
+              icon: const Icon(Icons.search),
+              onPressed: _startSearch,
+            ),
+          ],
           IconButton(
             key: const Key('settings-button'),
             tooltip: context.l10n.settings,
@@ -787,13 +858,16 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Evita salir de la app por accidente en mitad de una grabación. En una
-    // subcarpeta, «atrás» vuelve a la principal.
+    // Evita salir de la app por accidente en mitad de una grabación. Si se
+    // está buscando, «atrás» cierra la búsqueda; en una subcarpeta, vuelve a
+    // la principal.
     return PopScope(
-      canPop: !_recorder.isBusy && folder.isEmpty,
+      canPop: !_recorder.isBusy && folder.isEmpty && !searching,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_recorder.pending != null) {
+        if (_searchOpen) {
+          _closeSearch();
+        } else if (_recorder.pending != null) {
           _recorder.cancel();
         } else if (_recorder.isActive) {
           _showMessage((l10n) => l10n.stopToLeave);
@@ -812,14 +886,46 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
+    // Al buscar, en todas las carpetas.
+    final terms = searchTerms(_search.text);
+    final searching = terms.isNotEmpty;
     final recordings = [
       for (final recording in _recordings)
-        if (recording.folder == folder) recording,
+        if (searching
+            ? matchesSearch(recording, terms)
+            : recording.folder == folder)
+          recording,
     ];
-    if (recordings.isEmpty) {
-      return _EmptyState(inFolder: folder.isNotEmpty);
-    }
+    final l10n = context.l10n;
+    // Tirando hacia abajo desde arriba de la lista se busca.
+    return _PullToSearch(
+      onPull: _startSearch,
+      child: recordings.isEmpty
+          ? switch ((searching, folder.isEmpty)) {
+              (true, _) => _EmptyState(
+                icon: Icons.search_off,
+                title: l10n.noSearchResultsTitle,
+                hint: l10n.noSearchResultsHint(_search.text.trim()),
+              ),
+              (false, true) => _EmptyState(
+                icon: Icons.mic_none_rounded,
+                title: l10n.noRecordingsTitle,
+                hint: l10n.noRecordingsHint,
+              ),
+              (false, false) => _EmptyState(
+                icon: Icons.folder_open,
+                title: l10n.emptyFolderTitle,
+                hint: l10n.emptyFolderHint,
+              ),
+            }
+          : _buildList(recordings, terms),
+    );
+  }
+
+  Widget _buildList(List<Recording> recordings, List<String> terms) {
     return ListView.builder(
+      // También con pocas grabaciones, para poder tirar hacia abajo.
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: recordings.length,
       itemBuilder: (context, index) {
@@ -829,6 +935,9 @@ class _HomeScreenState extends State<HomeScreen> {
           recording: recording,
           player: _player,
           transcriptions: _transcriptions,
+          highlight: terms,
+          // En los resultados de una búsqueda, su subcarpeta.
+          showFolder: terms.isNotEmpty,
           onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
           onSeek: (position) => _seek(recording, position),
@@ -936,45 +1045,166 @@ class _SyncIndicator extends StatelessWidget {
   }
 }
 
+/// Lista vacía: sin grabaciones, carpeta vacía o búsqueda sin resultados.
+/// Se puede desplazar, para que tirar hacia abajo también funcione aquí.
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.inFolder});
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.hint,
+  });
 
-  /// Si es una subcarpeta (vacía) y no la carpeta principal.
-  final bool inFolder;
+  final IconData icon;
+  final String title;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              inFolder ? Icons.folder_open : Icons.mic_none_rounded,
-              size: 72,
-              color: theme.colorScheme.outline,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              inFolder
-                  ? context.l10n.emptyFolderTitle
-                  : context.l10n.noRecordingsTitle,
-              style: theme.textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              inFolder
-                  ? context.l10n.emptyFolderHint
-                  : context.l10n.noRecordingsHint,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 72, color: theme.colorScheme.outline),
+                  const SizedBox(height: 16),
+                  Text(title, style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Text(
+                    hint,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// Campo de búsqueda de la barra superior.
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.focusNode,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return TextField(
+      key: const Key('search-field'),
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: true,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: l10n.searchHint,
+        border: InputBorder.none,
+        suffixIcon: IconButton(
+          tooltip: l10n.clearSearch,
+          icon: const Icon(Icons.close),
+          onPressed: onClear,
+        ),
+      ),
+    );
+  }
+}
+
+/// Llama a [onPull] al tirar de [child] hacia abajo cuando ya está arriba del
+/// todo, y mientras tanto muestra una lupa que aparece poco a poco.
+class _PullToSearch extends StatefulWidget {
+  const _PullToSearch({required this.onPull, required this.child});
+
+  final VoidCallback onPull;
+  final Widget child;
+
+  @override
+  State<_PullToSearch> createState() => _PullToSearchState();
+}
+
+class _PullToSearchState extends State<_PullToSearch> {
+  /// Lo que hay que tirar para buscar.
+  static const _distance = 80.0;
+
+  /// Lo que se ha tirado más allá del principio de la lista.
+  double _pulled = 0;
+  bool _triggered = false;
+
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.depth != 0) return false;
+    var pulled = _pulled;
+    switch (notification) {
+      case ScrollStartNotification():
+        pulled = 0;
+        _triggered = false;
+      // Android: la lista no pasa del principio; avisa de lo que sobra.
+      case OverscrollNotification(:final overscroll, :final dragDetails)
+          when dragDetails != null && overscroll < 0:
+        pulled -= overscroll;
+      case ScrollUpdateNotification(:final metrics, :final dragDetails)
+          when dragDetails != null:
+        // iOS: la lista rebota más allá del principio.
+        pulled = metrics.pixels < metrics.minScrollExtent
+            ? metrics.minScrollExtent - metrics.pixels
+            : 0;
+      case ScrollEndNotification():
+        pulled = 0;
+      default:
+        break;
+    }
+    if (!_triggered && pulled >= _distance) {
+      _triggered = true;
+      widget.onPull();
+    }
+    if (pulled != _pulled) setState(() => _pulled = pulled);
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final progress = (_pulled / _distance).clamp(0.0, 1.0);
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: Stack(
+        children: [
+          widget.child,
+          if (progress > 0)
+            Positioned(
+              top: 8 + 16 * progress,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: Opacity(
+                    opacity: progress,
+                    child: CircleAvatar(
+                      backgroundColor: theme.colorScheme.secondaryContainer,
+                      foregroundColor: theme.colorScheme.onSecondaryContainer,
+                      child: const Icon(Icons.search),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

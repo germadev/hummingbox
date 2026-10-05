@@ -360,6 +360,7 @@ class FileRecordingsRepository implements RecordingsRepository {
           size: file.size,
           checksum: file.checksum,
           modified: file.modified,
+          transcript: file.transcript,
         ).toJson(),
       };
     });

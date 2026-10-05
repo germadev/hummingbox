@@ -977,6 +977,199 @@ void main() {
     });
   });
 
+  group('barra superior y búsqueda', () {
+    Recording withTranscript(
+      String id,
+      String name,
+      String text, {
+      String folder = '',
+    }) => Recording(
+      id: id,
+      path: '/fake/$id.m4a',
+      name: name,
+      createdAt: DateTime(2026, 9, 28, 8, 30),
+      duration: const Duration(seconds: 83),
+      folder: folder,
+      transcript: Transcript(
+        text: text,
+        engine: TranscriptionEngine.system,
+        revision: 0,
+        createdAt: DateTime(2026, 9, 28, 9),
+      ),
+    );
+
+    Finder searchField() => find.byKey(const Key('search-field'));
+
+    bool searchFocused(WidgetTester tester) =>
+        tester.widget<TextField>(searchField()).focusNode!.hasFocus;
+
+    testWidgets('el botón de carpetas abre el menú y no hay título', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      expect(find.text('HummingBox'), findsNothing);
+
+      await tester.tap(find.byTooltip('Carpetas'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
+    });
+
+    testWidgets('mientras se graba no se abre el menú de carpetas', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await tester.tap(record());
+      await pumpAnimations(tester);
+
+      final button = tester.widget<IconButton>(
+        find.byKey(const Key('folders-button')),
+      );
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('busca en los nombres y las transcripciones de todas las '
+        'carpetas', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Reunión del lunes'),
+        withTranscript(
+          'b',
+          'Tema 1',
+          'Hoy vemos la reunión de Yalta y sus consecuencias.',
+          folder: 'Clases',
+        ),
+        sample('c', 'Idea para el viaje'),
+      ]);
+      await pumpApp(tester);
+
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      // El campo ocupa la barra: sin la lupa ni el título.
+      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isTrue);
+      expect(find.byKey(const Key('search-button')), findsNothing);
+
+      await tester.enterText(searchField(), 'reunion');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('a')), findsOneWidget);
+      // También la de otra carpeta, por su transcripción y con su carpeta.
+      expect(find.byKey(const ValueKey('b')), findsOneWidget);
+      expect(find.textContaining('Clases · '), findsOneWidget);
+      expect(find.byKey(const ValueKey('c')), findsNothing);
+
+      await tester.enterText(searchField(), 'mañana');
+      await tester.pumpAndSettle();
+      expect(find.text('Sin resultados'), findsOneWidget);
+      expect(
+        find.text(
+          'Ninguna grabación tiene «mañana» en el nombre ni en la '
+          'transcripción.',
+        ),
+        findsOneWidget,
+      );
+
+      // La X borra la búsqueda y la cierra.
+      await tester.tap(find.byTooltip('Borrar la búsqueda'));
+      await tester.pumpAndSettle();
+      expect(searchField(), findsNothing);
+      expect(find.byKey(const ValueKey('a')), findsOneWidget);
+      expect(find.byKey(const ValueKey('b')), findsNothing);
+    });
+
+    testWidgets('el extracto de la transcripción muestra la coincidencia', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript(
+          'a',
+          'Clase',
+          'Empezamos repasando lo de la semana pasada, que fue bastante '
+              'largo, y luego hablamos del examen final.',
+        ),
+      ]);
+      await pumpApp(tester);
+
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'examen');
+      await tester.pumpAndSettle();
+
+      final snippet = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const Key('transcript-a')),
+          matching: find.byType(Text),
+        ),
+      );
+      expect(snippet.textSpan!.toPlainText(), startsWith('…'));
+      expect(snippet.textSpan!.toPlainText(), contains('examen final'));
+    });
+
+    testWidgets('sin nada escrito, se cierra al perder el foco', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(searchField(), findsNothing);
+      expect(find.byKey(const Key('search-button')), findsOneWidget);
+    });
+
+    testWidgets('«atrás» cierra la búsqueda', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'nada');
+      await tester.pumpAndSettle();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+
+      expect(searchField(), findsNothing);
+      expect(find.text('Entrevista'), findsOneWidget);
+    });
+
+    testWidgets('tirar de la lista hacia abajo abre la búsqueda', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+
+      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isTrue);
+    });
+
+    testWidgets('también sin grabaciones', (tester) async {
+      await pumpApp(tester);
+
+      await tester.drag(
+        find.text('Aún no hay grabaciones'),
+        const Offset(0, 300),
+      );
+      await tester.pumpAndSettle();
+
+      expect(searchField(), findsOneWidget);
+    });
+
+    testWidgets('un tirón corto no la abre', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+
+      await tester.drag(find.byType(ListView), const Offset(0, 40));
+      await tester.pumpAndSettle();
+
+      expect(searchField(), findsNothing);
+    });
+  });
+
   group('carpetas', () {
     Future<void> openDrawer(WidgetTester tester) async {
       // Deslizando desde el borde izquierdo.
@@ -984,11 +1177,14 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    String title(WidgetTester tester) => tester
-        .widget<Text>(
-          find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
-        )
-        .data!;
+    /// Título de la barra superior: la subcarpeta abierta o, en la
+    /// principal, nada.
+    String title(WidgetTester tester) {
+      final texts = tester.widgetList<Text>(
+        find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
+      );
+      return texts.isEmpty ? '' : texts.single.data!;
+    }
 
     testWidgets('el menú lateral muestra las subcarpetas y abre una', (
       tester,
@@ -1002,7 +1198,7 @@ void main() {
         folders: ['Ideas'],
       );
       await pumpApp(tester);
-      expect(title(tester), 'Grabadora');
+      expect(title(tester), '');
       expect(find.text('Tema 1'), findsNothing);
 
       await openDrawer(tester);
@@ -1092,7 +1288,7 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
-      expect(title(tester), 'Grabadora');
+      expect(title(tester), '');
       expect(store.settings.openFolder, '');
     });
 

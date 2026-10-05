@@ -283,6 +283,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
             size: file.size,
             checksum: file.checksum,
             modified: file.modified,
+            transcript: file.transcript,
           ),
         },
         audio: audioChanged ? null : current.audio,
@@ -687,7 +688,15 @@ class FakeDriveService implements DriveService {
   }
 
   @override
-  Future<DriveSettings?> connect({required String folderName}) async => account;
+  Future<DriveSettings?> connect({required String folderName}) async {
+    final account = this.account;
+    if (account == null) return null;
+    return DriveSettings(
+      email: account.email,
+      folderId: account.folderId,
+      folderName: folderName,
+    );
+  }
 
   @override
   Future<void> disconnect() async => disconnected = true;
@@ -805,6 +814,7 @@ StorageSync fakeStorageSync(
     drive: drive ?? FakeDriveService(),
     cache: AudioCache(directory: () async => Directory('/fake/cache')),
     fileExists: fileExists ?? (_) => true,
+    workDirectory: () async => Directory.systemTemp,
   );
 }
 

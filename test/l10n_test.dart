@@ -81,12 +81,17 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    /// Nombre de la app (el título que se da al sistema).
+    String appTitle(WidgetTester tester) =>
+        tester.widget<Title>(find.byType(Title)).title;
+
     testWidgets('en inglés, también los nombres y los formatos', (
       tester,
     ) async {
       await pumpIn(tester, const Locale('en'));
 
-      expect(find.text('Recorder'), findsOneWidget);
+      // Es una marca: no se traduce.
+      expect(appTitle(tester), 'HummingBox');
       expect(find.text('No recordings yet'), findsOneWidget);
       expect(Intl.defaultLocale, 'en');
 
@@ -111,7 +116,7 @@ void main() {
 
       await pumpIn(tester, null);
 
-      expect(find.text('Recorder'), findsOneWidget);
+      expect(find.text('No recordings yet'), findsOneWidget);
     });
 
     testWidgets('sigue el idioma del sistema', (tester) async {
@@ -120,7 +125,7 @@ void main() {
 
       await pumpIn(tester, null);
 
-      expect(find.text('ボイスレコーダー'), findsOneWidget);
+      expect(appTitle(tester), 'HummingBox');
       expect(find.text('まだ録音がありません'), findsOneWidget);
     });
   });

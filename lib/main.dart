@@ -28,7 +28,7 @@ Future<void> main() async {
     store: FileSettingsStore(),
     folders: const PlatformFolderAccess(),
     // Los IDs de cliente de Google se pasan al compilar con --dart-define
-    // (ver README → «Google Drive»).
+    // (ver docs/google-drive.md).
     drive: GoogleDriveService(
       iosClientId: const String.fromEnvironment('GOOGLE_IOS_CLIENT_ID'),
       serverClientId: const String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID'),
