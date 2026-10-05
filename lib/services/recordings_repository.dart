@@ -30,7 +30,9 @@ abstract interface class RecordingsRepository {
   /// libre ("Grabación N"), y con fecha [createdAt] o, si no se indica, la
   /// actual.
   ///
-  /// Devuelve `null` si el archivo no existe.
+  /// Si [copies] no está vacío, el audio puede no estar en [path]: la
+  /// grabación está guardada fuera de la app (en la carpeta del dispositivo o
+  /// en Google Drive). Si no, devuelve `null` si el archivo no existe.
   Future<Recording?> add({
     required String path,
     required Duration duration,
@@ -71,14 +73,44 @@ abstract interface class RecordingsRepository {
     CopyState? state,
   );
 
+  /// Guarda que [recording] está en el archivo [file] del destino [key] y
+  /// que ese archivo tiene su audio y su nombre actuales (p. ej. si se
+  /// renombró fuera de la app o se reconoce como suyo). Si se indica [name],
+  /// la grabación pasa a llamarse así. Si [audioChanged], el audio se cambió
+  /// fuera de la app: la revisión aumenta y se olvidan la onda, la duración y
+  /// el formato para volver a calcularlos.
+  Future<Recording> updateStoredFile(
+    Recording recording,
+    String key,
+    CopyState file, {
+    String? name,
+    bool audioChanged = false,
+  });
+
+  /// Mueve a [moveTo] (la caché) el audio de [recording] que hay dentro de
+  /// la app, porque ya está guardado en el destino [key] (la carpeta del
+  /// dispositivo o Google Drive).
+  ///
+  /// No hace nada y devuelve `false` si entretanto ha cambiado (p. ej. se ha
+  /// editado) y falta volver a guardarla allí.
+  Future<bool> releaseAudio(
+    Recording recording, {
+    required String key,
+    required String moveTo,
+  });
+
+  /// Quita [recording] de la app y borra su audio de dentro de la app (no el
+  /// de la carpeta del dispositivo).
   Future<void> delete(Recording recording);
 
   /// Elimina un archivo de audio que no llegó a registrarse.
   Future<void> discard(String path);
 }
 
-/// Guarda los audios en una carpeta del dispositivo y sus metadatos
-/// (nombre, fecha y duración) en un índice JSON dentro de la misma carpeta.
+/// Guarda los audios en la carpeta privada de la app y sus metadatos (nombre,
+/// fecha, duración…) en un índice JSON dentro de la misma carpeta. De las
+/// grabaciones guardadas fuera de la app (en la carpeta del dispositivo o en
+/// Google Drive) solo están los metadatos, salvo mientras falta guardarlas.
 class FileRecordingsRepository implements RecordingsRepository {
   FileRecordingsRepository({Future<Directory> Function()? directory})
     : _directoryProvider = directory ?? _defaultDirectory;
@@ -114,9 +146,12 @@ class FileRecordingsRepository implements RecordingsRepository {
     final directory = await _getDirectory();
     final baseId =
         'rec_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+    // También las que solo están en el índice (guardadas fuera de la app).
+    final index = await _readIndex(directory);
 
     // El id es el nombre sin extensión: no puede repetirse en otro formato.
     Future<bool> taken(String id) async {
+      if (index.containsKey(id)) return true;
       for (final other in RecordingFormat.values) {
         if (await File(_pathFor(directory, id, other)).exists()) return true;
       }
@@ -137,11 +172,13 @@ class FileRecordingsRepository implements RecordingsRepository {
     final index = await _readIndex(directory);
 
     final recordings = <Recording>[];
+    final withAudio = <String>{};
     await for (final entity in directory.list()) {
       if (entity is! File || RecordingFormat.fromPath(entity.path) == null) {
         continue;
       }
       final id = p.basenameWithoutExtension(entity.path);
+      withAudio.add(id);
       final metadata = index[id];
       recordings.add(
         metadata != null
@@ -154,6 +191,18 @@ class FileRecordingsRepository implements RecordingsRepository {
                 createdAt: await entity.lastModified(),
                 duration: Duration.zero,
               ),
+      );
+    }
+
+    // Las que están guardadas fuera, sin audio dentro de la app.
+    for (final MapEntry(key: id, value: metadata) in index.entries) {
+      if (withAudio.contains(id) || !_savedOutside(metadata)) continue;
+      recordings.add(
+        Recording.fromMetadata(
+          id: id,
+          path: _pathFor(directory, id, Recording.formatIn(metadata)),
+          json: metadata,
+        ),
       );
     }
 
@@ -172,7 +221,7 @@ class FileRecordingsRepository implements RecordingsRepository {
     Map<String, CopyState> copies = const {},
     String folder = '',
   }) async {
-    if (!await File(path).exists()) return null;
+    if (copies.isEmpty && !await File(path).exists()) return null;
 
     return _synchronized(() async {
       final directory = await _getDirectory();
@@ -211,21 +260,25 @@ class FileRecordingsRepository implements RecordingsRepository {
     required Duration duration,
     List<double>? waveform,
     AudioInfo? audio,
-  }) async {
-    await moveFile(sourcePath, recording.path);
-    return _update(recording, (metadata) {
-      metadata['durationMs'] = duration.inMilliseconds;
-      metadata['revision'] = (metadata['revision'] as int? ?? 0) + 1;
-      if (waveform != null) {
-        metadata['waveform'] = encodeWaveform(waveform);
-      } else {
-        metadata.remove('waveform');
-      }
-      if (audio != null) {
-        metadata['audio'] = audio.toJson();
-      } else {
-        metadata.remove('audio');
-      }
+  }) {
+    // Dentro del bloqueo, para que no se mueva a la caché a la vez (ver
+    // [releaseAudio]).
+    return _synchronized(() async {
+      await moveFile(sourcePath, recording.path);
+      return _updateUnlocked(recording, (metadata) {
+        metadata['durationMs'] = duration.inMilliseconds;
+        metadata['revision'] = (metadata['revision'] as int? ?? 0) + 1;
+        if (waveform != null) {
+          metadata['waveform'] = encodeWaveform(waveform);
+        } else {
+          metadata.remove('waveform');
+        }
+        if (audio != null) {
+          metadata['audio'] = audio.toJson();
+        } else {
+          metadata.remove('audio');
+        }
+      });
     });
   }
 
@@ -261,6 +314,59 @@ class FileRecordingsRepository implements RecordingsRepository {
       } else {
         metadata['copies'] = copies;
       }
+    });
+  }
+
+  @override
+  Future<Recording> updateStoredFile(
+    Recording recording,
+    String key,
+    CopyState file, {
+    String? name,
+    bool audioChanged = false,
+  }) {
+    return _update(recording, (metadata) {
+      var revision = metadata['revision'] as int? ?? 0;
+      if (audioChanged) {
+        metadata['revision'] = ++revision;
+        metadata['durationMs'] = 0;
+        metadata
+          ..remove('waveform')
+          ..remove('audio');
+      }
+      if (name != null) metadata['name'] = name;
+      metadata['copies'] = {
+        ...?(metadata['copies'] as Map<String, dynamic>?),
+        key: CopyState(
+          destination: file.destination,
+          ref: file.ref,
+          revision: revision,
+          name: metadata['name'] as String? ?? recording.name,
+          size: file.size,
+        ).toJson(),
+      };
+    });
+  }
+
+  @override
+  Future<bool> releaseAudio(
+    Recording recording, {
+    required String key,
+    required String moveTo,
+  }) {
+    return _synchronized(() async {
+      final directory = await _getDirectory();
+      final metadata = (await _readIndex(directory))[recording.id];
+      if (metadata == null || !File(recording.path).existsSync()) return false;
+      final current = Recording.fromMetadata(
+        id: recording.id,
+        path: recording.path,
+        json: metadata,
+      );
+      if (!current.isSavedIn(key)) return false;
+      await File(moveTo).parent.create(recursive: true);
+      await moveFile(recording.path, moveTo);
+      return true;
     });
   }
 
@@ -302,27 +408,42 @@ class FileRecordingsRepository implements RecordingsRepository {
   /// Modifica los metadatos de [recording] partiendo de los guardados (y no
   /// de [recording], que puede estar desactualizada) y devuelve el resultado.
   ///
-  /// Si el audio se ha borrado entretanto (p. ej. mientras se copiaba o se
-  /// calculaba su onda), no hace nada para no dejar una entrada huérfana.
+  /// Si se ha eliminado entretanto (p. ej. mientras se copiaba o se calculaba
+  /// su onda), no hace nada para no dejar una entrada huérfana.
   Future<Recording> _update(
     Recording recording,
     void Function(Map<String, dynamic> metadata) change,
-  ) {
-    return _synchronized(() async {
-      if (!await File(recording.path).exists()) return recording;
-      final directory = await _getDirectory();
-      final index = await _readIndex(directory);
-      final metadata = {...(index[recording.id] ?? recording.toMetadata())};
-      change(metadata);
-      index[recording.id] = metadata;
-      await _writeIndex(directory, index);
-      return Recording.fromMetadata(
-        id: recording.id,
-        path: recording.path,
-        json: metadata,
-      );
-    });
+  ) => _synchronized(() => _updateUnlocked(recording, change));
+
+  Future<Recording> _updateUnlocked(
+    Recording recording,
+    void Function(Map<String, dynamic> metadata) change,
+  ) async {
+    final directory = await _getDirectory();
+    final index = await _readIndex(directory);
+    final stored = index[recording.id];
+    // Sin metadatos solo existe si tiene el audio dentro de la app (p. ej.
+    // si el índice se perdió).
+    if (stored == null && !await File(recording.path).exists()) {
+      return recording;
+    }
+    final metadata = {...(stored ?? recording.toMetadata())};
+    change(metadata);
+    index[recording.id] = metadata;
+    await _writeIndex(directory, index);
+    return Recording.fromMetadata(
+      id: recording.id,
+      path: recording.path,
+      json: metadata,
+    );
   }
+
+  static bool _savedOutside(Map<String, dynamic> metadata) =>
+      Recording.fromMetadata(
+        id: '',
+        path: '',
+        json: metadata,
+      ).copies.isNotEmpty;
 
   Future<T> _synchronized<T>(Future<T> Function() action) {
     final result = _lock.then((_) => action());

@@ -12,11 +12,16 @@ francés, alemán, chino y japonés.
 <p>
   <img src="docs/carpetas.png" width="200" alt="Menú lateral con la carpeta principal, sus subcarpetas y el número de grabaciones de cada una">
   <img src="docs/editor.png" width="200" alt="Modo de edición con la selección recortada, el volumen y los fundidos">
-  <img src="docs/opciones.png" width="200" alt="Opciones de grabación (formato, calidad y cuenta atrás) y de la carpeta y Google Drive">
+  <img src="docs/inicio.png" width="200" alt="Menú inicial para elegir dónde guardar las grabaciones: una carpeta del dispositivo o Google Drive">
+  <img src="docs/opciones.png" width="200" alt="Opciones de grabación (formato, calidad y cuenta atrás) y de dónde se guardan las grabaciones: la carpeta del dispositivo y la copia en Google Drive">
 </p>
 
 ## Funciones
 
+- **Menú inicial**: al instalar la app se elige dónde guardar las
+  grabaciones, en una **carpeta del dispositivo** o en **Google Drive** (ver
+  [Dónde se guardan](#dónde-se-guardan-las-grabaciones)). Hasta elegirlo no
+  se puede grabar; si después se deja de usar el destino, vuelve a aparecer.
 - **Grabar** con un solo toque, con **pausa/reanudar** y cronómetro.
 - **Formato y calidad** (*Opciones → Grabación*): AAC (`.m4a`) o WAV sin
   comprimir, en calidad baja, media o alta (ver
@@ -39,9 +44,10 @@ francés, alemán, chino y japonés.
   fecha («Hoy», «Ayer»…), duración, **formato y calidad** («AAC · 128 kbps ·
   44,1 kHz») y la **onda completa de cada una**. **Tocar el nombre** permite
   cambiarlo.
-- **Carpetas**: deslizando desde la izquierda (o con ☰) se abre un menú con
-  la carpeta principal y sus **subcarpetas**, con cuántas grabaciones tiene
-  cada una, y *Nueva carpeta*. La carpeta abierta aparece arriba a la
+- **Carpetas**: deslizando hacia la derecha en cualquier punto de la lista
+  (o con ☰) se abre un menú con la carpeta principal y sus **subcarpetas**,
+  con cuántas grabaciones tiene cada una, y *Nueva carpeta*. Arrastrar sobre
+  la onda de una grabación sigue sirviendo para saltar. La carpeta abierta aparece arriba a la
   izquierda, la lista muestra sus grabaciones y **se graba en ella**. «Atrás»
   vuelve a la principal.
 - **Reproductor integrado**: la onda hace de barra de progreso; se puede tocar
@@ -60,12 +66,12 @@ francés, alemán, chino y japonés.
   **eliminar** grabaciones.
 - **Opciones** (botón ⚙ arriba a la derecha):
   - **Grabación**: formato, calidad y duración de la cuenta atrás.
-  - **Carpeta del dispositivo**: guarda una copia de cada grabación en la
-    carpeta que elijas (almacenamiento interno, tarjeta SD, iCloud Drive…) y
-    **muestra en la app las grabaciones que ya había en ella** y en sus
-    subcarpetas.
-  - **Google Drive**: guarda una copia de cada grabación en la carpeta
-    «Grabadora» de tu Drive. Necesita configuración previa (ver
+  - **Carpeta del dispositivo**: dónde se guardan las grabaciones
+    (almacenamiento interno, tarjeta SD, iCloud Drive…). La app muestra
+    todos los audios que hay en ella y en sus subcarpetas.
+  - **Google Drive**: con carpeta, guarda además una copia de cada grabación
+    en la carpeta «Grabadora» de tu Drive; sin carpeta, las grabaciones se
+    guardan en Drive. Necesita configuración previa (ver
     [Google Drive](#google-drive)).
 - Tema claro y oscuro según el sistema, con los colores del icono (morado
   `#5B3FD9` y, para grabar, el rojo `#FF4D4D`).
@@ -73,9 +79,11 @@ francés, alemán, chino y japonés.
   chino y japonés. Se usa el del sistema y, si no es ninguno de ellos, el
   inglés (ver [Idiomas](#idiomas)).
 
-Las grabaciones se guardan en la carpeta privada de la app, junto con un
-índice `recordings.json` que guarda el nombre, la fecha, la duración, la onda,
-el formato, la subcarpeta y el estado de las copias de cada una.
+La app guarda en su carpeta privada un índice `recordings.json` con el
+nombre, la fecha, la duración, la onda, el formato, la subcarpeta y el
+archivo de cada grabación en la carpeta del dispositivo o en Drive. El audio
+está allí, no en la app (ver
+[Dónde se guardan](#dónde-se-guardan-las-grabaciones)).
 
 ### Formato y calidad
 
@@ -104,35 +112,46 @@ la voz: un `.m4a` se recorta sin volver a codificarlo (`MediaMuxer` en
 Android, `AVAssetExportSession` en iOS) y un WAV, en Dart. Si el recorte
 fallara, la grabación se guarda entera.
 
-### Copias en una carpeta y en Google Drive
+### Dónde se guardan las grabaciones
 
-La app sigue guardando todo en su carpeta privada (así grabar, reproducir y
-editar no depende de permisos ni de la red) y, además, mantiene una copia de
-cada grabación en los destinos activados, con el nombre que le hayas dado y
-en su subcarpeta (`Clases/Tema 1.m4a`):
+Las grabaciones **viven en el destino elegido**: en la carpeta del
+dispositivo o, si no se ha elegido ninguna, en Google Drive. Con nombre de
+archivo el que les hayas dado y en su subcarpeta (`Clases/Tema 1.m4a`).
 
-- Al grabar, editar o renombrar, la copia se crea, se sobrescribe o se
-  renombra. Solo se sube lo que ha cambiado.
-- **Lo que ya hay en la carpeta del dispositivo se añade a la app**: al
-  elegirla, al volver a la app y con *Copiar ahora*, los audios (`.m4a` y
-  `.wav`) de la carpeta y de sus subcarpetas que la app no tiene se copian a
-  ella y quedan enlazados a su archivo (renombrarlos o editarlos cambia ese
-  archivo). Si al elegir la carpeta hay audios nuevos, se pregunta antes
-  (por si es, por ejemplo, una carpeta de música); se puede cambiar después
-  con *Mostrar las grabaciones de la carpeta*.
-- Las copias propias se reconocen por el nombre y el tamaño, así que volver
-  a elegir la misma carpeta no duplica nada.
-- En Drive, las subcarpetas se crean dentro de la de la app.
-- Si algo falla (sin conexión, permiso retirado…), se reintenta al volver a la
-  app o con *Opciones → Copiar ahora*. Los errores se ven en las opciones y con
-  un icono en la barra superior.
-- **Las copias no se borran** al eliminar una grabación en la app ni al
-  desactivar un destino. Una grabación eliminada no se vuelve a añadir desde
-  la carpeta.
-- Salvo los audios nuevos de la carpeta del dispositivo, que se añaden, es
-  una copia en un solo sentido: si cambias o borras directamente en la
-  carpeta o en Drive un archivo que ya está en la app, el cambio no vuelve a
-  ella. De Drive no se añade nada.
+- **Sin copias**: lo que hay en el destino (`.m4a` y `.wav`, en la carpeta y
+  en el primer nivel de subcarpetas) aparece en la app tal cual, sin
+  copiarlo. Al elegir la carpeta, al volver a la app, al abrir el menú
+  lateral y con *Sincronizar ahora* se vuelve a leer.
+- **En los dos sentidos**: renombrar, editar o eliminar una grabación en la
+  app lo hace en su archivo (en Drive, eliminar la manda a la papelera). Lo
+  que se borra en el destino fuera de la app desaparece de la app, lo que se
+  cambia se vuelve a leer (se detecta por el tamaño) y lo que se renombra
+  conserva su onda (se reconoce por la subcarpeta y el tamaño).
+- **Lo pendiente**: el grabador necesita un archivo local, así que se graba
+  dentro de la app y, al parar, la grabación se guarda en el destino. Lo
+  mismo al editar. Mientras no se puede guardar (sin conexión, sin permiso,
+  tarjeta SD quitada…) se queda en la app y se reintenta al volver a ella o
+  con *Sincronizar ahora*. Los errores se ven en las opciones y con un icono
+  en la barra superior.
+- **Caché**: para escuchar, editar, compartir o calcular la onda, el audio se
+  lee del destino (en Drive se descarga) y se guarda en la caché de la app,
+  que no pasa de 100 MB: cuando se llena se borra lo que hace más tiempo que
+  no se usa, y el sistema también puede vaciarla. Lo recién grabado o
+  editado pasa a la caché al guardarse en el destino.
+- **Cambiar de destino**: las grabaciones que solo estaban en la app se
+  guardan en el nuevo; las del destino anterior **se quedan allí** y dejan
+  de verse (si vuelves a elegirlo, aparecen otra vez y la app reconoce sus
+  archivos por el nombre y el tamaño, sin duplicarlos). Si se deja de usar
+  la carpeta con Drive conectado, la app pasa a usar Drive (donde ya está la
+  copia de cada grabación); de Drive a una carpeta, las grabaciones se
+  descargan de Drive y se guardan en ella.
+- **Copia en Drive**: con la carpeta como destino, Drive guarda una copia de
+  cada grabación. Las copias se actualizan al renombrar o editar, pero no se
+  borran al eliminar una grabación.
+- **Google Drive como destino**: con el permiso `drive.file` la app solo ve
+  los archivos que ha creado ella (también desde otro dispositivo), no los
+  que se suban a mano a su carpeta. Para escuchar una grabación hay que
+  poder descargarla (salvo que esté en la caché).
 
 En Android la carpeta se elige con el selector del sistema y el permiso se
 conserva entre reinicios. En iOS se usa el selector de archivos (En mi iPhone,
@@ -164,9 +183,9 @@ flutter build ipa             # iOS (requiere macOS y Xcode)
 ## Permisos
 
 - **Android**: `RECORD_AUDIO` e `INTERNET` (para Google Drive), declarados en
-  `android/app/src/main/AndroidManifest.xml`. La carpeta de las copias no
-  necesita permisos de almacenamiento: el usuario la elige con el selector
-  del sistema.
+  `android/app/src/main/AndroidManifest.xml`. La carpeta de las grabaciones
+  no necesita permisos de almacenamiento: el usuario la elige con el
+  selector del sistema.
 - **iOS**: `NSMicrophoneUsageDescription`, en `ios/Runner/Info.plist`.
 
 El permiso se pide la primera vez que se pulsa el botón de grabar. Si se
@@ -180,7 +199,7 @@ lib/
 ├── app.dart                      MaterialApp, tema y localización
 ├── l10n/                         Traducciones (app_xx.arb) y código generado
 ├── models/
-│   ├── recording.dart            Grabación (nombre, duración, onda, copias…)
+│   ├── recording.dart            Grabación (nombre, duración, onda, archivos fuera de la app…)
 │   └── recording_options.dart    Formato y calidad de grabación
 ├── audio/
 │   ├── levels.dart               Niveles de la onda (dBFS → 0–1) y remuestreo
@@ -196,19 +215,20 @@ lib/
 │   ├── audio_player_service.dart    Reproducción (paquete `audioplayers`)
 │   ├── audio_codec.dart             m4a ↔ WAV y recorte de m4a (sistema)
 │   ├── recording_editor.dart        Editar y calcular ondas (en un isolate)
-│   ├── recordings_repository.dart   Archivos y metadatos en disco
+│   ├── recordings_repository.dart   Índice de grabaciones y audio pendiente
 │   ├── settings_store.dart          Opciones de la app
 │   ├── folder_access.dart           Carpeta elegida por el usuario
 │   ├── google_drive.dart            Google Sign-In y API REST de Drive
-│   ├── copy_sync.dart               Copias e importación (carpeta y Drive)
+│   ├── storage_sync.dart            Guardar y leer en el destino (carpeta o Drive) y copia en Drive
+│   ├── audio_cache.dart             Caché del audio leído del destino
 │   └── share_service.dart           Compartir (paquete `share_plus`)
-├── screens/                      Pantalla principal, editor y opciones
+├── screens/                      Pantalla principal, menú inicial, editor y opciones
 ├── widgets/                      Panel de grabación, ondas, lista, menú de carpetas y diálogos
 └── utils/                        Formatos de duraciones y fechas, archivos
 
 packages/voicerecorder_native/    Plugin propio con el código nativo
 ├── android/…/AudioCodecHandler.kt   MediaExtractor + MediaCodec + MediaMuxer
-├── android/…/FolderAccess.kt        Storage Access Framework (con subcarpetas)
+├── android/…/FolderAccess.kt        Storage Access Framework (leer, escribir, renombrar y borrar)
 ├── ios/…/AudioCodecHandler.swift    AVAudioFile + AVAssetExportSession
 └── ios/…/FolderAccessHandler.swift  UIDocumentPicker + marcadores de seguridad
 ```
@@ -272,13 +292,14 @@ flutter test
 
 Hay tests unitarios del procesado de audio (WAV, recorte, volumen, fundidos,
 picos), de la lectura de cabeceras WAV y MP4, del detector de voz, del
-editor, del almacenamiento, de las copias e importación en carpeta y Drive
-(la API de Drive se prueba con un cliente HTTP falso), de los controladores
+editor, del almacenamiento y la caché, de la sincronización con la carpeta y
+con Drive (como destino y como copia; la API de Drive se prueba con un
+cliente HTTP falso), de los controladores
 (también la cuenta atrás y el inicio por voz con su recorte), de los
 formatos y de las traducciones, y tests de widgets de los flujos principales
-(grabar, desplegar el panel sin grabar, cuenta atrás, voz, saltar en la onda,
-editar y escuchar con el volumen, menú de carpetas, opciones, renombrar,
-eliminar e idioma). Los tests de widgets se ejecutan en español.
+(menú inicial, grabar, desplegar el panel sin grabar, cuenta atrás, voz,
+saltar en la onda, editar y escuchar con el volumen, menú de carpetas y
+abrirlo deslizando, opciones, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
 
 ## Integración continua (GitHub Actions)
 
@@ -411,9 +432,11 @@ ejemplo con AltStore o Sideloadly.
   Android y el modo de audio en segundo plano en iOS.
 - La detección de voz se basa solo en el nivel del micrófono: un ruido
   fuerte (un golpe, una puerta) también puede empezar la grabación.
-- Solo se añaden desde la carpeta los `.m4a` (AAC) y `.wav`, y solo de la
-  carpeta y del primer nivel de subcarpetas. Lo que se cambie directamente
-  en la carpeta después de añadirlo no se refleja en la app.
+- Solo se muestran los `.m4a` (AAC) y `.wav` del destino, y solo de la
+  carpeta y del primer nivel de subcarpetas. Un cambio hecho fuera de la app
+  que no cambie el tamaño del archivo no se detecta.
+- La onda de lo que se añade desde el destino se calcula leyendo el audio
+  entero: con Google Drive como destino, la primera vez se descarga todo.
 - No hay forma de mover una grabación a otra subcarpeta desde la app.
-- Las copias en la carpeta y en Drive se hacen con la app abierta; no hay
-  subida en segundo plano.
+- Guardar en el destino y leerlo se hace con la app abierta; no hay subida
+  en segundo plano.

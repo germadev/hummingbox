@@ -43,17 +43,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die Aufnahmen konnten nicht geladen werden';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count Aufnahmen aus dem Ordner hinzugefügt',
-      one: '1 Aufnahme aus dem Ordner hinzugefügt',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => 'Neuer Ordner';
 
   @override
@@ -121,12 +110,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get rootFolder => 'Aufnahmen';
-
-  @override
-  String get savingCopies => 'Kopien werden gespeichert …';
-
-  @override
-  String get copiesFailed => 'Einige Kopien konnten nicht gespeichert werden';
 
   @override
   String get emptyFolderTitle => 'Dieser Ordner ist leer';
@@ -310,30 +293,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get playbackPosition => 'Wiedergabeposition';
 
   @override
-  String get importTitle => 'Aufnahmen aus dem Ordner hinzufügen?';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count Audiodateien',
-      one: '1 Audiodatei',
-    );
-    return '„$folder“ enthält $_temp0 ($size), die nicht in der App sind. Wenn du sie hinzufügst, erscheinen sie in der Liste und werden in die App kopiert.';
-  }
-
-  @override
-  String get add => 'Hinzufügen';
-
-  @override
-  String get dontAdd => 'Nicht hinzufügen';
-
-  @override
   String get folderFailed => 'Dieser Ordner kann nicht verwendet werden';
-
-  @override
-  String get copiesKept => 'Die Kopien im Ordner bleiben erhalten';
 
   @override
   String get driveConnectFailed => 'Verbindung zu Google Drive fehlgeschlagen';
@@ -395,27 +355,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get storageSection => 'Speicherort der Aufnahmen';
 
   @override
-  String get storageDescription =>
-      'Aufnahmen werden immer in der App gespeichert. Zusätzlich kannst du von jeder eine Kopie in einem Ordner auf dem Gerät und in Google Drive behalten – mit dem Namen, den du ihr gegeben hast, und in ihrem Unterordner. Kopien werden beim Umbenennen oder Bearbeiten aktualisiert, aber beim Löschen nicht gelöscht.';
-
-  @override
   String get deviceFolder => 'Ordner auf dem Gerät';
 
   @override
-  String get noFolder => 'Wird in keinem Ordner gespeichert';
-
-  @override
-  String get stopSavingToFolder => 'Nicht mehr im Ordner speichern';
+  String get noFolder => 'Keiner';
 
   @override
   String get chooseAnotherFolder => 'Anderen Ordner wählen';
-
-  @override
-  String get showFolderRecordings => 'Aufnahmen aus dem Ordner anzeigen';
-
-  @override
-  String get showFolderRecordingsSubtitle =>
-      'Fügt der App die Audiodateien (.m4a und .wav) aus dem Ordner und seinen Unterordnern hinzu';
 
   @override
   String driveAccount(String email, String folder) {
@@ -430,30 +376,12 @@ class AppLocalizationsDe extends AppLocalizations {
       'Nicht verfügbar: Diese App-Version ist nicht für den Zugriff auf Google eingerichtet';
 
   @override
-  String get copyNow => 'Jetzt kopieren';
-
-  @override
-  String get copyNowSubtitle =>
-      'Es wird nur kopiert, was fehlt oder sich geändert hat';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count Aufnahmen konnten nicht kopiert werden',
-      one: '1 Aufnahme konnte nicht kopiert werden',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count Aufnahmen aus dem Ordner konnten nicht hinzugefügt werden',
-      one: '1 Aufnahme aus dem Ordner konnte nicht hinzugefügt werden',
+      other: '$count Aufnahmen konnten nicht hinzugefügt werden',
+      one: '1 Aufnahme konnte nicht hinzugefügt werden',
     );
     return '$_temp0';
   }
@@ -479,4 +407,112 @@ class AppLocalizationsDe extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message: $detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count neue Aufnahmen',
+      one: '1 neue Aufnahme',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => 'Die Aufnahme konnte nicht abgespielt werden';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return 'Sie wird auch aus „$folder“ gelöscht. Dies kann nicht rückgängig gemacht werden.';
+  }
+
+  @override
+  String get deleteFromDriveMessage =>
+      'Sie wird in den Papierkorb deines Google Drive verschoben.';
+
+  @override
+  String get syncing => 'Wird synchronisiert…';
+
+  @override
+  String get syncFailed => 'Nicht alles konnte synchronisiert werden';
+
+  @override
+  String get setupTitle => 'Wo möchtest du deine Aufnahmen speichern?';
+
+  @override
+  String get setupMessage =>
+      'Du kannst das später in den Einstellungen ändern.';
+
+  @override
+  String get setupFolder => 'In einem Ordner auf dem Gerät';
+
+  @override
+  String get setupFolderDescription =>
+      'Interner Speicher, SD-Karte, iCloud Drive … Aufnahmen, die schon darin sind, erscheinen in der App.';
+
+  @override
+  String get setupDrive => 'In Google Drive';
+
+  @override
+  String get setupDriveDescription =>
+      'In einem Ordner in deinem Drive. Was noch nicht hochgeladen werden kann, bleibt in der App.';
+
+  @override
+  String get storageFolderDescription =>
+      'Die Aufnahmen werden im gewählten Ordner gespeichert, mit dem Namen, den du ihnen gibst, und in ihrem Unterordner. Die App zeigt alle Audiodateien (.m4a und .wav) darin an. Was du in der App löschst, umbenennst oder bearbeitest, ändert sich auch im Ordner.';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return 'Die Aufnahmen werden im Ordner „$folder“ deines Google Drive gespeichert und zum Anhören oder Bearbeiten heruntergeladen. Was noch nicht hochgeladen werden konnte (z. B. ohne Verbindung), bleibt in der App. Wenn du einen Ordner auf dem Gerät wählst, werden sie dort gespeichert und Drive behält eine Kopie.';
+  }
+
+  @override
+  String get stopUsingFolder => 'Ordner nicht mehr verwenden';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return '„$folder“ nicht mehr verwenden?';
+  }
+
+  @override
+  String get stopUsingFolderMessage =>
+      'Die Aufnahmen bleiben im Ordner, werden aber nicht mehr in der App angezeigt. Danach musst du wählen, wo neue gespeichert werden.';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      'Die Aufnahmen bleiben im Ordner, und die App verwendet dann die aus deinem Google Drive, wo auch neue gespeichert werden.';
+
+  @override
+  String get stopUsing => 'Nicht mehr verwenden';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      'Die Aufnahmen bleiben in deinem Drive, werden aber nicht mehr in der App angezeigt. Danach musst du wählen, wo neue gespeichert werden.';
+
+  @override
+  String folderInUse(String folder) {
+    return 'Aufnahmen werden jetzt in „$folder“ gespeichert';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Aufnahmen konnten nicht gespeichert werden',
+      one: '1 Aufnahme konnte nicht gespeichert werden',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => 'Google Drive konnte nicht gelesen werden';
+
+  @override
+  String get syncNow => 'Jetzt synchronisieren';
+
+  @override
+  String get syncNowSubtitle =>
+      'Speichert Ausstehendes und sucht nach Änderungen dort, wo die Aufnahmen gespeichert sind';
 }

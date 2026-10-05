@@ -42,15 +42,6 @@
     }
   },
   "loadRecordingsFailed": "Couldn't load the recordings",
-  "importedFromFolder": "{count, plural, =1{1 recording added from the folder} other{{count} recordings added from the folder}}",
-  "@importedFromFolder": {
-    "description": "Grabaciones añadidas desde la carpeta del dispositivo",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "newFolder": "New folder",
   "invalidFolderName": "That name can't be used for a folder",
   "microphonePermission": "Allow microphone access in settings to record",
@@ -91,8 +82,6 @@
   "@rootFolder": {
     "description": "Carpeta principal en el menú lateral, si no hay carpeta del dispositivo"
   },
-  "savingCopies": "Saving copies…",
-  "copiesFailed": "Some copies couldn't be saved",
   "emptyFolderTitle": "This folder is empty",
   "emptyFolderHint": "Tap the red button to record in it.",
   "noRecordingsTitle": "No recordings yet",
@@ -232,26 +221,7 @@
   "@playbackPosition": {
     "description": "Onda como barra de progreso (accesibilidad)"
   },
-  "importTitle": "Add the folder's recordings?",
-  "importMessage": "“{folder}” has {count, plural, =1{1 audio file} other{{count} audio files}} ({size}) that aren't in the app. If you add them, they'll appear in the list and be copied into the app.",
-  "@importMessage": {
-    "description": "Al elegir una carpeta con audios que la app no tiene",
-    "placeholders": {
-      "folder": {
-        "type": "String"
-      },
-      "count": {
-        "type": "int"
-      },
-      "size": {
-        "type": "String"
-      }
-    }
-  },
-  "add": "Add",
-  "dontAdd": "Don't add",
   "folderFailed": "Couldn't use that folder",
-  "copiesKept": "The copies already in the folder are kept",
   "driveConnectFailed": "Couldn't connect to Google Drive",
   "disconnectDriveTitle": "Disconnect Google Drive?",
   "disconnectDriveMessage": "Copies will no longer be saved to Drive. The ones already there are kept.",
@@ -292,13 +262,9 @@
   "@storageSection": {
     "description": "Sección de las opciones"
   },
-  "storageDescription": "Recordings are always saved inside the app. You can also keep a copy of each one in a device folder and in Google Drive, with the name you gave it and in its subfolder. Copies are updated when you rename or edit a recording, but aren't deleted when you delete it.",
   "deviceFolder": "Device folder",
-  "noFolder": "Not saved to any folder",
-  "stopSavingToFolder": "Stop saving to the folder",
+  "noFolder": "None",
   "chooseAnotherFolder": "Choose another folder",
-  "showFolderRecordings": "Show the folder's recordings",
-  "showFolderRecordingsSubtitle": "Adds the audio files (.m4a and .wav) in the folder and its subfolders to the app",
   "driveAccount": "{email} · folder “{folder}”",
   "@driveAccount": {
     "description": "Cuenta y carpeta de Google Drive conectadas",
@@ -313,17 +279,7 @@
   },
   "driveSaveCopy": "Save a copy to your Google Drive",
   "driveUnavailable": "Not available: this version of the app isn't set up to access Google",
-  "copyNow": "Copy now",
-  "copyNowSubtitle": "Only what's missing or changed is copied",
-  "copyFailed": "{count, plural, =1{Couldn't copy 1 recording} other{Couldn't copy {count} recordings}}",
-  "@copyFailed": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "importFailed": "{count, plural, =1{Couldn't add 1 recording from the folder} other{Couldn't add {count} recordings from the folder}}",
+  "importFailed": "{count, plural, =1{Couldn't add 1 recording} other{Couldn't add {count} recordings}}",
   "@importFailed": {
     "placeholders": {
       "count": {
@@ -347,5 +303,97 @@
         "type": "String"
       }
     }
-  }
+  },
+  "newRecordingsFound": "{count, plural, =1{1 new recording} other{{count} new recordings}}",
+  "@newRecordingsFound": {
+    "description": "Grabaciones nuevas encontradas en el destino (la carpeta o Drive)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "playFailed": "Couldn't play the recording",
+  "deleteFromFolderMessage": "It will also be deleted from “{folder}”. This can't be undone.",
+  "@deleteFromFolderMessage": {
+    "description": "Al eliminar una grabación guardada en la carpeta del dispositivo",
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteFromDriveMessage": "It will be moved to the trash in your Google Drive.",
+  "@deleteFromDriveMessage": {
+    "description": "Al eliminar una grabación guardada en Google Drive"
+  },
+  "syncing": "Syncing…",
+  "@syncing": {
+    "description": "Mientras se guardan las grabaciones o se lee el destino"
+  },
+  "syncFailed": "Couldn't sync everything",
+  "setupTitle": "Where do you want to save your recordings?",
+  "@setupTitle": {
+    "description": "Menú inicial, cuando todavía no se ha elegido dónde guardar las grabaciones"
+  },
+  "setupMessage": "You can change this later in the settings.",
+  "setupFolder": "In a folder on this device",
+  "setupFolderDescription": "Internal storage, an SD card, iCloud Drive… Any recordings already in it will appear in the app.",
+  "setupDrive": "In Google Drive",
+  "setupDriveDescription": "In a folder in your Drive. Any that can't be uploaded yet are kept inside the app.",
+  "storageFolderDescription": "Recordings are saved in the chosen folder, with the name you give them and in their subfolder, and the app shows all the audio files (.m4a and .wav) in it. Whatever you delete, rename or edit in the app also changes in the folder.",
+  "@storageFolderDescription": {
+    "description": "Opciones, si las grabaciones se guardan en la carpeta del dispositivo"
+  },
+  "storageDriveDescription": "Recordings are saved in the “{folder}” folder of your Google Drive and downloaded to play or edit them. Those that couldn't be uploaded yet (for example, while offline) are kept inside the app. If you choose a device folder, they'll be saved there and Drive will keep a copy.",
+  "@storageDriveDescription": {
+    "description": "Opciones, si las grabaciones se guardan en Google Drive",
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "stopUsingFolder": "Stop using the folder",
+  "stopUsingFolderTitle": "Stop using “{folder}”?",
+  "@stopUsingFolderTitle": {
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "stopUsingFolderMessage": "The recordings will stay in the folder but will no longer appear in the app. Then you'll need to choose where to save new ones.",
+  "@stopUsingFolderMessage": {
+    "description": "Al dejar de usar la carpeta del dispositivo sin Google Drive conectado"
+  },
+  "stopUsingFolderDriveMessage": "The recordings will stay in the folder, and the app will switch to the ones in your Google Drive, where new ones will be saved.",
+  "@stopUsingFolderDriveMessage": {
+    "description": "Al dejar de usar la carpeta del dispositivo con Google Drive conectado"
+  },
+  "stopUsing": "Stop using",
+  "disconnectDriveStorageMessage": "The recordings will stay in your Drive but will no longer appear in the app. Then you'll need to choose where to save new ones.",
+  "@disconnectDriveStorageMessage": {
+    "description": "Al desconectar Google Drive si las grabaciones se guardan en él"
+  },
+  "folderInUse": "Recordings are now saved in “{folder}”",
+  "@folderInUse": {
+    "description": "Tras elegir la carpeta del dispositivo",
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFailed": "{count, plural, =1{Couldn't save 1 recording} other{Couldn't save {count} recordings}}",
+  "@saveFailed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "readDriveFailed": "Couldn't read Google Drive",
+  "syncNow": "Sync now",
+  "syncNowSubtitle": "Saves anything pending and looks for changes where recordings are saved"
 }

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/screens/settings_screen.dart';
-import 'package:voicerecorder/services/copy_sync.dart';
+import 'package:voicerecorder/services/settings_store.dart';
+import 'package:voicerecorder/services/storage_sync.dart';
 
 import 'fakes.dart';
 import 'l10n_helpers.dart';
@@ -11,13 +12,18 @@ void main() {
   late InMemorySettingsStore store;
   late FakeFolderAccess folders;
   late FakeDriveService drive;
-  late CopySync sync;
+  late StorageSync sync;
+
+  const driveAccount = DriveSettings(
+    email: 'ana@example.com',
+    folderId: 'folder1',
+  );
 
   setUp(() {
-    store = InMemorySettingsStore();
+    store = InMemorySettingsStore(const AppSettings(folder: testFolder));
     folders = FakeFolderAccess();
     drive = FakeDriveService();
-    sync = fakeCopySync(
+    sync = fakeStorageSync(
       InMemoryRecordingsRepository(),
       store: store,
       folders: folders,
@@ -30,8 +36,24 @@ void main() {
     tester.view.physicalSize = const Size(800, 1600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(localizedApp(home: SettingsScreen(sync: sync)));
+    // Se abre desde otra pantalla, como en la app (sin destino, se cierra).
+    await tester.pumpWidget(
+      localizedApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => SettingsScreen(sync: sync),
+              ),
+            ),
+            child: const Text('Abrir'),
+          ),
+        ),
+      ),
+    );
     await sync.load();
+    await tester.tap(find.text('Abrir'));
     await tester.pumpAndSettle();
   }
 
@@ -94,46 +116,56 @@ void main() {
     expect(store.settings.recording, const RecordingOptions());
   });
 
-  testWidgets('elige la carpeta donde guardar las grabaciones', (tester) async {
+  testWidgets('elige otra carpeta donde guardar las grabaciones', (
+    tester,
+  ) async {
     await pumpSettings(tester);
-    expect(find.text('No se guarda en ninguna carpeta'), findsOneWidget);
+    expect(find.text('Grabaciones'), findsOneWidget);
+    expect(find.textContaining('se guardan en la carpeta elegida'), findsOne);
 
     await tester.tap(find.byKey(const Key('folder-option')));
     await tester.pumpAndSettle();
 
+    // Sin preguntar: lo que haya en la carpeta son grabaciones.
     expect(find.text('Music'), findsOneWidget);
     expect(store.settings.folder!.id, 'tree://music');
-
-    await tester.tap(find.byTooltip('Dejar de guardar en la carpeta'));
-    await tester.pumpAndSettle();
-    expect(store.settings.folder, isNull);
     expect(
-      find.text('Las copias que ya están en la carpeta se conservan'),
+      find.text('Las grabaciones se guardan ahora en «Music»'),
       findsOneWidget,
     );
   });
 
-  testWidgets('pregunta antes de añadir los audios de la carpeta', (
+  testWidgets('al dejar de usar la carpeta, pasa a usar Google Drive', (
     tester,
   ) async {
-    folders.addFile('tree://music', 'Idea.m4a', bytes: List.filled(500000, 0));
+    store.settings = const AppSettings(folder: testFolder, drive: driveAccount);
     await pumpSettings(tester);
 
-    await tester.tap(find.byKey(const Key('folder-option')));
+    await tester.tap(find.byTooltip('Dejar de usar la carpeta'));
     await tester.pumpAndSettle();
-    expect(find.text('¿Añadir las grabaciones de la carpeta?'), findsOneWidget);
-    expect(find.textContaining('1 audio (0,5 MB)'), findsOneWidget);
-
-    await tester.tap(find.text('No añadir'));
+    expect(
+      find.textContaining('la app pasará a usar las de tu Google Drive'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Dejar de usarla'));
     await tester.pumpAndSettle();
 
-    expect(store.settings.folder!.importFiles, isFalse);
-    final option = find.byKey(const Key('import-option'));
-    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+    expect(store.settings.folder, isNull);
+    expect(store.settings.storage, StorageKind.drive);
+    expect(find.text('Ninguna'), findsOneWidget);
+    expect(find.textContaining('carpeta «Grabadora» de tu Google'), findsOne);
+  });
 
-    await tester.tap(option);
+  testWidgets('no deja de usar la carpeta si se cancela', (tester) async {
+    await pumpSettings(tester);
+
+    await tester.tap(find.byTooltip('Dejar de usar la carpeta'));
     await tester.pumpAndSettle();
-    expect(store.settings.folder!.importFiles, isTrue);
+    expect(find.textContaining('dejarán de verse en la app'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.folder, testFolder);
   });
 
   testWidgets('no cambia nada si se cancela el selector', (tester) async {
@@ -143,7 +175,7 @@ void main() {
     await tester.tap(find.byKey(const Key('folder-option')));
     await tester.pumpAndSettle();
 
-    expect(store.settings.folder, isNull);
+    expect(store.settings.folder, testFolder);
   });
 
   testWidgets('conecta y desconecta Google Drive', (tester) async {
@@ -157,12 +189,29 @@ void main() {
     await tester.tap(find.byKey(const Key('drive-option')));
     await tester.pumpAndSettle();
     expect(find.text('¿Desconectar Google Drive?'), findsOneWidget);
+    expect(find.textContaining('Dejarán de guardarse copias'), findsOne);
     await tester.tap(find.text('Desconectar'));
     await tester.pumpAndSettle();
 
     expect(drive.disconnected, isTrue);
     expect(store.settings.drive, isNull);
     expect(find.text('Guardar una copia en tu Google Drive'), findsOneWidget);
+  });
+
+  testWidgets('al desconectar Drive si es el destino, cierra las opciones', (
+    tester,
+  ) async {
+    store.settings = const AppSettings(drive: driveAccount);
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('drive-option')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('se quedarán en tu Drive'), findsOneWidget);
+    await tester.tap(find.text('Desconectar'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.storage, isNull);
+    expect(find.byType(SettingsScreen), findsNothing);
   });
 
   testWidgets('no conecta si se cancela el inicio de sesión', (tester) async {

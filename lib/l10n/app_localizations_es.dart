@@ -42,17 +42,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get loadRecordingsFailed => 'No se pudieron cargar las grabaciones';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Se han añadido $count grabaciones de la carpeta',
-      one: 'Se ha añadido 1 grabación de la carpeta',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => 'Nueva carpeta';
 
   @override
@@ -117,12 +106,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get rootFolder => 'Grabaciones';
-
-  @override
-  String get savingCopies => 'Guardando copias…';
-
-  @override
-  String get copiesFailed => 'No se pudieron guardar algunas copias';
 
   @override
   String get emptyFolderTitle => 'Esta carpeta está vacía';
@@ -302,30 +285,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get playbackPosition => 'Posición de la reproducción';
 
   @override
-  String get importTitle => '¿Añadir las grabaciones de la carpeta?';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count audios',
-      one: '1 audio',
-    );
-    return '«$folder» tiene $_temp0 ($size) que no están en la app. Si los añades, aparecerán en la lista y se copiarán a la app.';
-  }
-
-  @override
-  String get add => 'Añadir';
-
-  @override
-  String get dontAdd => 'No añadir';
-
-  @override
   String get folderFailed => 'No se pudo usar esa carpeta';
-
-  @override
-  String get copiesKept => 'Las copias que ya están en la carpeta se conservan';
 
   @override
   String get driveConnectFailed => 'No se pudo conectar con Google Drive';
@@ -387,27 +347,13 @@ class AppLocalizationsEs extends AppLocalizations {
   String get storageSection => 'Dónde se guardan las grabaciones';
 
   @override
-  String get storageDescription =>
-      'Las grabaciones se guardan siempre dentro de la app. Además, puedes guardar una copia de cada una en una carpeta del dispositivo y en Google Drive, con el nombre que le hayas dado y en su subcarpeta. Las copias se actualizan al renombrar o editar una grabación, pero no se borran al eliminarla.';
-
-  @override
   String get deviceFolder => 'Carpeta del dispositivo';
 
   @override
-  String get noFolder => 'No se guarda en ninguna carpeta';
-
-  @override
-  String get stopSavingToFolder => 'Dejar de guardar en la carpeta';
+  String get noFolder => 'Ninguna';
 
   @override
   String get chooseAnotherFolder => 'Elegir otra carpeta';
-
-  @override
-  String get showFolderRecordings => 'Mostrar las grabaciones de la carpeta';
-
-  @override
-  String get showFolderRecordingsSubtitle =>
-      'Añade a la app los audios (.m4a y .wav) que haya en la carpeta y en sus subcarpetas';
 
   @override
   String driveAccount(String email, String folder) {
@@ -422,29 +368,12 @@ class AppLocalizationsEs extends AppLocalizations {
       'No disponible: esta versión de la app no tiene configurado el acceso a Google';
 
   @override
-  String get copyNow => 'Copiar ahora';
-
-  @override
-  String get copyNowSubtitle => 'Se copia solo lo que falta o ha cambiado';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'No se pudieron copiar $count grabaciones',
-      one: 'No se pudo copiar 1 grabación',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: 'No se pudieron añadir $count grabaciones de la carpeta',
-      one: 'No se pudo añadir 1 grabación de la carpeta',
+      other: 'No se pudieron añadir $count grabaciones',
+      one: 'No se pudo añadir 1 grabación',
     );
     return '$_temp0';
   }
@@ -469,4 +398,111 @@ class AppLocalizationsEs extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message: $detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Hay $count grabaciones nuevas',
+      one: 'Hay 1 grabación nueva',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => 'No se pudo reproducir la grabación';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return 'También se borrará de «$folder». Esta acción no se puede deshacer.';
+  }
+
+  @override
+  String get deleteFromDriveMessage =>
+      'Se moverá a la papelera de tu Google Drive.';
+
+  @override
+  String get syncing => 'Sincronizando…';
+
+  @override
+  String get syncFailed => 'No se pudo sincronizar todo';
+
+  @override
+  String get setupTitle => '¿Dónde quieres guardar las grabaciones?';
+
+  @override
+  String get setupMessage => 'Podrás cambiarlo después en las opciones.';
+
+  @override
+  String get setupFolder => 'En una carpeta del dispositivo';
+
+  @override
+  String get setupFolderDescription =>
+      'En el almacenamiento interno, una tarjeta SD, iCloud Drive… Las grabaciones que ya haya en ella aparecerán en la app.';
+
+  @override
+  String get setupDrive => 'En Google Drive';
+
+  @override
+  String get setupDriveDescription =>
+      'En una carpeta de tu Drive. Las que todavía no se hayan podido subir se guardarán dentro de la app.';
+
+  @override
+  String get storageFolderDescription =>
+      'Las grabaciones se guardan en la carpeta elegida, con el nombre que les des y en su subcarpeta, y la app muestra todos los audios (.m4a y .wav) que hay en ella. Lo que borres, renombres o edites en la app cambia también en la carpeta.';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return 'Las grabaciones se guardan en la carpeta «$folder» de tu Google Drive y se descargan para escucharlas o editarlas. Las que todavía no se han podido subir (por ejemplo, sin conexión) se guardan dentro de la app. Si eliges una carpeta del dispositivo, se guardarán en ella y en Drive quedará una copia.';
+  }
+
+  @override
+  String get stopUsingFolder => 'Dejar de usar la carpeta';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return '¿Dejar de usar «$folder»?';
+  }
+
+  @override
+  String get stopUsingFolderMessage =>
+      'Las grabaciones se quedarán en la carpeta, pero dejarán de verse en la app. Después tendrás que elegir dónde guardar las nuevas.';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      'Las grabaciones se quedarán en la carpeta y la app pasará a usar las de tu Google Drive, donde se guardarán las nuevas.';
+
+  @override
+  String get stopUsing => 'Dejar de usarla';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      'Las grabaciones se quedarán en tu Drive, pero dejarán de verse en la app. Después tendrás que elegir dónde guardar las nuevas.';
+
+  @override
+  String folderInUse(String folder) {
+    return 'Las grabaciones se guardan ahora en «$folder»';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'No se pudieron guardar $count grabaciones',
+      one: 'No se pudo guardar 1 grabación',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => 'No se pudo leer Google Drive';
+
+  @override
+  String get syncNow => 'Sincronizar ahora';
+
+  @override
+  String get syncNowSubtitle =>
+      'Guarda lo pendiente y busca cambios donde se guardan las grabaciones';
 }

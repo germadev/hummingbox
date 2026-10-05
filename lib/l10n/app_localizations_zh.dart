@@ -42,16 +42,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get loadRecordingsFailed => '无法加载录音';
 
   @override
-  String importedFromFolder(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '已从文件夹添加 $count 条录音',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get newFolder => '新建文件夹';
 
   @override
@@ -114,12 +104,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rootFolder => '录音';
-
-  @override
-  String get savingCopies => '正在保存副本…';
-
-  @override
-  String get copiesFailed => '部分副本无法保存';
 
   @override
   String get emptyFolderTitle => '此文件夹为空';
@@ -298,24 +282,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get playbackPosition => '播放位置';
 
   @override
-  String get importTitle => '添加该文件夹中的录音？';
-
-  @override
-  String importMessage(String folder, int count, String size) {
-    return '“$folder”中有 $count 个音频文件（$size）不在应用中。添加后，它们会显示在列表中并复制到应用里。';
-  }
-
-  @override
-  String get add => '添加';
-
-  @override
-  String get dontAdd => '不添加';
-
-  @override
   String get folderFailed => '无法使用该文件夹';
-
-  @override
-  String get copiesKept => '文件夹中已有的副本会保留';
 
   @override
   String get driveConnectFailed => '无法连接 Google Drive';
@@ -373,26 +340,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get storageSection => '录音的保存位置';
 
   @override
-  String get storageDescription =>
-      '录音始终保存在应用内。你还可以将每条录音的副本保存到设备上的文件夹和 Google Drive，使用你起的名称并放在对应的子文件夹中。重命名或编辑录音时副本会同步更新，但删除录音时副本不会被删除。';
-
-  @override
   String get deviceFolder => '设备文件夹';
 
   @override
-  String get noFolder => '未保存到任何文件夹';
-
-  @override
-  String get stopSavingToFolder => '停止保存到该文件夹';
+  String get noFolder => '无';
 
   @override
   String get chooseAnotherFolder => '选择其他文件夹';
-
-  @override
-  String get showFolderRecordings => '显示文件夹中的录音';
-
-  @override
-  String get showFolderRecordingsSubtitle => '将文件夹及其子文件夹中的音频（.m4a 和 .wav）添加到应用';
 
   @override
   String driveAccount(String email, String folder) {
@@ -406,27 +360,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get driveUnavailable => '不可用：此版本的应用未配置 Google 访问权限';
 
   @override
-  String get copyNow => '立即复制';
-
-  @override
-  String get copyNowSubtitle => '只复制缺少或有变动的内容';
-
-  @override
-  String copyFailed(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '有 $count 条录音无法复制',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String importFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '有 $count 条录音无法从文件夹添加',
+      other: '有 $count 条录音未能添加',
     );
     return '$_temp0';
   }
@@ -450,4 +388,104 @@ class AppLocalizationsZh extends AppLocalizations {
   String errorWithDetail(String message, String detail) {
     return '$message：$detail';
   }
+
+  @override
+  String newRecordingsFound(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '有 $count 条新录音',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get playFailed => '无法播放录音';
+
+  @override
+  String deleteFromFolderMessage(String folder) {
+    return '它也会从“$folder”中删除。此操作无法撤销。';
+  }
+
+  @override
+  String get deleteFromDriveMessage => '它将被移到你的 Google Drive 回收站。';
+
+  @override
+  String get syncing => '正在同步…';
+
+  @override
+  String get syncFailed => '部分内容未能同步';
+
+  @override
+  String get setupTitle => '你想把录音保存在哪里？';
+
+  @override
+  String get setupMessage => '之后可以在设置中更改。';
+
+  @override
+  String get setupFolder => '设备上的文件夹';
+
+  @override
+  String get setupFolderDescription => '内部存储、SD 卡、iCloud 云盘……其中已有的录音会显示在应用中。';
+
+  @override
+  String get setupDrive => 'Google Drive';
+
+  @override
+  String get setupDriveDescription => '保存在你 Drive 的一个文件夹中。暂时无法上传的录音会保存在应用内。';
+
+  @override
+  String get storageFolderDescription =>
+      '录音保存在所选文件夹中，使用你起的名称并放在对应的子文件夹里，应用会显示其中的所有音频（.m4a 和 .wav）。在应用中删除、重命名或编辑的内容也会同步到文件夹。';
+
+  @override
+  String storageDriveDescription(String folder) {
+    return '录音保存在你的 Google Drive 的“$folder”文件夹中，播放或编辑时会下载。尚未上传的录音（例如离线时）会保存在应用内。如果选择设备上的文件夹，录音会保存在那里，Drive 中保留一份副本。';
+  }
+
+  @override
+  String get stopUsingFolder => '停止使用此文件夹';
+
+  @override
+  String stopUsingFolderTitle(String folder) {
+    return '停止使用“$folder”？';
+  }
+
+  @override
+  String get stopUsingFolderMessage => '录音会保留在文件夹中，但不再显示在应用里。之后你需要选择新录音的保存位置。';
+
+  @override
+  String get stopUsingFolderDriveMessage =>
+      '录音会保留在文件夹中，应用将改用你 Google Drive 中的录音，新录音也会保存在那里。';
+
+  @override
+  String get stopUsing => '停止使用';
+
+  @override
+  String get disconnectDriveStorageMessage =>
+      '录音会保留在你的 Drive 中，但不再显示在应用里。之后你需要选择新录音的保存位置。';
+
+  @override
+  String folderInUse(String folder) {
+    return '录音现在保存在“$folder”中';
+  }
+
+  @override
+  String saveFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '有 $count 条录音未能保存',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get readDriveFailed => '无法读取 Google Drive';
+
+  @override
+  String get syncNow => '立即同步';
+
+  @override
+  String get syncNowSubtitle => '保存待处理的内容，并检查录音保存位置的更改';
 }

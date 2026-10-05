@@ -18,9 +18,9 @@ import java.io.IOException
 import java.io.OutputStream
 
 /**
- * Lee y copia archivos en una carpeta elegida por el usuario con el selector
- * del sistema (Storage Access Framework) y en sus subcarpetas. El permiso
- * sobre la carpeta se conserva entre reinicios.
+ * Lee, escribe y borra archivos en una carpeta elegida por el usuario con el
+ * selector del sistema (Storage Access Framework) y en sus subcarpetas. El
+ * permiso sobre la carpeta se conserva entre reinicios.
  */
 internal class FolderAccess(private val context: Context) :
     MethodChannel.MethodCallHandler,
@@ -78,6 +78,13 @@ internal class FolderAccess(private val context: Context) :
                 val ref = call.argument<String>("ref") ?: return badArgs(result)
                 val name = call.argument<String>("name") ?: return badArgs(result)
                 runner.run(result) { renameFile(Uri.parse(ref), name) }
+            }
+            "deleteFile" -> {
+                val ref = call.argument<String>("ref") ?: return badArgs(result)
+                runner.run(result) {
+                    deleteFile(Uri.parse(ref))
+                    null
+                }
             }
             else -> result.notImplemented()
         }
@@ -251,6 +258,18 @@ internal class FolderAccess(private val context: Context) :
     } catch (e: UnsupportedOperationException) {
         // El proveedor no permite renombrar: se conserva el nombre anterior.
         ref.toString()
+    }
+
+    /** Borra el documento [ref]. Si ya no existe, no hace nada. */
+    private fun deleteFile(ref: Uri) {
+        if (!exists(ref)) return
+        try {
+            if (!DocumentsContract.deleteDocument(context.contentResolver, ref)) {
+                throw IOException("No se pudo borrar el archivo")
+            }
+        } catch (e: FileNotFoundException) {
+            // Se borró entretanto.
+        }
     }
 
     private fun exists(uri: Uri): Boolean = try {

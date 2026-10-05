@@ -44,13 +44,21 @@ class RecordingEditor {
   RecordingEditor({
     required this.codec,
     required this.repository,
+    Future<String> Function(Recording recording)? audioPath,
     Future<Directory> Function()? workDirectory,
     this.useIsolates = true,
-  }) : _workDirectory = workDirectory ?? getTemporaryDirectory;
+  }) : _audioPath = audioPath ?? _localPath,
+       _workDirectory = workDirectory ?? getTemporaryDirectory;
 
   final AudioCodec codec;
   final RecordingsRepository repository;
+
+  /// Ruta local del audio de cada grabación (ver `StorageSync.audioPath`);
+  /// por defecto, la de dentro de la app.
+  final Future<String> Function(Recording recording) _audioPath;
   final Future<Directory> Function() _workDirectory;
+
+  static Future<String> _localPath(Recording recording) async => recording.path;
 
   /// Si es `false`, el procesado se hace en el isolate actual (para tests).
   final bool useIsolates;
@@ -65,7 +73,7 @@ class RecordingEditor {
     final directory = await _createSessionDirectory();
     try {
       final source = p.join(directory.path, 'source.wav');
-      await _decode(recording.path, source);
+      await _decode(await _audioPath(recording), source);
       final analysis = await _analyze(source, editorResolution);
       return EditSession(
         recording: recording,
@@ -176,7 +184,8 @@ class RecordingEditor {
   /// cabecera o, si no se puede leer, la de la calidad alta.
   Future<int> _bitRateOf(Recording recording) async {
     final known =
-        recording.audio?.bitRate ?? (await probe(recording.path))?.info.bitRate;
+        recording.audio?.bitRate ??
+        (await probe(await _audioPath(recording)))?.info.bitRate;
     return known ?? const RecordingOptions().bitRate;
   }
 
@@ -196,12 +205,12 @@ class RecordingEditor {
   }
 
   /// Calcula la onda de una grabación que no la tiene (p. ej. si se hizo con
-  /// una versión anterior de la app).
+  /// una versión anterior de la app o se añadió desde el destino).
   Future<List<double>> extractWaveform(Recording recording) async {
     final directory = await _createSessionDirectory();
     try {
       final wav = p.join(directory.path, 'waveform.wav');
-      await _decode(recording.path, wav);
+      await _decode(await _audioPath(recording), wav);
       final analysis = await _analyze(wav, waveformResolution);
       return analysis.levels;
     } finally {

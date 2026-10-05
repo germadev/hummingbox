@@ -292,4 +292,177 @@ void main() {
       'Grabación 8',
     );
   });
+
+  group('guardadas fuera de la app', () {
+    const file = CopyState(
+      destination: 'tree://music',
+      ref: 'doc1',
+      revision: 0,
+      name: 'Idea',
+      size: 3,
+    );
+
+    test('aparecen aunque su audio no esté en la app', () async {
+      final path = await repository.createRecordingPath(
+        format: RecordingFormat.wav,
+      );
+      final added = await repository.add(
+        path: path,
+        duration: Duration.zero,
+        name: 'Idea',
+        copies: {'folder': file},
+      );
+
+      expect(added, isNotNull);
+      expect(File(path).existsSync(), isFalse);
+      final loaded = (await newRepository().loadAll()).single;
+      expect(loaded.name, 'Idea');
+      expect(loaded.path, path);
+      expect(loaded.format, RecordingFormat.wav);
+      expect(loaded.copies['folder'], file);
+    });
+
+    test('las rutas nuevas no repiten su id', () async {
+      final path = await repository.createRecordingPath();
+      await repository.add(
+        path: path,
+        duration: Duration.zero,
+        copies: {'folder': file},
+      );
+
+      expect(await repository.createRecordingPath(), isNot(path));
+    });
+
+    test('saca el audio de la app solo si ya está guardado', () async {
+      final path = await createAudioFile();
+      var recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      final cache = p.join(directory.parent.path, 'cache', 'a.m4a');
+
+      expect(
+        await repository.releaseAudio(recording, key: 'folder', moveTo: cache),
+        isFalse,
+      );
+      recording = await repository.setCopy(
+        recording,
+        'folder',
+        CopyState(
+          destination: 'tree://music',
+          ref: 'doc1',
+          revision: recording.revision,
+          name: recording.name,
+        ),
+      );
+      expect(
+        await repository.releaseAudio(recording, key: 'folder', moveTo: cache),
+        isTrue,
+      );
+
+      expect(File(path).existsSync(), isFalse);
+      expect(File(cache).readAsBytesSync(), [1, 2, 3]);
+      expect((await repository.loadAll()).single.id, recording.id);
+    });
+
+    test('no saca el audio si se ha editado entretanto', () async {
+      final path = await createAudioFile();
+      var recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      recording = await repository.setCopy(
+        recording,
+        'folder',
+        CopyState(
+          destination: 'tree://music',
+          ref: 'doc1',
+          revision: 0,
+          name: recording.name,
+        ),
+      );
+      final edited = p.join(directory.parent.path, 'edited.m4a');
+      await File(edited).writeAsBytes([9]);
+      await repository.replaceAudio(
+        recording,
+        sourcePath: edited,
+        duration: Duration.zero,
+      );
+
+      final cache = p.join(directory.parent.path, 'cache', 'a.m4a');
+      expect(
+        await repository.releaseAudio(recording, key: 'folder', moveTo: cache),
+        isFalse,
+      );
+      expect(File(path).readAsBytesSync(), [9]);
+    });
+
+    test(
+      'al cambiar fuera de la app, olvida la onda y sube la revisión',
+      () async {
+        var recording = (await repository.add(
+          path: await repository.createRecordingPath(),
+          duration: const Duration(seconds: 4),
+          waveform: const [0.5],
+          name: 'Idea',
+          copies: {'folder': file},
+        ))!;
+
+        recording = await repository.updateStoredFile(
+          recording,
+          'folder',
+          file.withSize(10),
+          audioChanged: true,
+        );
+
+        expect(recording.revision, 1);
+        expect(recording.waveform, isNull);
+        expect(recording.duration, Duration.zero);
+        expect(recording.copies['folder']!.size, 10);
+        expect(recording.isSavedIn('folder'), isTrue);
+      },
+    );
+
+    test(
+      'al renombrarse fuera de la app, cambia el nombre y el archivo',
+      () async {
+        var recording = (await repository.add(
+          path: await repository.createRecordingPath(),
+          duration: Duration.zero,
+          waveform: const [0.5],
+          name: 'Idea',
+          copies: {'folder': file},
+        ))!;
+
+        recording = await repository.updateStoredFile(
+          recording,
+          'folder',
+          const CopyState(
+            destination: 'tree://music',
+            ref: 'doc2',
+            revision: 0,
+            name: '',
+          ),
+          name: 'Idea buena',
+        );
+
+        expect(recording.name, 'Idea buena');
+        expect(recording.waveform, [0.5]);
+        expect(recording.copies['folder']!.ref, 'doc2');
+        expect(recording.isSavedIn('folder'), isTrue);
+      },
+    );
+
+    test('eliminarla quita sus metadatos', () async {
+      final recording = (await repository.add(
+        path: await repository.createRecordingPath(),
+        duration: Duration.zero,
+        copies: {'folder': file},
+      ))!;
+
+      await repository.delete(recording);
+
+      expect(await newRepository().loadAll(), isEmpty);
+    });
+  });
 }

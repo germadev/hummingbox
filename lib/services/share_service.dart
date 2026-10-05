@@ -7,9 +7,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/recording.dart';
 
-/// Comparte una grabación con otras apps usando el nombre que le dio el
-/// usuario como nombre de archivo.
-Future<void> shareRecording(Recording recording, {Rect? origin}) async {
+/// Comparte el audio de [path] de una grabación con otras apps usando el
+/// nombre que le dio el usuario como nombre de archivo.
+Future<void> shareRecording(
+  Recording recording, {
+  required String path,
+  Rect? origin,
+}) async {
   final temp = await getTemporaryDirectory();
   final shareDirectory = Directory(p.join(temp.path, 'share'));
   // Limpia las copias de comparticiones anteriores.
@@ -19,9 +23,9 @@ Future<void> shareRecording(Recording recording, {Rect? origin}) async {
   await shareDirectory.create(recursive: true);
 
   final fileName = safeFileName(recording.name, fallback: recording.id);
-  final copy = await File(recording.path).copy(
-    p.join(shareDirectory.path, '$fileName${p.extension(recording.path)}'),
-  );
+  final copy = await File(
+    path,
+  ).copy(p.join(shareDirectory.path, '$fileName${recording.format.extension}'));
 
   await SharePlus.instance.share(
     ShareParams(

@@ -5,6 +5,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/recording_options.dart';
+import 'folder_access.dart';
 import 'settings_store.dart';
 
 /// Hay que volver a conectar la cuenta de Google (sesión cerrada, permiso
@@ -31,8 +32,8 @@ class DriveException implements Exception {
   String toString() => 'Google Drive ($statusCode): $message';
 }
 
-/// Copias de las grabaciones en Google Drive. Abstraído para poder
-/// sustituirlo en los tests.
+/// Grabaciones en Google Drive: donde se guardan o donde se guarda una copia.
+/// Abstraído para poder sustituirlo en los tests.
 abstract interface class DriveService {
   /// Indica si la app tiene configurado el acceso a Google en esta
   /// plataforma (ver README → «Google Drive»).
@@ -60,6 +61,23 @@ abstract interface class DriveService {
   /// Cambia el nombre del archivo [fileId]. Lanza [DriveException] con código
   /// 404 si ya no existe.
   Future<void> rename({required String fileId, required String name});
+
+  /// Archivos y subcarpetas de la carpeta [folderId] o de su subcarpeta
+  /// [subfolder] (ninguno si no existe). Solo se ven los que creó la app.
+  Future<List<FolderEntry>> list({
+    required String folderId,
+    String subfolder = '',
+  });
+
+  /// Descarga el archivo [fileId] a la ruta local [destination].
+  Future<void> download({required String fileId, required String destination});
+
+  /// Mueve el archivo [fileId] a la papelera de Drive. Si ya no existe, no
+  /// hace nada.
+  Future<void> delete({required String fileId});
+
+  /// Crea la subcarpeta [name] en [folderId], si no existe.
+  Future<void> createFolder({required String folderId, required String name});
 }
 
 /// Implementación con Google Sign-In y la API REST de Drive.
@@ -162,21 +180,9 @@ class GoogleDriveService implements DriveService {
     String subfolder = '',
     String? fileId,
   }) async {
-    var parent = folderId;
-    if (subfolder.isNotEmpty) {
-      final key = (folderId, subfolder);
-      final lookup = _subfolders[key] ??= _api.ensureFolder(
-        subfolder,
-        parentId: folderId,
-      );
-      try {
-        parent = await lookup;
-      } catch (_) {
-        // Se vuelve a intentar en la siguiente subida.
-        _subfolders.remove(key);
-        rethrow;
-      }
-    }
+    final parent = subfolder.isEmpty
+        ? folderId
+        : await _subfolder(folderId, subfolder);
     return _api.upload(
       folderId: parent,
       path: path,
@@ -185,9 +191,55 @@ class GoogleDriveService implements DriveService {
     );
   }
 
+  /// Id de la subcarpeta [name] de [folderId], que se crea si no existe.
+  Future<String> _subfolder(String folderId, String name) async {
+    final key = (folderId, name);
+    final lookup = _subfolders[key] ??= _api.ensureFolder(
+      name,
+      parentId: folderId,
+    );
+    try {
+      return await lookup;
+    } catch (_) {
+      // Se vuelve a intentar la próxima vez.
+      _subfolders.remove(key);
+      rethrow;
+    }
+  }
+
   @override
   Future<void> rename({required String fileId, required String name}) =>
       _api.rename(fileId: fileId, name: name);
+
+  @override
+  Future<List<FolderEntry>> list({
+    required String folderId,
+    String subfolder = '',
+  }) async {
+    var parent = folderId;
+    if (subfolder.isNotEmpty) {
+      final known = _subfolders[(folderId, subfolder)];
+      final id = known != null
+          ? await known
+          : await _api.findFolder(subfolder, parentId: folderId);
+      if (id == null) return const [];
+      parent = id;
+    }
+    return _api.list(parent);
+  }
+
+  @override
+  Future<void> download({
+    required String fileId,
+    required String destination,
+  }) => _api.download(fileId: fileId, destination: destination);
+
+  @override
+  Future<void> delete({required String fileId}) => _api.trash(fileId);
+
+  @override
+  Future<void> createFolder({required String folderId, required String name}) =>
+      _subfolder(folderId, name);
 }
 
 /// Llamadas a la API REST de Google Drive v3.
@@ -208,16 +260,17 @@ class DriveApi {
   static const folderMimeType = 'application/vnd.google-apps.folder';
   static const _jsonType = 'application/json; charset=UTF-8';
 
+  static String _escape(String value) =>
+      value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+
   /// Devuelve el id de la carpeta [name] creada por la app (dentro de
-  /// [parentId], si se indica), creándola si no existe.
-  Future<String> ensureFolder(String name, {String? parentId}) async {
-    String escape(String value) =>
-        value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+  /// [parentId], si se indica), o `null` si no existe.
+  Future<String?> findFolder(String name, {String? parentId}) async {
     final conditions = [
       "mimeType='$folderMimeType'",
-      "name='${escape(name)}'",
+      "name='${_escape(name)}'",
       'trashed=false',
-      if (parentId != null) "'${escape(parentId)}' in parents",
+      if (parentId != null) "'${_escape(parentId)}' in parents",
     ];
     final found = await _send(
       (headers) => _client.get(
@@ -235,6 +288,13 @@ class DriveApi {
     if (files is List && files.isNotEmpty) {
       return (files.first as Map<String, dynamic>)['id'] as String;
     }
+    return null;
+  }
+
+  /// Devuelve el id de la carpeta [name] creada por la app (dentro de
+  /// [parentId], si se indica), creándola si no existe.
+  Future<String> ensureFolder(String name, {String? parentId}) async {
+    if (await findFolder(name, parentId: parentId) case final id?) return id;
 
     final created = await _send(
       (headers) => _client.post(
@@ -282,6 +342,98 @@ class DriveApi {
         body: jsonEncode({'name': name}),
       ),
     );
+  }
+
+  /// Archivos y subcarpetas (no borrados) de la carpeta [folderId].
+  Future<List<FolderEntry>> list(String folderId) async {
+    final entries = <FolderEntry>[];
+    String? pageToken;
+    do {
+      final response = await _send(
+        (headers) => _client.get(
+          _files.replace(
+            queryParameters: {
+              'q': "'${_escape(folderId)}' in parents and trashed=false",
+              'fields':
+                  'nextPageToken,files(id,name,mimeType,size,modifiedTime)',
+              'pageSize': '1000',
+              'spaces': 'drive',
+              'pageToken': ?pageToken,
+            },
+          ),
+          headers: headers,
+        ),
+      );
+      final json = _json(response);
+      for (final file in json['files'] as List? ?? const []) {
+        if (file is! Map<String, dynamic>) continue;
+        final id = file['id'];
+        final name = file['name'];
+        if (id is! String || name is! String) continue;
+        entries.add(
+          FolderEntry(
+            ref: id,
+            name: name,
+            isDirectory: file['mimeType'] == folderMimeType,
+            size: int.tryParse('${file['size']}'),
+            modified: DateTime.tryParse('${file['modifiedTime']}')?.toLocal(),
+          ),
+        );
+      }
+      pageToken = json['nextPageToken'] as String?;
+    } while (pageToken != null);
+    return entries;
+  }
+
+  /// Descarga el contenido de [fileId] a [destination], sin cargarlo entero
+  /// en memoria.
+  Future<void> download({
+    required String fileId,
+    required String destination,
+  }) async {
+    final uri = _files.replace(
+      path: '${_files.path}/$fileId',
+      queryParameters: {'alt': 'media'},
+    );
+    Future<http.StreamedResponse> get(Map<String, String> headers) =>
+        _client.send(http.Request('GET', uri)..headers.addAll(headers));
+
+    var headers = await _authHeaders();
+    var response = await get(headers);
+    if (response.statusCode == 401) {
+      await response.stream.drain<void>();
+      final token = headers['Authorization']?.replaceFirst('Bearer ', '');
+      headers = await _authHeaders(invalidToken: token);
+      response = await get(headers);
+      if (response.statusCode == 401) throw const DriveAuthException();
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      _check(await http.Response.fromStream(response));
+    }
+    final sink = File(destination).openWrite();
+    try {
+      await sink.addStream(response.stream);
+    } finally {
+      await sink.close();
+    }
+  }
+
+  /// Mueve [fileId] a la papelera. Si ya no existe, no hace nada.
+  Future<void> trash(String fileId) async {
+    try {
+      await _send(
+        (headers) => _client.patch(
+          _files.replace(
+            path: '${_files.path}/$fileId',
+            queryParameters: {'fields': 'id'},
+          ),
+          headers: {...headers, 'Content-Type': _jsonType},
+          body: jsonEncode({'trashed': true}),
+        ),
+      );
+    } on DriveException catch (e) {
+      if (e.statusCode != 404) rethrow;
+    }
   }
 
   /// Subida reanudable: primero se envían los metadatos y luego el audio, sin

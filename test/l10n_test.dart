@@ -73,7 +73,7 @@ void main() {
           recorderFactory: () => recorder,
           playerFactory: FakeAudioPlayerService.new,
           editor: FakeRecordingEditor(repository: repository),
-          sync: fakeCopySync(repository),
+          sync: fakeStorageSync(repository),
         ),
       );
       await tester.pumpAndSettle();

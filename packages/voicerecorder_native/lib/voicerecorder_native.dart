@@ -77,7 +77,8 @@ class NativeFolderEntry {
 }
 
 /// Acceso a carpetas fuera de la app (almacenamiento del dispositivo, iCloud
-/// Drive, tarjeta SD…) elegidas por el usuario.
+/// Drive, tarjeta SD…) elegidas por el usuario: listar, leer, escribir,
+/// renombrar y borrar archivos.
 class NativeFolders {
   const NativeFolders();
 
@@ -165,6 +166,15 @@ class NativeFolders {
     return _channel.invokeMethod<void>('createFolder', {
       'folder': folder,
       'name': name,
+    });
+  }
+
+  /// Borra el archivo [ref] de la carpeta [folder]. Si ya no existe, no hace
+  /// nada.
+  Future<void> deleteFile({required String folder, required String ref}) {
+    return _channel.invokeMethod<void>('deleteFile', {
+      'folder': folder,
+      'ref': ref,
     });
   }
 

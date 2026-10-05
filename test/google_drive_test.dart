@@ -230,4 +230,92 @@ void main() {
       throwsA(isA<DriveAuthException>()),
     );
   });
+
+  test('lista los archivos de una carpeta, página a página', () async {
+    final drive = api((request) async {
+      if (request.url.queryParameters['pageToken'] == null) {
+        return json({
+          'nextPageToken': 'p2',
+          'files': [
+            {
+              'id': 'f1',
+              'name': 'Idea.m4a',
+              'mimeType': 'audio/mp4',
+              'size': '1234',
+              'modifiedTime': '2026-03-02T09:15:00.000Z',
+            },
+          ],
+        });
+      }
+      return json({
+        'files': [
+          {
+            'id': 'd1',
+            'name': 'Clases',
+            'mimeType': 'application/vnd.google-apps.folder',
+          },
+        ],
+      });
+    });
+
+    final entries = await drive.list('folder1');
+
+    expect(entries.map((e) => (e.ref, e.name, e.isDirectory, e.size)), [
+      ('f1', 'Idea.m4a', false, 1234),
+      ('d1', 'Clases', true, null),
+    ]);
+    expect(entries.first.modified, DateTime.utc(2026, 3, 2, 9, 15).toLocal());
+    expect(
+      requests.first.url.queryParameters['q'],
+      "'folder1' in parents and trashed=false",
+    );
+    expect(requests.last.url.queryParameters['pageToken'], 'p2');
+  });
+
+  test('descarga un archivo, renovando el token si ha caducado', () async {
+    final drive = api((request) async {
+      if (request.headers['Authorization'] == 'Bearer token1') {
+        return http.Response('', 401);
+      }
+      return http.Response.bytes([5, 6, 7], 200);
+    });
+    final destination = p.join(directory.path, 'descarga.m4a');
+
+    await drive.download(fileId: 'f1', destination: destination);
+
+    expect(File(destination).readAsBytesSync(), [5, 6, 7]);
+    expect(requests.last.url.path, '/drive/v3/files/f1');
+    expect(requests.last.url.queryParameters['alt'], 'media');
+    expect(invalidated.last, 'token1');
+  });
+
+  test('si la descarga falla, lanza el error de Drive', () async {
+    final drive = api(
+      (request) async => json({
+        'error': {'message': 'File not found'},
+      }, status: 404),
+    );
+
+    await expectLater(
+      drive.download(
+        fileId: 'f1',
+        destination: p.join(directory.path, 'x.m4a'),
+      ),
+      throwsA(
+        isA<DriveException>().having((e) => e.statusCode, 'statusCode', 404),
+      ),
+    );
+  });
+
+  test('borrar manda a la papelera y no falla si ya no existe', () async {
+    var status = 200;
+    final drive = api((request) async => json({'id': 'f1'}, status: status));
+
+    await drive.trash('f1');
+    expect(requests.last.method, 'PATCH');
+    expect(jsonDecode(requests.last.body), {'trashed': true});
+
+    status = 404;
+    await drive.trash('f1');
+  });
 }

@@ -52,12 +52,7 @@ void main() {
 
   test('guarda las carpetas, la abierta y la cuenta atrás', () async {
     const settings = AppSettings(
-      folder: FolderSettings(
-        id: 'tree://music',
-        name: 'Music',
-        importFiles: false,
-        ignored: {'doc1'},
-      ),
+      folder: FolderSettings(id: 'tree://music', name: 'Music'),
       folders: ['Clases', 'Ideas'],
       openFolder: 'Clases',
       countdownSeconds: 10,
@@ -65,6 +60,33 @@ void main() {
     await store.save(settings);
 
     expect(await store.load(), settings);
+  });
+
+  test('las grabaciones van a la carpeta y, si no hay, a Drive', () {
+    const folder = FolderSettings(id: 'tree://music', name: 'Music');
+    const drive = DriveSettings(email: 'ana@example.com', folderId: 'f1');
+
+    expect(const AppSettings().storage, isNull);
+    expect(const AppSettings(folder: folder).storage, StorageKind.folder);
+    expect(const AppSettings(drive: drive).storage, StorageKind.drive);
+    const both = AppSettings(folder: folder, drive: drive);
+    expect(both.storage, StorageKind.folder);
+    expect(both.copiesToDrive, isTrue);
+    expect(const AppSettings(drive: drive).copiesToDrive, isFalse);
+  });
+
+  test('lee las opciones de la carpeta de versiones anteriores', () async {
+    final file = File(p.join(directory.path, 'sub', 'settings.json'));
+    await file.create(recursive: true);
+    await file.writeAsString(
+      '{"folder": {"id": "tree://music", "name": "Music", "import": false, '
+      '"ignored": ["doc1"]}}',
+    );
+
+    expect(
+      (await store.load()).folder,
+      const FolderSettings(id: 'tree://music', name: 'Music'),
+    );
   });
 
   test('tolera un archivo corrupto', () async {
