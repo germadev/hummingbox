@@ -106,8 +106,8 @@ void main() {
     expect(await repository.loadAll(), isEmpty);
   });
 
-  test('añade grabaciones numeradas y las lista de la más nueva a la más '
-      'antigua', () async {
+  test('añade grabaciones numeradas y las lista de la más antigua a la más '
+      'nueva', () async {
     final first = await repository.add(
       path: await createAudioFile(),
       duration: const Duration(seconds: 5),
@@ -122,8 +122,8 @@ void main() {
     expect(second!.name, 'Grabación 2');
 
     final all = await repository.loadAll();
-    expect(all.map((r) => r.id), [second.id, first.id]);
-    expect(all.first.duration, const Duration(seconds: 12));
+    expect(all.map((r) => r.id), [first.id, second.id]);
+    expect(all.last.duration, const Duration(seconds: 12));
   });
 
   test('conserva los metadatos entre sesiones', () async {

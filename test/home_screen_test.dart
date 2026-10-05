@@ -381,6 +381,57 @@ void main() {
     expect(folders.files.values, ['Notas.m4a']);
   });
 
+  group('orden de la lista', () {
+    /// Más de las que caben en la pantalla, de la más antigua a la más
+    /// reciente.
+    List<Recording> many() => [
+      for (var i = 0; i < 20; i++)
+        sample('r$i', 'Toma $i', createdAt: DateTime(2020, 1, 1 + i)),
+    ];
+
+    testWidgets('la más antigua arriba y las siguientes debajo', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        sample('new', 'Reciente', createdAt: DateTime(2020, 1, 2)),
+        sample('old', 'Antigua', createdAt: DateTime(2020, 1, 1)),
+      ]);
+      await pumpApp(tester);
+
+      expect(
+        tester.getTopLeft(find.text('Antigua')).dy,
+        lessThan(tester.getTopLeft(find.text('Reciente')).dy),
+      );
+    });
+
+    testWidgets('al abrir la app, muestra el final de la lista', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository(many());
+      await pumpApp(tester);
+
+      expect(find.text('Toma 19').hitTestable(), findsOneWidget);
+      expect(find.text('Toma 0').hitTestable(), findsNothing);
+    });
+
+    testWidgets('al añadir una grabación, baja hasta ella', (tester) async {
+      repository = InMemoryRecordingsRepository(many());
+      await pumpApp(tester);
+      // Se sube hasta el principio.
+      await tester.fling(find.text('Toma 19'), const Offset(0, 10000), 5000);
+      await tester.pumpAndSettle();
+      expect(find.text('Toma 0').hitTestable(), findsOneWidget);
+
+      await tester.tap(record());
+      await pumpAnimations(tester);
+      await tester.tap(record());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Grabación 1').hitTestable(), findsOneWidget);
+      expect(find.text('Toma 0').hitTestable(), findsNothing);
+    });
+  });
+
   group('menú inicial', () {
     setUp(
       () => store = InMemorySettingsStore(

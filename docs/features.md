@@ -58,9 +58,10 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 
 ## Recordings list
 
-- Sorted from newest to oldest, with the date ("Today", "Yesterday"…),
-  duration, **format and quality** ("AAC · 128 kbps · 44.1 kHz") and the
-  **full waveform** of each one. **Tap the name** to rename it.
+- Sorted from oldest to newest: new recordings appear at the bottom, and the
+  list scrolls to the end when the app opens and when one is added.
+- Each one shows the date ("Today", "Yesterday"…), duration, **format and
+  quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**. **Tap the name** to rename it.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek (also on recordings that are not playing).
 - **Rename**, **share** (with the name you gave it) and **delete**.

@@ -102,9 +102,18 @@ class _HomeScreenState extends State<HomeScreen> {
   /// indica.
   final _pull = ValueNotifier(_Pull.none);
 
-  /// Todas las grabaciones, de todas las carpetas.
+  /// Todas las grabaciones, de todas las carpetas, de la más antigua a la
+  /// más reciente.
   List<Recording> _recordings = const [];
   bool _loading = true;
+
+  /// Desplazamiento de la lista: las grabaciones más recientes están al
+  /// final.
+  final _scroll = ScrollController();
+
+  /// Lo que muestra la lista (la carpeta o los resultados de la búsqueda):
+  /// al cambiar, la de una carpeta se muestra desde el final.
+  Object? _shownList;
 
   /// Si ya se puede transcribir automáticamente: tras leer el destino la
   /// primera vez, para no adelantarse a los `.txt` que ya hay.
@@ -161,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _search.dispose();
     _searchFocus.dispose();
     _pull.dispose();
+    _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
     widget.sync.removeListener(_onSettingsChanged);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
@@ -328,9 +338,37 @@ class _HomeScreenState extends State<HomeScreen> {
       await _player.stop();
     }
     setState(() => _recordings = recordings);
-    if (added > 0) _showMessage((l10n) => l10n.newRecordingsFound(added));
+    if (added > 0) {
+      _scrollToEnd(animate: true);
+      _showMessage((l10n) => l10n.newRecordingsFound(added));
+    }
     unawaited(_addMissingDetails());
     unawaited(_transcribeMissing());
+  }
+
+  /// Lleva la lista al final, donde están las grabaciones más recientes (no
+  /// en los resultados de una búsqueda), cuando se haya dibujado.
+  void _scrollToEnd({bool animate = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_query.isEmpty || !_scroll.hasClients) return;
+      if (animate) {
+        final position = _scroll.position;
+        await position.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+      // La altura de las grabaciones que aún no se han dibujado es estimada:
+      // al dibujarlas puede crecer, y se vuelve a bajar hasta el final.
+      for (var i = 0; i < 10; i++) {
+        if (!mounted || !_scroll.hasClients) return;
+        final position = _scroll.position;
+        if (position.pixels >= position.maxScrollExtent) return;
+        position.jumpTo(position.maxScrollExtent);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    });
   }
 
   // --- Búsqueda ---
@@ -483,7 +521,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final saved = recording;
-    setState(() => _recordings = [saved, ..._recordings]);
+    setState(() => _recordings = [..._recordings, saved]);
+    _scrollToEnd(animate: true);
     _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncStorage();
     unawaited(_transcribeMissing());
@@ -583,9 +622,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final edited = result.recording;
     setState(() {
       _recordings = result.isCopy
-          ? [edited, ..._recordings]
+          ? [..._recordings, edited]
           : [for (final r in _recordings) r.id == edited.id ? edited : r];
     });
+    if (result.isCopy) _scrollToEnd(animate: true);
     _showMessage(
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
@@ -765,7 +805,8 @@ class _HomeScreenState extends State<HomeScreen> {
       do {
         _transcriptionsPending = false;
         await widget.sync.load();
-        for (final recording in _recordings) {
+        // De la más reciente a la más antigua.
+        for (final recording in _recordings.reversed) {
           if (!mounted || !_autoTranscribing) return;
           if (!_needsAutoTranscript(recording)) continue;
           if (!await widget.sync.hasLocalAudio(recording)) continue;
@@ -1261,6 +1302,13 @@ class _HomeScreenState extends State<HomeScreen> {
           if (recording.folder == folder) recording,
       ];
     }
+    // Al abrir la app o una carpeta (o al terminar de buscar), desde el
+    // final, con las más recientes; los resultados, desde el principio.
+    final Object shown = searching ? const _SearchResults() : folder;
+    if (shown != _shownList) {
+      _shownList = shown;
+      if (!searching) _scrollToEnd();
+    }
     final l10n = context.l10n;
     // Tirando hacia abajo desde arriba de la lista se busca.
     return _PullToSearch(
@@ -1284,12 +1332,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 hint: l10n.emptyFolderHint,
               ),
             }
-          : _buildList(recordings, searching ? query : null),
+          : _buildList(recordings, shown, searching ? query : null),
     );
   }
 
-  Widget _buildList(List<Recording> recordings, SearchQuery? query) {
+  Widget _buildList(
+    List<Recording> recordings,
+    Object shown,
+    SearchQuery? query,
+  ) {
     return ListView.builder(
+      // Una lista nueva para cada carpeta y para los resultados.
+      key: ValueKey(shown),
+      controller: _scroll,
       // También con pocas grabaciones, para poder tirar hacia abajo.
       physics: _PullToSearch.physics,
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1498,6 +1553,13 @@ class _SearchField extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Lo que muestra la lista mientras se busca: los resultados, de todas las
+/// carpetas.
+@immutable
+class _SearchResults {
+  const _SearchResults();
 }
 
 /// Cuánto se ha tirado de la lista hacia abajo para buscar.

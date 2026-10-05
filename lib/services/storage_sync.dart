@@ -591,7 +591,7 @@ class StorageSync extends ChangeNotifier {
         var failed = 0;
         Object? lastError;
         // De la más antigua a la más reciente, para que se guarden en orden.
-        for (final recording in (await repository.loadAll()).reversed) {
+        for (final recording in await repository.loadAll()) {
           if (_disposed || !_isCurrent(target, role)) break;
           try {
             await _save(

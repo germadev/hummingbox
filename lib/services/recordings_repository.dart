@@ -23,7 +23,7 @@ abstract interface class RecordingsRepository {
     RecordingFormat format = RecordingFormat.aac,
   });
 
-  /// Devuelve todas las grabaciones, de la más reciente a la más antigua.
+  /// Devuelve todas las grabaciones, de la más antigua a la más reciente.
   Future<List<Recording>> loadAll();
 
   /// Registra el archivo de audio de [path] como una nueva grabación de la
@@ -228,7 +228,8 @@ class FileRecordingsRepository implements RecordingsRepository {
       );
     }
 
-    recordings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    // De la más antigua a la más reciente: las nuevas, al final.
+    recordings.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return recordings;
   }
 

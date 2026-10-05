@@ -156,7 +156,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
 
   @override
   Future<List<Recording>> loadAll() async =>
-      [...recordings]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      [...recordings]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
   @override
   Future<Recording?> add({
