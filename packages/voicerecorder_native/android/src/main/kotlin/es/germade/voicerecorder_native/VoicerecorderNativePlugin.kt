@@ -66,6 +66,11 @@ internal class BackgroundRunner {
             try {
                 val value = task()
                 mainHandler.post { result.success(value) }
+            } catch (e: SecurityException) {
+                // Se retiró el permiso sobre la carpeta.
+                mainHandler.post {
+                    result.error("no_permission", e.message ?: e.javaClass.simpleName, null)
+                }
             } catch (e: Exception) {
                 mainHandler.post {
                     result.error("failed", e.message ?: e.javaClass.simpleName, null)

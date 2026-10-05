@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../audio/levels.dart';
+import '../l10n/l10n.dart';
 import '../utils/formatters.dart';
 
 enum _Drag { start, end, playhead }
@@ -141,7 +142,9 @@ class _TrimWaveformState extends State<TrimWaveform> {
             bottom: 0,
             child: Semantics(
               slider: true,
-              label: isStart ? 'Inicio del recorte' : 'Fin del recorte',
+              label: isStart
+                  ? context.l10n.trimStartHandle
+                  : context.l10n.trimEndHandle,
               value: formatDuration(time, showTenths: true),
               increasedValue: formatDuration(time + _step, showTenths: true),
               decreasedValue: formatDuration(time - _step, showTenths: true),

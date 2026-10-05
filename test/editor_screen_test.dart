@@ -4,6 +4,7 @@ import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/screens/editor_screen.dart';
 
 import 'fakes.dart';
+import 'l10n_helpers.dart';
 
 void main() {
   late InMemoryRecordingsRepository repository;
@@ -30,7 +31,7 @@ void main() {
 
   Future<void> pumpEditor(WidgetTester tester) async {
     await tester.pumpWidget(
-      MaterialApp(
+      localizedApp(
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
@@ -154,7 +155,7 @@ void main() {
     await tester.tap(find.text('Normalizar'));
     await tester.pump();
 
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.text('¿Descartar los cambios?'), findsOneWidget);
 
@@ -168,7 +169,7 @@ void main() {
   testWidgets('sale sin preguntar si no hay cambios', (tester) async {
     await pumpEditor(tester);
 
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
 
     expect(closed, isTrue);
@@ -181,13 +182,47 @@ void main() {
 
     await tester.tap(find.byKey(const Key('preview-button')));
     await tester.pumpAndSettle();
-    expect(player.calls, ['play /fake/a.m4a @0']);
+    // Sin cambios de volumen, suena el original decodificado.
+    expect(player.calls, ['play /fake/editor/source.wav @0']);
     expect(find.byTooltip('Pausar'), findsOneWidget);
 
     player.positionController.add(const Duration(seconds: 10));
     await tester.pumpAndSettle();
     expect(player.calls.last, 'pause');
     expect(find.byTooltip('Escuchar la selección'), findsOneWidget);
+  });
+
+  testWidgets('la escucha suena con el volumen y los fundidos', (tester) async {
+    await pumpEditor(tester);
+    await tester.drag(
+      find.byKey(const Key('gain-slider')),
+      const Offset(200, 0),
+    );
+    await tester.pumpAndSettle();
+    final edit = editor.previews.isEmpty ? null : editor.previews.last;
+    expect(edit, isNull);
+
+    await tester.tap(find.byKey(const Key('preview-button')));
+    await tester.pumpAndSettle();
+
+    // Se genera la selección con el volumen y suena eso.
+    expect(editor.previews.single.gainDb, greaterThan(0));
+    expect(player.calls.last, 'play /fake/editor/preview_0.wav @0');
+
+    // Las posiciones del archivo generado son relativas a la selección.
+    player.positionController.add(const Duration(seconds: 2));
+    await tester.pump();
+
+    // Si se cambia el volumen mientras suena, se regenera y sigue en el
+    // mismo punto.
+    await tester.drag(
+      find.byKey(const Key('gain-slider')),
+      const Offset(-100, 0),
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(editor.previews, hasLength(2));
+    expect(player.calls.last, 'play /fake/editor/preview_1.wav @2000');
   });
 
   testWidgets('avisa si no puede abrir el audio', (tester) async {

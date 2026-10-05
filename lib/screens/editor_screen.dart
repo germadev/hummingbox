@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../audio/audio_edit.dart';
 import '../audio/levels.dart';
+import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../services/audio_player_service.dart';
 import '../services/recording_editor.dart';
@@ -63,6 +64,25 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _previewPlaying = false;
   Duration? _playhead;
 
+  /// Archivo de la escucha previa: la selección con el volumen y los
+  /// fundidos, generada para [_previewEdit].
+  String? _previewPath;
+  AudioEdit? _previewEdit;
+
+  /// Posición del original en la que empieza el archivo que suena (el inicio
+  /// de la selección, o cero si suena el original).
+  Duration _previewOffset = Duration.zero;
+
+  /// Mientras se genera la escucha previa.
+  bool _rendering = false;
+
+  /// Aumenta con cada petición de escucha, para descartar las que se han
+  /// quedado atrás.
+  int _previewRequest = 0;
+
+  /// Regenera la escucha previa poco después de cambiar algo mientras suena.
+  Timer? _refreshPreview;
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +95,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   void dispose() {
+    _refreshPreview?.cancel();
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
@@ -121,16 +142,20 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _onPreviewPosition(Duration position) {
     if (!mounted || !_previewPlaying) return;
-    if (position >= _edit.end) {
+    final time = position + _previewOffset;
+    if (time >= _edit.end) {
       _player.pause();
       setState(() => _playhead = _edit.start);
       return;
     }
-    setState(() => _playhead = position);
+    setState(() => _playhead = time);
   }
 
   Future<void> _togglePreview() async {
-    if (_previewPlaying) {
+    if (_previewPlaying || _rendering) {
+      _previewRequest++;
+      _refreshPreview?.cancel();
+      setState(() => _rendering = false);
       await _player.pause();
       return;
     }
@@ -140,12 +165,63 @@ class _EditorScreenState extends State<EditorScreen> {
         ? playhead
         : _edit.start;
     setState(() => _playhead = from);
-    await _player.play(widget.recording.path, position: from);
+    await _playPreview(from);
+  }
+
+  /// Reproduce desde [from] la selección tal como quedará: con el volumen y
+  /// los fundidos. Si no los hay, suena el original decodificado.
+  Future<void> _playPreview(Duration from) async {
+    final session = _session;
+    if (session == null) return;
+    final request = ++_previewRequest;
+    final edit = _edit;
+
+    final String path;
+    final Duration offset;
+    if (edit.gainDb == 0 &&
+        edit.fadeIn == Duration.zero &&
+        edit.fadeOut == Duration.zero) {
+      path = session.sourcePath;
+      offset = Duration.zero;
+    } else {
+      if (_previewEdit != edit || _previewPath == null) {
+        setState(() => _rendering = true);
+        final String rendered;
+        try {
+          rendered = await widget.editor.renderPreview(session, edit);
+        } catch (_) {
+          if (mounted && request == _previewRequest) {
+            setState(() => _rendering = false);
+            _showMessage((l10n) => l10n.previewFailed);
+          }
+          return;
+        }
+        // Mientras se generaba, se pausó o se pidió otra.
+        if (!mounted || request != _previewRequest) return;
+        _previewPath = rendered;
+        _previewEdit = edit;
+        setState(() => _rendering = false);
+      }
+      path = _previewPath!;
+      offset = edit.start;
+    }
+    _previewOffset = offset;
+    await _player.play(path, position: from - offset);
+  }
+
+  /// Tras un cambio mientras suena, vuelve a generar la escucha y sigue desde
+  /// el mismo punto.
+  void _schedulePreviewRefresh() {
+    _refreshPreview?.cancel();
+    _refreshPreview = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted || !_previewPlaying) return;
+      _playPreview(_playhead ?? _edit.start);
+    });
   }
 
   void _seekPreview(Duration position) {
     setState(() => _playhead = position);
-    if (_previewPlaying) _player.seek(position);
+    if (_previewPlaying) _player.seek(position - _previewOffset);
   }
 
   // --- Cambios ---
@@ -157,14 +233,16 @@ class _EditorScreenState extends State<EditorScreen> {
       fadeIn: edit.fadeIn > maxFade ? maxFade : edit.fadeIn,
       fadeOut: edit.fadeOut > maxFade ? maxFade : edit.fadeOut,
     );
+    if (edit == _edit) return;
     setState(() {
       _edit = edit;
       final playhead = _playhead;
       if (playhead != null && (playhead < edit.start || playhead > edit.end)) {
         _playhead = edit.start;
-        if (_previewPlaying) _player.seek(edit.start);
       }
     });
+    // Lo que suena tiene que reflejar el cambio.
+    if (_previewPlaying) _schedulePreviewRefresh();
   }
 
   Duration _maxFadeFor(AudioEdit edit) {
@@ -221,6 +299,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final session = _session;
     if (session == null || _saving) return;
 
+    final copyName = context.l10n.editedCopyName(session.recording.name);
     setState(() => _savingAsCopy = asCopy);
     await _player.stop();
     try {
@@ -228,24 +307,32 @@ class _EditorScreenState extends State<EditorScreen> {
         session,
         _edit,
         asCopy: asCopy,
+        copyName: copyName,
       );
       if (!mounted) return;
       Navigator.pop(context, EditResult(recording, isCopy: asCopy));
     } catch (_) {
       if (!mounted) return;
       setState(() => _savingAsCopy = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo guardar la edición')),
-      );
+      _showMessage((l10n) => l10n.editSaveFailed);
     }
+  }
+
+  /// Muestra un aviso con el texto que devuelve [message] en el idioma de la
+  /// app (se lee al mostrarlo, así que se puede llamar tras un `await`).
+  void _showMessage(String Function(AppLocalizations l10n) message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
   Future<void> _confirmExit() async {
     final discard = await showConfirmDialog(
       context,
-      title: '¿Descartar los cambios?',
-      message: 'Los cambios que no has guardado se perderán.',
-      confirmLabel: 'Descartar',
+      title: context.l10n.discardChangesTitle,
+      message: context.l10n.discardChangesMessage,
+      confirmLabel: context.l10n.discard,
     );
     if (discard && mounted) Navigator.pop(context);
   }
@@ -261,11 +348,11 @@ class _EditorScreenState extends State<EditorScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Editar grabación'),
+          title: Text(context.l10n.editRecording),
           actions: [
             TextButton(
               onPressed: _changed && !_saving ? _reset : null,
-              child: const Text('Restablecer'),
+              child: Text(context.l10n.reset),
             ),
           ],
           bottom: _saving
@@ -295,7 +382,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 key: const Key('save-copy-button'),
                 icon: const Icon(Icons.file_copy_outlined),
                 label: _ButtonLabel(
-                  _savingAsCopy == true ? 'Guardando…' : 'Guardar copia',
+                  _savingAsCopy == true
+                      ? context.l10n.saving
+                      : context.l10n.saveCopy,
                 ),
                 onPressed: canSave ? () => _save(asCopy: true) : null,
               ),
@@ -306,7 +395,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 key: const Key('save-edit-button'),
                 icon: const Icon(Icons.save_outlined),
                 label: _ButtonLabel(
-                  _savingAsCopy == false ? 'Guardando…' : 'Guardar',
+                  _savingAsCopy == false
+                      ? context.l10n.saving
+                      : context.l10n.save,
                 ),
                 onPressed: canSave ? () => _save(asCopy: false) : null,
               ),
@@ -319,17 +410,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _buildBody() {
     if (_failed) {
-      return const _Message(
+      return _Message(
         icon: Icons.error_outline,
-        text: 'No se pudo abrir el audio para editarlo.',
+        text: context.l10n.openAudioFailed,
       );
     }
     final session = _session;
     if (session == null) {
-      return const _Message(text: 'Preparando el audio…', loading: true);
+      return _Message(text: context.l10n.preparingAudio, loading: true);
     }
 
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final maxFade = _maxFadeFor(_edit);
     final gainLabel = formatGain(_edit.gainDb);
 
@@ -360,9 +452,9 @@ class _EditorScreenState extends State<EditorScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _TimeLabel(label: 'Inicio', time: _edit.start),
-              _TimeLabel(label: 'Duración', time: _edit.length),
-              _TimeLabel(label: 'Fin', time: _edit.end),
+              _TimeLabel(label: l10n.trimStartLabel, time: _edit.start),
+              _TimeLabel(label: l10n.durationLabel, time: _edit.length),
+              _TimeLabel(label: l10n.trimEndLabel, time: _edit.end),
             ],
           ),
           const SizedBox(height: 8),
@@ -370,15 +462,25 @@ class _EditorScreenState extends State<EditorScreen> {
             child: IconButton.filledTonal(
               key: const Key('preview-button'),
               iconSize: 32,
-              tooltip: _previewPlaying ? 'Pausar' : 'Escuchar la selección',
-              icon: Icon(_previewPlaying ? Icons.pause : Icons.play_arrow),
+              tooltip: _previewPlaying || _rendering
+                  ? l10n.pause
+                  : l10n.playSelection,
+              icon: _rendering
+                  ? const SizedBox.square(
+                      dimension: 32,
+                      child: Padding(
+                        padding: EdgeInsets.all(4),
+                        child: CircularProgressIndicator(strokeWidth: 3),
+                      ),
+                    )
+                  : Icon(_previewPlaying ? Icons.pause : Icons.play_arrow),
               onPressed: _togglePreview,
             ),
           ),
           const Divider(height: 32),
           _SectionHeader(
             icon: Icons.volume_up_outlined,
-            title: 'Volumen',
+            title: l10n.volume,
             value: gainLabel,
           ),
           Slider(
@@ -396,7 +498,7 @@ class _EditorScreenState extends State<EditorScreen> {
             children: [
               OutlinedButton.icon(
                 icon: const Icon(Icons.auto_fix_high),
-                label: const Text('Normalizar'),
+                label: Text(l10n.normalize),
                 onPressed: _selectionPeak > 0 ? _normalize : null,
               ),
               if (_clips)
@@ -410,7 +512,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Las partes más fuertes se saturarán',
+                      l10n.clippingWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.error,
                       ),
@@ -422,7 +524,7 @@ class _EditorScreenState extends State<EditorScreen> {
           const Divider(height: 32),
           _SectionHeader(
             icon: Icons.trending_up,
-            title: 'Fundido de entrada',
+            title: l10n.fadeIn,
             value: formatSeconds(_edit.fadeIn),
           ),
           _FadeSlider(
@@ -433,7 +535,7 @@ class _EditorScreenState extends State<EditorScreen> {
           ),
           _SectionHeader(
             icon: Icons.trending_down,
-            title: 'Fundido de salida',
+            title: l10n.fadeOut,
             value: formatSeconds(_edit.fadeOut),
           ),
           _FadeSlider(
@@ -443,13 +545,6 @@ class _EditorScreenState extends State<EditorScreen> {
             onChanged: (value) => _setEdit(_edit.copyWith(fadeOut: value)),
           ),
           const SizedBox(height: 8),
-          Text(
-            'La escucha previa reproduce la selección con el volumen '
-            'original.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
         ],
       ),
     );

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/recording_options.dart';
 import 'settings_store.dart';
 
 /// Hay que volver a conectar la cuenta de Google (sesión cerrada, permiso
@@ -38,18 +39,21 @@ abstract interface class DriveService {
   bool get isAvailable;
 
   /// Inicia sesión, pide permiso para crear archivos en Drive y prepara la
-  /// carpeta de las grabaciones. Devuelve `null` si el usuario lo cancela.
-  Future<DriveSettings?> connect();
+  /// carpeta de las grabaciones, [folderName]. Devuelve `null` si el usuario
+  /// lo cancela.
+  Future<DriveSettings?> connect({required String folderName});
 
   /// Cierra la sesión y retira el permiso.
   Future<void> disconnect();
 
-  /// Sube [path] a la carpeta [folderId] con el nombre [name]. Si [fileId]
-  /// sigue existiendo, sustituye su contenido. Devuelve el id del archivo.
+  /// Sube [path] a la carpeta [folderId] (o a su subcarpeta [subfolder],
+  /// que se crea si no existe) con el nombre [name]. Si [fileId] sigue
+  /// existiendo, sustituye su contenido. Devuelve el id del archivo.
   Future<String> upload({
     required String folderId,
     required String path,
     required String name,
+    String subfolder = '',
     String? fileId,
   });
 
@@ -77,11 +81,13 @@ class GoogleDriveService implements DriveService {
 
   final http.Client _http;
 
-  static const folderName = 'Grabadora';
   static const scopes = ['https://www.googleapis.com/auth/drive.file'];
 
   late final DriveApi _api = DriveApi(_http, _authHeaders);
   Future<void>? _initialization;
+
+  /// Ids de las subcarpetas ya encontradas o creadas, por carpeta y nombre.
+  final _subfolders = <(String, String), Future<String>>{};
 
   @override
   bool get isAvailable {
@@ -98,7 +104,7 @@ class GoogleDriveService implements DriveService {
   }
 
   @override
-  Future<DriveSettings?> connect() async {
+  Future<DriveSettings?> connect({required String folderName}) async {
     if (!isAvailable) {
       throw const DriveAuthException(
         'Esta versión de la app no tiene configurado el acceso a Google',
@@ -114,7 +120,11 @@ class GoogleDriveService implements DriveService {
       rethrow;
     }
     final folderId = await _api.ensureFolder(folderName);
-    return DriveSettings(email: account.email, folderId: folderId);
+    return DriveSettings(
+      email: account.email,
+      folderId: folderId,
+      folderName: folderName,
+    );
   }
 
   @override
@@ -149,8 +159,31 @@ class GoogleDriveService implements DriveService {
     required String folderId,
     required String path,
     required String name,
+    String subfolder = '',
     String? fileId,
-  }) => _api.upload(folderId: folderId, path: path, name: name, fileId: fileId);
+  }) async {
+    var parent = folderId;
+    if (subfolder.isNotEmpty) {
+      final key = (folderId, subfolder);
+      final lookup = _subfolders[key] ??= _api.ensureFolder(
+        subfolder,
+        parentId: folderId,
+      );
+      try {
+        parent = await lookup;
+      } catch (_) {
+        // Se vuelve a intentar en la siguiente subida.
+        _subfolders.remove(key);
+        rethrow;
+      }
+    }
+    return _api.upload(
+      folderId: parent,
+      path: path,
+      name: name,
+      fileId: fileId,
+    );
+  }
 
   @override
   Future<void> rename({required String fileId, required String name}) =>
@@ -173,20 +206,24 @@ class DriveApi {
     'https://www.googleapis.com/upload/drive/v3/files',
   );
   static const folderMimeType = 'application/vnd.google-apps.folder';
-  static const audioMimeType = 'audio/mp4';
   static const _jsonType = 'application/json; charset=UTF-8';
 
-  /// Devuelve el id de la carpeta [name] creada por la app, creándola si no
-  /// existe.
-  Future<String> ensureFolder(String name) async {
-    final escaped = name.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+  /// Devuelve el id de la carpeta [name] creada por la app (dentro de
+  /// [parentId], si se indica), creándola si no existe.
+  Future<String> ensureFolder(String name, {String? parentId}) async {
+    String escape(String value) =>
+        value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
+    final conditions = [
+      "mimeType='$folderMimeType'",
+      "name='${escape(name)}'",
+      'trashed=false',
+      if (parentId != null) "'${escape(parentId)}' in parents",
+    ];
     final found = await _send(
       (headers) => _client.get(
         _files.replace(
           queryParameters: {
-            'q':
-                "mimeType='$folderMimeType' and name='$escaped' "
-                'and trashed=false',
+            'q': conditions.join(' and '),
             'fields': 'files(id)',
             'spaces': 'drive',
           },
@@ -203,7 +240,11 @@ class DriveApi {
       (headers) => _client.post(
         _files.replace(queryParameters: {'fields': 'id'}),
         headers: {...headers, 'Content-Type': _jsonType},
-        body: jsonEncode({'name': name, 'mimeType': folderMimeType}),
+        body: jsonEncode({
+          'name': name,
+          'mimeType': folderMimeType,
+          if (parentId != null) 'parents': [parentId],
+        }),
       ),
     );
     return _json(created)['id'] as String;
@@ -226,7 +267,7 @@ class DriveApi {
     return _upload(path, {
       'name': name,
       'parents': [folderId],
-      'mimeType': audioMimeType,
+      'mimeType': _mimeTypeOf(path),
     });
   }
 
@@ -265,7 +306,7 @@ class DriveApi {
             ..headers.addAll({
               ...headers,
               'Content-Type': _jsonType,
-              'X-Upload-Content-Type': audioMimeType,
+              'X-Upload-Content-Type': _mimeTypeOf(path),
               'X-Upload-Content-Length': '$length',
             })
             ..body = jsonEncode(metadata);
@@ -273,15 +314,12 @@ class DriveApi {
     });
     final location = session.headers['location'];
     if (location == null) {
-      throw DriveException(
-        session.statusCode,
-        'no se recibió la dirección de subida',
-      );
+      throw DriveException(session.statusCode, 'no upload URL received');
     }
 
     final request = http.StreamedRequest('PUT', Uri.parse(location))
       ..contentLength = length
-      ..headers['Content-Type'] = audioMimeType;
+      ..headers['Content-Type'] = _mimeTypeOf(path);
     final responseFuture = _client.send(request);
     await request.sink.addStream(File(path).openRead());
     await request.sink.close();
@@ -289,6 +327,9 @@ class DriveApi {
     _check(response);
     return _json(response)['id'] as String;
   }
+
+  static String _mimeTypeOf(String path) =>
+      (RecordingFormat.fromPath(path) ?? RecordingFormat.aac).mimeType;
 
   /// Hace la petición y, si el token ha caducado, la repite una vez con uno
   /// nuevo.

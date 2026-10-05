@@ -5,20 +5,30 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import '../utils/files.dart';
 
 /// Almacén de las grabaciones del usuario.
 abstract interface class RecordingsRepository {
-  /// Devuelve una ruta libre donde guardar una nueva grabación.
-  Future<String> createRecordingPath();
+  /// Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»).
+  /// Lo fija la interfaz según el idioma.
+  abstract String defaultNamePrefix;
+
+  /// Devuelve una ruta libre donde guardar una nueva grabación en [format].
+  Future<String> createRecordingPath({
+    RecordingFormat format = RecordingFormat.aac,
+  });
 
   /// Devuelve todas las grabaciones, de la más reciente a la más antigua.
   Future<List<Recording>> loadAll();
 
-  /// Registra el archivo de audio de [path] como una nueva grabación, con
-  /// [name] o, si no se indica, el siguiente nombre libre ("Grabación N").
+  /// Registra el archivo de audio de [path] como una nueva grabación de la
+  /// subcarpeta [folder], con [name] o, si no se indica, el siguiente nombre
+  /// libre ("Grabación N"), y con fecha [createdAt] o, si no se indica, la
+  /// actual.
   ///
   /// Devuelve `null` si el archivo no existe.
   Future<Recording?> add({
@@ -26,6 +36,10 @@ abstract interface class RecordingsRepository {
     required Duration duration,
     List<double>? waveform,
     String? name,
+    DateTime? createdAt,
+    AudioInfo? audio,
+    Map<String, CopyState> copies = const {},
+    String folder = '',
   });
 
   Future<Recording> rename(Recording recording, String name);
@@ -37,10 +51,17 @@ abstract interface class RecordingsRepository {
     required String sourcePath,
     required Duration duration,
     List<double>? waveform,
+    AudioInfo? audio,
   });
 
-  /// Guarda la onda calculada para [recording].
-  Future<Recording> setWaveform(Recording recording, List<double> waveform);
+  /// Guarda los datos de [recording] calculados después de registrarla: la
+  /// onda, la duración o el formato. Los que son `null` no cambian.
+  Future<Recording> setDetails(
+    Recording recording, {
+    List<double>? waveform,
+    Duration? duration,
+    AudioInfo? audio,
+  });
 
   /// Guarda (o borra, si [state] es `null`) el estado de la copia de
   /// [recording] en el destino [target].
@@ -62,9 +83,9 @@ class FileRecordingsRepository implements RecordingsRepository {
   FileRecordingsRepository({Future<Directory> Function()? directory})
     : _directoryProvider = directory ?? _defaultDirectory;
 
-  static const fileExtension = '.m4a';
   static const _indexFileName = 'recordings.json';
-  static const defaultNamePrefix = 'Grabación';
+  @override
+  String defaultNamePrefix = 'Grabación';
 
   final Future<Directory> Function() _directoryProvider;
   Directory? _directory;
@@ -87,17 +108,27 @@ class FileRecordingsRepository implements RecordingsRepository {
   }
 
   @override
-  Future<String> createRecordingPath() async {
+  Future<String> createRecordingPath({
+    RecordingFormat format = RecordingFormat.aac,
+  }) async {
     final directory = await _getDirectory();
     final baseId =
         'rec_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
 
+    // El id es el nombre sin extensión: no puede repetirse en otro formato.
+    Future<bool> taken(String id) async {
+      for (final other in RecordingFormat.values) {
+        if (await File(_pathFor(directory, id, other)).exists()) return true;
+      }
+      return false;
+    }
+
     var id = baseId;
     var suffix = 1;
-    while (await File(_pathFor(directory, id)).exists()) {
+    while (await taken(id)) {
       id = '${baseId}_${suffix++}';
     }
-    return _pathFor(directory, id);
+    return _pathFor(directory, id, format);
   }
 
   @override
@@ -107,7 +138,7 @@ class FileRecordingsRepository implements RecordingsRepository {
 
     final recordings = <Recording>[];
     await for (final entity in directory.list()) {
-      if (entity is! File || p.extension(entity.path) != fileExtension) {
+      if (entity is! File || RecordingFormat.fromPath(entity.path) == null) {
         continue;
       }
       final id = p.basenameWithoutExtension(entity.path);
@@ -136,6 +167,10 @@ class FileRecordingsRepository implements RecordingsRepository {
     required Duration duration,
     List<double>? waveform,
     String? name,
+    DateTime? createdAt,
+    AudioInfo? audio,
+    Map<String, CopyState> copies = const {},
+    String folder = '',
   }) async {
     if (!await File(path).exists()) return null;
 
@@ -147,10 +182,16 @@ class FileRecordingsRepository implements RecordingsRepository {
         path: path,
         name:
             name ??
-            nextDefaultName(index.values.map((m) => m['name'] as String?)),
-        createdAt: DateTime.now(),
+            nextDefaultName(
+              index.values.map((m) => m['name'] as String?),
+              prefix: defaultNamePrefix,
+            ),
+        createdAt: createdAt ?? DateTime.now(),
         duration: duration,
         waveform: waveform,
+        audio: audio,
+        copies: copies,
+        folder: folder,
       );
       index[recording.id] = recording.toMetadata();
       await _writeIndex(directory, index);
@@ -169,6 +210,7 @@ class FileRecordingsRepository implements RecordingsRepository {
     required String sourcePath,
     required Duration duration,
     List<double>? waveform,
+    AudioInfo? audio,
   }) async {
     await moveFile(sourcePath, recording.path);
     return _update(recording, (metadata) {
@@ -179,15 +221,26 @@ class FileRecordingsRepository implements RecordingsRepository {
       } else {
         metadata.remove('waveform');
       }
+      if (audio != null) {
+        metadata['audio'] = audio.toJson();
+      } else {
+        metadata.remove('audio');
+      }
     });
   }
 
   @override
-  Future<Recording> setWaveform(Recording recording, List<double> waveform) {
-    return _update(
-      recording,
-      (metadata) => metadata['waveform'] = encodeWaveform(waveform),
-    );
+  Future<Recording> setDetails(
+    Recording recording, {
+    List<double>? waveform,
+    Duration? duration,
+    AudioInfo? audio,
+  }) {
+    return _update(recording, (metadata) {
+      if (waveform != null) metadata['waveform'] = encodeWaveform(waveform);
+      if (duration != null) metadata['durationMs'] = duration.inMilliseconds;
+      if (audio != null) metadata['audio'] = audio.toJson();
+    });
   }
 
   @override
@@ -230,8 +283,11 @@ class FileRecordingsRepository implements RecordingsRepository {
   }
 
   /// Siguiente nombre libre del tipo "Grabación N".
-  static String nextDefaultName(Iterable<String?> existingNames) {
-    final pattern = RegExp('^$defaultNamePrefix (\\d+)\$');
+  static String nextDefaultName(
+    Iterable<String?> existingNames, {
+    String prefix = 'Grabación',
+  }) {
+    final pattern = RegExp('^${RegExp.escape(prefix)} (\\d+)\$');
     var highest = 0;
     for (final name in existingNames) {
       final match = name == null ? null : pattern.firstMatch(name);
@@ -240,7 +296,7 @@ class FileRecordingsRepository implements RecordingsRepository {
         if (number > highest) highest = number;
       }
     }
-    return '$defaultNamePrefix ${highest + 1}';
+    return '$prefix ${highest + 1}';
   }
 
   /// Modifica los metadatos de [recording] partiendo de los guardados (y no
@@ -274,8 +330,8 @@ class FileRecordingsRepository implements RecordingsRepository {
     return result;
   }
 
-  String _pathFor(Directory directory, String id) =>
-      p.join(directory.path, '$id$fileExtension');
+  String _pathFor(Directory directory, String id, RecordingFormat format) =>
+      p.join(directory.path, '$id${format.extension}');
 
   Future<Map<String, Map<String, dynamic>>> _readIndex(
     Directory directory,

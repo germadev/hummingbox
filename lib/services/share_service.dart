@@ -25,7 +25,7 @@ Future<void> shareRecording(Recording recording, {Rect? origin}) async {
 
   await SharePlus.instance.share(
     ShareParams(
-      files: [XFile(copy.path, mimeType: 'audio/mp4')],
+      files: [XFile(copy.path, mimeType: recording.format.mimeType)],
       sharePositionOrigin: origin,
     ),
   );

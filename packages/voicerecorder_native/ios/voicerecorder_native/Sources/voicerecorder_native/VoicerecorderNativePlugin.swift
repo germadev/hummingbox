@@ -25,12 +25,15 @@ public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
   }
 }
 
-/// Error con un mensaje para mostrar en Dart.
+/// Error con un mensaje para Dart y, si la app lo traduce, un código
+/// («no_permission»…).
 struct NativeError: LocalizedError {
   let message: String
+  let code: String
 
-  init(_ message: String) {
+  init(_ message: String, code: String = "failed") {
     self.message = message
+    self.code = code
   }
 
   var errorDescription: String? { message }
@@ -53,7 +56,9 @@ final class BackgroundRunner {
       } catch {
         DispatchQueue.main.async {
           result(
-            FlutterError(code: "failed", message: error.localizedDescription, details: nil))
+            FlutterError(
+              code: (error as? NativeError)?.code ?? "failed",
+              message: error.localizedDescription, details: nil))
         }
       }
     }

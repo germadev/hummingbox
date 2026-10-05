@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:intl/intl.dart';
 
 import 'app.dart';
 import 'services/audio_codec.dart';
@@ -15,8 +14,9 @@ import 'services/settings_store.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  Intl.defaultLocale = 'es';
-  await initializeDateFormatting('es');
+  // Formatos de fecha de todos los idiomas; el de la app se elige al
+  // resolver el idioma (ver VoiceRecorderApp).
+  await initializeDateFormatting();
 
   final repository = FileRecordingsRepository();
 

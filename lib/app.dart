@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/intl.dart';
 
+import 'l10n/l10n.dart';
 import 'screens/home_screen.dart';
 import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
@@ -22,7 +23,16 @@ class VoiceRecorderApp extends StatelessWidget {
     required this.playerFactory,
     required this.editor,
     required this.sync,
+    this.locale,
   });
+
+  /// Idiomas de la app. El primero, inglés, es el que se usa si el del
+  /// sistema no es ninguno de ellos.
+  static final supportedLocales = [
+    const Locale('en'),
+    for (final locale in AppLocalizations.supportedLocales)
+      if (locale.languageCode != 'en') locale,
+  ];
 
   final RecordingsRepository repository;
   final AudioRecorderService Function() recorderFactory;
@@ -30,16 +40,25 @@ class VoiceRecorderApp extends StatelessWidget {
   final RecordingEditor editor;
   final CopySync sync;
 
+  /// Idioma fijo (para los tests); si es `null`, el del sistema.
+  final Locale? locale;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Grabadora',
+      onGenerateTitle: (context) => context.l10n.appTitle,
       debugShowCheckedModeBanner: false,
       theme: _theme(Brightness.light),
       darkTheme: _theme(Brightness.dark),
-      locale: const Locale('es'),
-      supportedLocales: const [Locale('es')],
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      locale: locale,
+      supportedLocales: supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localeListResolutionCallback: (preferred, supported) {
+        final resolved = basicLocaleListResolution(preferred, supported);
+        // Las fechas y los números se formatean en el mismo idioma.
+        Intl.defaultLocale = resolved.toLanguageTag();
+        return resolved;
+      },
       home: HomeScreen(
         repository: repository,
         recorderFactory: recorderFactory,

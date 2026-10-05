@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../audio/levels.dart';
+import '../l10n/l10n.dart';
 import '../utils/formatters.dart';
 
 /// Onda de una grabación completa que hace de barra de progreso: la parte ya
@@ -114,7 +115,7 @@ class _WaveformSeekBarState extends State<WaveformSeekBar> {
 
     return Semantics(
       slider: true,
-      label: 'Posición de la reproducción',
+      label: context.l10n.playbackPosition,
       value: formatDuration(_timeAt(_fraction)),
       increasedValue: formatDuration(
         _timeAt((_fraction + _semanticsStep).clamp(0.0, 1.0)),

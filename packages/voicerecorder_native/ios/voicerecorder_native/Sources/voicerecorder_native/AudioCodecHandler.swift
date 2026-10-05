@@ -1,7 +1,8 @@
 import AVFoundation
 import Flutter
 
-/// Convierte entre audio comprimido y WAV PCM de 16 bits con AVAudioFile.
+/// Convierte entre audio comprimido y WAV PCM de 16 bits con AVAudioFile, y
+/// recorta el principio de un `.m4a` sin volver a codificarlo.
 final class AudioCodecHandler {
   private let runner = BackgroundRunner(label: "es.germade.voicerecorder.audio_codec")
 
@@ -10,7 +11,7 @@ final class AudioCodecHandler {
       let input = args["input"] as? String,
       let output = args["output"] as? String
     else {
-      if call.method == "decodeToWav" || call.method == "encodeToM4a" {
+      if ["decodeToWav", "encodeToM4a", "trimStart"].contains(call.method) {
         badArguments(result)
       } else {
         result(FlutterMethodNotImplemented)
@@ -24,6 +25,12 @@ final class AudioCodecHandler {
     case "decodeToWav":
       runner.run(result) {
         try AudioCodec.decodeToWav(input: inputURL, output: outputURL)
+        return nil
+      }
+    case "trimStart":
+      let startUs = (args["startUs"] as? NSNumber)?.int64Value ?? 0
+      runner.run(result) {
+        try AudioCodec.trimStart(input: inputURL, output: outputURL, startUs: startUs)
         return nil
       }
     case "encodeToM4a":
@@ -61,6 +68,31 @@ enum AudioCodec {
         AVNumberOfChannelsKey: format.channelCount,
         AVEncoderBitRateKey: bitRate,
       ]
+    }
+  }
+
+  /// Copia el audio de [input] desde [startUs] a un `.m4a` nuevo, sin
+  /// volver a codificarlo.
+  static func trimStart(input: URL, output: URL, startUs: Int64) throws {
+    let asset = AVURLAsset(url: input)
+    guard
+      let session = AVAssetExportSession(
+        asset: asset, presetName: AVAssetExportPresetPassthrough)
+    else {
+      throw NativeError("No se pudo recortar el audio")
+    }
+    try? FileManager.default.removeItem(at: output)
+    session.outputURL = output
+    session.outputFileType = .m4a
+    session.timeRange = CMTimeRange(
+      start: CMTime(value: startUs, timescale: 1_000_000), duration: .positiveInfinity)
+
+    // Se ejecuta en un hilo propio (BackgroundRunner): se puede esperar.
+    let done = DispatchSemaphore(value: 0)
+    session.exportAsynchronously { done.signal() }
+    done.wait()
+    if session.status != .completed {
+      throw session.error ?? NativeError("No se pudo recortar el audio")
     }
   }
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/screens/settings_screen.dart';
 import 'package:voicerecorder/services/copy_sync.dart';
 
 import 'fakes.dart';
+import 'l10n_helpers.dart';
 
 void main() {
   late InMemorySettingsStore store;
@@ -24,10 +26,73 @@ void main() {
   });
 
   Future<void> pumpSettings(WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(home: SettingsScreen(sync: sync)));
+    // Pantalla alta, para que quepan todas las opciones.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(localizedApp(home: SettingsScreen(sync: sync)));
     await sync.load();
     await tester.pumpAndSettle();
   }
+
+  testWidgets('elige el formato y la calidad de grabación', (tester) async {
+    await pumpSettings(tester);
+    expect(find.text('AAC (.m4a)'), findsOneWidget);
+    expect(
+      find.text('Alta · 44,1 kHz · 128 kbps · 1 MB por minuto'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('format-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('WAV (.wav)'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.recording.format, RecordingFormat.wav);
+    expect(
+      find.text('Alta · 44,1 kHz · 16 bits · 5,3 MB por minuto'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const Key('quality-option')));
+    await tester.pumpAndSettle();
+    // Cada calidad muestra lo que ocupa con el formato elegido.
+    expect(find.text('16 kHz · 16 bits · 1,9 MB por minuto'), findsOneWidget);
+    await tester.tap(find.text('Baja'));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.settings.recording,
+      const RecordingOptions(
+        format: RecordingFormat.wav,
+        quality: RecordingQuality.low,
+      ),
+    );
+  });
+
+  testWidgets('elige la duración de la cuenta atrás', (tester) async {
+    await pumpSettings(tester);
+    expect(find.textContaining('3 segundos antes'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('countdown-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('10 segundos'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.countdownSeconds, 10);
+    expect(find.textContaining('10 segundos antes'), findsOneWidget);
+  });
+
+  testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('quality-option')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.recording, const RecordingOptions());
+  });
 
   testWidgets('elige la carpeta donde guardar las grabaciones', (tester) async {
     await pumpSettings(tester);
@@ -46,6 +111,29 @@ void main() {
       find.text('Las copias que ya están en la carpeta se conservan'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('pregunta antes de añadir los audios de la carpeta', (
+    tester,
+  ) async {
+    folders.addFile('tree://music', 'Idea.m4a', bytes: List.filled(500000, 0));
+    await pumpSettings(tester);
+
+    await tester.tap(find.byKey(const Key('folder-option')));
+    await tester.pumpAndSettle();
+    expect(find.text('¿Añadir las grabaciones de la carpeta?'), findsOneWidget);
+    expect(find.textContaining('1 audio (0,5 MB)'), findsOneWidget);
+
+    await tester.tap(find.text('No añadir'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.folder!.importFiles, isFalse);
+    final option = find.byKey(const Key('import-option'));
+    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    expect(store.settings.folder!.importFiles, isTrue);
   });
 
   testWidgets('no cambia nada si se cancela el selector', (tester) async {

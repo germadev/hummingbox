@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
+import '../l10n/l10n.dart';
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../services/copy_sync.dart';
@@ -12,6 +14,7 @@ import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
 import '../services/share_service.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/folder_drawer.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
@@ -43,27 +46,46 @@ class _HomeScreenState extends State<HomeScreen> {
   late final RecorderController _recorder = RecorderController(
     recorder: widget.recorderFactory(),
     repository: widget.repository,
+    probe: widget.editor.probe,
+    trimStart: widget.editor.trimStart,
   );
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
   );
 
   late final AppLifecycleListener _lifecycle;
+  late final StreamSubscription<List<Recording>> _imports;
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Todas las grabaciones, de todas las carpetas.
   List<Recording> _recordings = const [];
   bool _loading = true;
+
+  /// Subcarpeta abierta; vacío para la principal.
+  String get _folder => widget.sync.settings.openFolder;
 
   @override
   void initState() {
     super.initState();
-    // Al volver a la app se reintentan las copias pendientes.
+    // Al volver a la app se reintentan las copias pendientes y se buscan
+    // grabaciones nuevas en la carpeta.
     _lifecycle = AppLifecycleListener(onResume: _syncCopies);
+    _imports = widget.sync.imports.listen(_onImported);
+    widget.sync.load();
     _loadRecordings();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Las grabaciones nuevas se llaman «Grabación N» en el idioma de la app.
+    widget.repository.defaultNamePrefix = context.l10n.defaultRecordingName;
   }
 
   @override
   void dispose() {
     _lifecycle.dispose();
+    _imports.cancel();
     _recorder.dispose();
     _player.dispose();
     super.dispose();
@@ -80,70 +102,193 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showMessage('No se pudieron cargar las grabaciones');
+      _showMessage((l10n) => l10n.loadRecordingsFailed);
       return;
     }
     _syncCopies();
-    await _addMissingWaveforms();
+    await _addMissingDetails();
   }
 
-  /// Calcula la onda de las grabaciones que no la tienen (las hechas con
-  /// versiones anteriores de la app). Si falla, se reintenta al volver a
-  /// abrirla.
-  Future<void> _addMissingWaveforms() async {
-    final pending = [
-      for (final recording in _recordings)
-        if (recording.waveform == null) recording,
-    ];
-    for (final recording in pending) {
-      if (!mounted) return;
-      try {
-        final levels = await widget.editor.extractWaveform(recording);
-        if (!mounted) return;
-        // Si entretanto se ha editado o borrado, ya no hace falta.
-        final current = _recordings.where((r) => r.id == recording.id);
-        if (current.isEmpty ||
-            current.single.waveform != null ||
-            current.single.revision != recording.revision) {
-          continue;
+  bool _addingDetails = false;
+  bool _detailsPending = false;
+
+  /// Calcula lo que les falta a las grabaciones hechas con versiones
+  /// anteriores de la app o importadas de la carpeta: la onda (decodificando
+  /// el audio), el formato y, si no se conoce, la duración. Si algo falla, se
+  /// reintenta al volver a abrir la app.
+  Future<void> _addMissingDetails() async {
+    if (_addingDetails) {
+      // Se repite al terminar para incluir las que han llegado entretanto.
+      _detailsPending = true;
+      return;
+    }
+    _addingDetails = true;
+    try {
+      do {
+        _detailsPending = false;
+        final pending = [
+          for (final recording in _recordings)
+            if (recording.waveform == null || recording.audio == null)
+              recording,
+        ];
+        for (final recording in pending) {
+          if (!mounted) return;
+          await _addDetails(recording);
         }
-        await widget.repository.setWaveform(recording, levels);
-        if (!mounted) return;
-        setState(() {
-          _recordings = [
-            for (final r in _recordings)
-              r.id == recording.id ? r.copyWith(waveform: levels) : r,
-          ];
-        });
+      } while (_detailsPending && mounted);
+    } finally {
+      _addingDetails = false;
+    }
+  }
+
+  Future<void> _addDetails(Recording recording) async {
+    final editor = widget.editor;
+    final probe = recording.audio == null
+        ? await editor.probe(recording.path)
+        : null;
+    List<double>? levels;
+    if (recording.waveform == null) {
+      try {
+        levels = await editor.extractWaveform(recording);
       } catch (_) {
         // Se sigue mostrando sin onda.
       }
+    }
+    final duration = recording.duration == Duration.zero
+        ? probe?.duration
+        : null;
+    if (!mounted || (probe == null && levels == null)) return;
+
+    // Si entretanto se ha editado o borrado, ya no hace falta.
+    final current = _recordings.where((r) => r.id == recording.id);
+    if (current.isEmpty || current.single.revision != recording.revision) {
+      return;
+    }
+    try {
+      final updated = await widget.repository.setDetails(
+        recording,
+        waveform: levels,
+        duration: duration,
+        audio: probe?.info,
+      );
+      if (!mounted) return;
+      setState(() {
+        _recordings = [
+          for (final r in _recordings)
+            r.id == recording.id
+                ? r.copyWith(
+                    waveform: updated.waveform,
+                    duration: updated.duration,
+                    audio: updated.audio,
+                  )
+                : r,
+        ];
+      });
+    } catch (_) {
+      // Se reintenta en el siguiente arranque.
     }
   }
 
   void _syncCopies() => unawaited(widget.sync.sync());
 
+  /// Añade a la lista las grabaciones que se acaban de traer de la carpeta.
+  void _onImported(List<Recording> imported) {
+    if (!mounted) return;
+    final known = {for (final r in _recordings) r.id};
+    final added = [
+      for (final r in imported)
+        if (!known.contains(r.id)) r,
+    ];
+    if (added.isEmpty) return;
+    setState(() {
+      _recordings = [..._recordings, ...added]
+        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    });
+    _showMessage((l10n) => l10n.importedFromFolder(added.length));
+    unawaited(_addMissingDetails());
+  }
+
+  // --- Carpetas ---
+
+  /// Subcarpetas: las creadas en la app, las de la carpeta del dispositivo y
+  /// las de las grabaciones.
+  List<String> get _folderNames {
+    final names = <String>{
+      ...widget.sync.settings.folders,
+      ...widget.sync.deviceFolders,
+      for (final recording in _recordings) recording.folder,
+      _folder,
+    }..remove('');
+    return names.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
+
+  Future<void> _openFolder(String folder) async {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
+    await _player.stop();
+    await widget.sync.openFolder(folder);
+  }
+
+  Future<void> _createFolder() async {
+    final input = await showNameDialog(
+      context,
+      title: context.l10n.newFolder,
+      confirmLabel: context.l10n.create,
+    );
+    if (input == null || !mounted) return;
+    final name = safeFileName(input, fallback: '');
+    if (name.isEmpty || name.startsWith('.')) {
+      _showMessage((l10n) => l10n.invalidFolderName);
+      return;
+    }
+    await widget.sync.createFolder(name);
+    if (!mounted) return;
+    await _openFolder(name);
+  }
+
   // --- Grabación ---
 
   Future<void> _onRecordPressed() async {
-    if (_recorder.isActive) {
+    if (_recorder.pending != null) {
+      // Empieza ya, sin esperar a la cuenta atrás o a la voz.
+      await _recorder.startNow();
+    } else if (_recorder.isActive) {
       await _stopRecording();
     } else {
-      await _startRecording();
+      await _startRecording(
+        (options, folder) => _recorder.start(options: options, folder: folder),
+      );
     }
   }
 
-  Future<void> _startRecording() async {
+  Future<void> _startAfterCountdown() => _startRecording(
+    (options, folder) => _recorder.startAfterCountdown(
+      seconds: widget.sync.settings.countdownSeconds,
+      options: options,
+      folder: folder,
+    ),
+  );
+
+  Future<void> _startWhenVoice() => _startRecording(
+    (options, folder) =>
+        _recorder.startWhenVoice(options: options, folder: folder),
+  );
+
+  /// Empieza a grabar (al momento, tras la cuenta atrás o al detectar la voz)
+  /// con el formato elegido y en la carpeta abierta.
+  Future<void> _startRecording(
+    Future<bool> Function(RecordingOptions options, String folder) start,
+  ) async {
     await _player.stop();
     try {
-      final started = await _recorder.start();
+      await widget.sync.load();
+      final started = await start(widget.sync.settings.recording, _folder);
       if (!started) {
-        _showMessage(
-          'Permite el acceso al micrófono en los ajustes para poder grabar',
-        );
+        _showMessage((l10n) => l10n.microphonePermission);
       }
     } catch (_) {
-      _showMessage('No se pudo iniciar la grabación');
+      _showMessage((l10n) => l10n.startRecordingFailed);
     }
   }
 
@@ -156,21 +301,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (!mounted) return;
     if (recording == null) {
-      _showMessage('No se pudo guardar la grabación');
+      _showMessage((l10n) => l10n.saveRecordingFailed);
       return;
     }
     final saved = recording;
     setState(() => _recordings = [saved, ..._recordings]);
-    _showMessage('Guardada como «${saved.name}»');
+    _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncCopies();
   }
 
   Future<void> _confirmCancel() async {
+    // Mientras se espera para empezar no hay nada grabado que perder.
+    if (_recorder.pending != null) {
+      await _recorder.cancel();
+      return;
+    }
     final discard = await showConfirmDialog(
       context,
-      title: '¿Descartar la grabación?',
-      message: 'Se perderá el audio grabado hasta ahora.',
-      confirmLabel: 'Descartar',
+      title: context.l10n.discardRecordingTitle,
+      message: context.l10n.discardRecordingMessage,
+      confirmLabel: context.l10n.discard,
     );
     if (discard) await _recorder.cancel();
   }
@@ -178,16 +328,16 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- Lista de grabaciones ---
 
   void _togglePlayback(Recording recording) {
-    if (_recorder.isActive) {
-      _showMessage('Detén la grabación para poder reproducir');
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToPlay);
       return;
     }
     _player.toggle(recording);
   }
 
   void _seek(Recording recording, Duration position) {
-    if (_recorder.isActive) {
-      _showMessage('Detén la grabación para poder reproducir');
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToPlay);
       return;
     }
     if (_player.isCurrent(recording)) {
@@ -215,8 +365,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _edit(Recording recording) async {
-    if (_recorder.isActive) {
-      _showMessage('Detén la grabación para poder editar');
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToEdit);
       return;
     }
     await _player.stop();
@@ -239,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : [for (final r in _recordings) r.id == edited.id ? edited : r];
     });
     _showMessage(
-      result.isCopy ? 'Guardada como «${edited.name}»' : 'Cambios guardados',
+      (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
     _syncCopies();
   }
@@ -257,7 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       _syncCopies();
     } catch (_) {
-      _showMessage('No se pudo renombrar la grabación');
+      _showMessage((l10n) => l10n.renameFailed);
     }
   }
 
@@ -270,22 +420,22 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       await shareRecording(recording, origin: origin);
     } catch (_) {
-      _showMessage('No se pudo compartir la grabación');
+      _showMessage((l10n) => l10n.shareFailed);
     }
   }
 
   Future<void> _delete(Recording recording) async {
     final confirmed = await showConfirmDialog(
       context,
-      title: '¿Eliminar «${recording.name}»?',
-      message: 'Esta acción no se puede deshacer.',
-      confirmLabel: 'Eliminar',
+      title: context.l10n.deleteTitle(recording.name),
+      message: context.l10n.deleteMessage,
+      confirmLabel: context.l10n.delete,
     );
     if (!confirmed) return;
 
     if (_player.isCurrent(recording)) await _player.stop();
     try {
-      await widget.repository.delete(recording);
+      await widget.sync.delete(recording);
       if (!mounted) return;
       setState(() {
         _recordings = [
@@ -293,17 +443,19 @@ class _HomeScreenState extends State<HomeScreen> {
             if (r.id != recording.id) r,
         ];
       });
-      _showMessage('Grabación eliminada');
+      _showMessage((l10n) => l10n.recordingDeleted);
     } catch (_) {
-      _showMessage('No se pudo eliminar la grabación');
+      _showMessage((l10n) => l10n.deleteFailed);
     }
   }
 
-  void _showMessage(String message) {
+  /// Muestra un aviso con el texto que devuelve [message] en el idioma de la
+  /// app (se lee al mostrarlo, así que se puede llamar tras un `await`).
+  void _showMessage(String Function(AppLocalizations l10n) message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+      ..showSnackBar(SnackBar(content: Text(message(context.l10n))));
   }
 
   Future<void> _openSettings() {
@@ -319,54 +471,97 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Las carpetas y la abierta dependen de las opciones.
+    return ListenableBuilder(
+      listenable: Listenable.merge([_recorder, widget.sync]),
+      builder: (context, _) => _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
+    final folder = _folder;
+    final folderNames = _folderNames;
     final scaffold = Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('Grabadora'),
+        // Nombre de la carpeta abierta, arriba a la izquierda.
+        title: Text(folder.isEmpty ? context.l10n.appTitle : folder),
         actions: [
           _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
           IconButton(
             key: const Key('settings-button'),
-            tooltip: 'Opciones',
+            tooltip: context.l10n.settings,
             icon: const Icon(Icons.settings_outlined),
             onPressed: _openSettings,
           ),
           const SizedBox(width: 4),
         ],
       ),
-      body: _buildBody(),
+      // Se abre deslizando desde la izquierda. Al abrirlo se buscan
+      // subcarpetas nuevas.
+      drawer: FolderDrawer(
+        rootName: widget.sync.settings.folder?.name ?? context.l10n.rootFolder,
+        folders: folderNames,
+        counts: {
+          for (final name in ['', ...folderNames]) name: _countIn(name),
+        },
+        selected: folder,
+        onSelected: _openFolder,
+        onCreate: _createFolder,
+      ),
+      onDrawerChanged: (opened) {
+        if (opened) _syncCopies();
+      },
+      // Mientras se graba no se cambia de carpeta.
+      drawerEnableOpenDragGesture: !_recorder.isBusy,
+      body: _buildBody(folder),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
+        countdownSeconds: widget.sync.settings.countdownSeconds,
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
+        onCountdownPressed: _startAfterCountdown,
+        onVoicePressed: _startWhenVoice,
       ),
     );
 
-    // Evita salir de la app por accidente en mitad de una grabación.
-    return ListenableBuilder(
-      listenable: _recorder,
+    // Evita salir de la app por accidente en mitad de una grabación. En una
+    // subcarpeta, «atrás» vuelve a la principal.
+    return PopScope(
+      canPop: !_recorder.isBusy && folder.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_recorder.pending != null) {
+          _recorder.cancel();
+        } else if (_recorder.isActive) {
+          _showMessage((l10n) => l10n.stopToLeave);
+        } else {
+          _openFolder('');
+        }
+      },
       child: scaffold,
-      builder: (context, child) => PopScope(
-        canPop: !_recorder.isActive,
-        onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _showMessage('Detén la grabación antes de salir');
-        },
-        child: child!,
-      ),
     );
   }
 
-  Widget _buildBody() {
+  int _countIn(String folder) =>
+      _recordings.where((recording) => recording.folder == folder).length;
+
+  Widget _buildBody(String folder) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_recordings.isEmpty) {
-      return const _EmptyState();
+    final recordings = [
+      for (final recording in _recordings)
+        if (recording.folder == folder) recording,
+    ];
+    if (recordings.isEmpty) {
+      return _EmptyState(inFolder: folder.isNotEmpty);
     }
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _recordings.length,
+      itemCount: recordings.length,
       itemBuilder: (context, index) {
-        final recording = _recordings[index];
+        final recording = recordings[index];
         return RecordingTile(
           key: ValueKey(recording.id),
           recording: recording,
@@ -396,14 +591,14 @@ class _SyncIndicator extends StatelessWidget {
       builder: (context, _) {
         if (sync.syncing) {
           return IconButton(
-            tooltip: 'Guardando copias…',
+            tooltip: context.l10n.savingCopies,
             icon: const Icon(Icons.sync),
             onPressed: onPressed,
           );
         }
         if (sync.errors.isNotEmpty) {
           return IconButton(
-            tooltip: 'No se pudieron guardar algunas copias',
+            tooltip: context.l10n.copiesFailed,
             icon: Icon(
               Icons.sync_problem,
               color: Theme.of(context).colorScheme.error,
@@ -418,7 +613,10 @@ class _SyncIndicator extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState();
+  const _EmptyState({required this.inFolder});
+
+  /// Si es una subcarpeta (vacía) y no la carpeta principal.
+  final bool inFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -430,15 +628,22 @@ class _EmptyState extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.mic_none_rounded,
+              inFolder ? Icons.folder_open : Icons.mic_none_rounded,
               size: 72,
               color: theme.colorScheme.outline,
             ),
             const SizedBox(height: 16),
-            Text('Aún no hay grabaciones', style: theme.textTheme.titleMedium),
+            Text(
+              inFolder
+                  ? context.l10n.emptyFolderTitle
+                  : context.l10n.noRecordingsTitle,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Text(
-              'Pulsa el botón rojo para empezar a grabar.',
+              inFolder
+                  ? context.l10n.emptyFolderHint
+                  : context.l10n.noRecordingsHint,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

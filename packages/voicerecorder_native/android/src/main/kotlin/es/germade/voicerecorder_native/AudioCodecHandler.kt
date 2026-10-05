@@ -11,8 +11,12 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
+import java.nio.ByteBuffer
 
-/** Convierte entre audio comprimido y WAV PCM de 16 bits con MediaCodec. */
+/**
+ * Convierte entre audio comprimido y WAV PCM de 16 bits con MediaCodec, y
+ * recorta el principio de un `.m4a` sin volver a codificarlo.
+ */
 internal class AudioCodecHandler : MethodChannel.MethodCallHandler {
     private val runner = BackgroundRunner()
 
@@ -20,6 +24,17 @@ internal class AudioCodecHandler : MethodChannel.MethodCallHandler {
         val input = call.argument<String>("input")
         val output = call.argument<String>("output")
         when (call.method) {
+            "trimStart" -> {
+                if (input == null || output == null) {
+                    result.error("bad_args", "Faltan las rutas de entrada o salida", null)
+                    return
+                }
+                val startUs = call.argument<Number>("startUs")?.toLong() ?: 0L
+                runner.run(result) {
+                    trimStart(input, output, startUs)
+                    null
+                }
+            }
             "decodeToWav", "encodeToM4a" -> {
                 if (input == null || output == null) {
                     result.error("bad_args", "Faltan las rutas de entrada o salida", null)
@@ -113,6 +128,57 @@ internal class AudioCodecHandler : MethodChannel.MethodCallHandler {
                     runCatching { it.stop() }
                     it.release()
                 }
+                extractor.release()
+            }
+        }
+
+        /**
+         * Copia las muestras de audio desde [startUs] a un MP4 nuevo, tal
+         * cual (en AAC todas las muestras se pueden decodificar por sí solas).
+         */
+        fun trimStart(inputPath: String, outputPath: String, startUs: Long) {
+            val extractor = MediaExtractor()
+            try {
+                extractor.setDataSource(inputPath)
+                val track = (0 until extractor.trackCount).firstOrNull {
+                    extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+                } ?: throw IOException("El archivo no tiene audio")
+                extractor.selectTrack(track)
+                val format = extractor.getTrackFormat(track)
+                val bufferSize = if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                    format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE)
+                } else {
+                    64 * 1024
+                }
+                val buffer = ByteBuffer.allocate(bufferSize)
+                val info = MediaCodec.BufferInfo()
+
+                val muxer = MediaMuxer(outputPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                try {
+                    val outputTrack = muxer.addTrack(format)
+                    muxer.start()
+                    extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
+                    var firstUs = -1L
+                    while (true) {
+                        val size = extractor.readSampleData(buffer, 0)
+                        if (size < 0) break
+                        val timeUs = extractor.sampleTime
+                        if (firstUs < 0) firstUs = timeUs
+                        val flags = if (extractor.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC != 0) {
+                            MediaCodec.BUFFER_FLAG_KEY_FRAME
+                        } else {
+                            0
+                        }
+                        info.set(0, size, timeUs - firstUs, flags)
+                        muxer.writeSampleData(outputTrack, buffer, info)
+                        extractor.advance()
+                    }
+                    if (firstUs < 0) throw IOException("No queda audio después del recorte")
+                    muxer.stop()
+                } finally {
+                    runCatching { muxer.release() }
+                }
+            } finally {
                 extractor.release()
             }
         }

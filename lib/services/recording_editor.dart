@@ -5,8 +5,11 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../audio/audio_edit.dart';
+import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import '../audio/wav.dart';
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 import '../utils/files.dart';
 import 'audio_codec.dart';
 import 'recordings_repository.dart';
@@ -35,7 +38,8 @@ class EditSession {
 }
 
 /// Edita grabaciones: las decodifica a WAV, aplica los cambios en un isolate
-/// aparte para no bloquear la interfaz y vuelve a codificarlas en `.m4a`.
+/// aparte para no bloquear la interfaz y las vuelve a guardar en su formato
+/// (`.m4a` o `.wav`).
 class RecordingEditor {
   RecordingEditor({
     required this.codec,
@@ -61,7 +65,7 @@ class RecordingEditor {
     final directory = await _createSessionDirectory();
     try {
       final source = p.join(directory.path, 'source.wav');
-      await codec.decodeToWav(recording.path, source);
+      await _decode(recording.path, source);
       final analysis = await _analyze(source, editorResolution);
       return EditSession(
         recording: recording,
@@ -76,33 +80,53 @@ class RecordingEditor {
   }
 
   /// Aplica [edit] y guarda el resultado, sustituyendo el audio original o,
-  /// si [asCopy] es `true`, como una grabación nueva.
+  /// si [asCopy] es `true`, como una grabación nueva llamada [copyName] (por
+  /// defecto, el nombre del original seguido de [copySuffix]).
   Future<Recording> save(
     EditSession session,
     AudioEdit edit, {
     required bool asCopy,
+    String? copyName,
   }) async {
+    final recording = session.recording;
     final edited = p.join(session.directory.path, 'edited.wav');
-    final encoded = p.join(session.directory.path, 'edited.m4a');
     final result = await _process(session.sourcePath, edited, edit);
-    await codec.encodeToM4a(edited, encoded);
+
+    // Se conserva el formato de la grabación y, en AAC, su tasa de bits.
+    final format = recording.format;
+    final String output;
+    switch (format) {
+      case RecordingFormat.wav:
+        output = edited;
+      case RecordingFormat.aac:
+        output = p.join(session.directory.path, 'edited.m4a');
+        await codec.encodeToM4a(
+          edited,
+          output,
+          bitRate: await _bitRateOf(recording),
+        );
+    }
+    final audio = (await probe(output))?.info;
 
     if (!asCopy) {
       return repository.replaceAudio(
-        session.recording,
-        sourcePath: encoded,
+        recording,
+        sourcePath: output,
         duration: result.duration,
         waveform: result.levels,
+        audio: audio,
       );
     }
 
-    final path = await repository.createRecordingPath();
-    await moveFile(encoded, path);
+    final path = await repository.createRecordingPath(format: format);
+    await moveFile(output, path);
     final copy = await repository.add(
       path: path,
       duration: result.duration,
       waveform: result.levels,
-      name: '${session.recording.name}$copySuffix',
+      name: copyName ?? '${recording.name}$copySuffix',
+      audio: audio,
+      folder: recording.folder,
     );
     if (copy == null) throw StateError('No se pudo registrar la copia');
     return copy;
@@ -110,13 +134,74 @@ class RecordingEditor {
 
   Future<void> close(EditSession session) => deleteQuietly(session.directory);
 
+  /// Quita de la grabación de [path] lo anterior a [start] (p. ej. la espera
+  /// hasta que se empezó a hablar). Un `.m4a` se recorta sin volver a
+  /// codificarlo; un WAV, en Dart.
+  Future<void> trimStart(String path, Duration start) async {
+    final directory = await _createSessionDirectory();
+    try {
+      final trimmed = p.join(directory.path, 'trimmed${p.extension(path)}');
+      switch (RecordingFormat.fromPath(path)) {
+        case RecordingFormat.wav:
+          final info = await readWavInfo(path);
+          await _process(
+            path,
+            trimmed,
+            AudioEdit(start: start, end: info.duration),
+          );
+        case RecordingFormat.aac || null:
+          await codec.trimStart(path, trimmed, start);
+      }
+      await moveFile(trimmed, path);
+    } finally {
+      await deleteQuietly(directory);
+    }
+  }
+
+  int _previews = 0;
+
+  /// Genera un WAV con la selección de [edit] y su volumen y fundidos
+  /// aplicados, para escucharlo antes de guardar. Cada llamada usa un archivo
+  /// nuevo (el anterior puede seguir sonando); se borran al cerrar la sesión.
+  Future<String> renderPreview(EditSession session, AudioEdit edit) async {
+    final path = p.join(session.directory.path, 'preview_${_previews++}.wav');
+    await _process(session.sourcePath, path, edit);
+    return path;
+  }
+
+  /// Lee el formato y la duración del archivo de [path] en su cabecera.
+  Future<AudioProbe?> probe(String path) => probeAudio(path);
+
+  /// Tasa de bits con la que se vuelve a codificar un AAC: la que indica su
+  /// cabecera o, si no se puede leer, la de la calidad alta.
+  Future<int> _bitRateOf(Recording recording) async {
+    final known =
+        recording.audio?.bitRate ?? (await probe(recording.path))?.info.bitRate;
+    return known ?? const RecordingOptions().bitRate;
+  }
+
+  /// Los WAV de 16 bits se usan tal cual; el resto se decodifica con el
+  /// códec del sistema.
+  Future<void> _decode(String input, String output) async {
+    if (RecordingFormat.fromPath(input) == RecordingFormat.wav) {
+      try {
+        await readWavInfo(input);
+        await File(input).copy(output);
+        return;
+      } on FormatException {
+        // Otro tipo de WAV (p. ej. de 24 bits): lo convierte el sistema.
+      }
+    }
+    await codec.decodeToWav(input, output);
+  }
+
   /// Calcula la onda de una grabación que no la tiene (p. ej. si se hizo con
   /// una versión anterior de la app).
   Future<List<double>> extractWaveform(Recording recording) async {
     final directory = await _createSessionDirectory();
     try {
       final wav = p.join(directory.path, 'waveform.wav');
-      await codec.decodeToWav(recording.path, wav);
+      await _decode(recording.path, wav);
       final analysis = await _analyze(wav, waveformResolution);
       return analysis.levels;
     } finally {
