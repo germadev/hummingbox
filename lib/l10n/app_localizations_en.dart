@@ -31,9 +31,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get nameLabel => 'Name';
 
   @override
-  String get defaultRecordingName => 'Recording';
-
-  @override
   String editedCopyName(String name) {
     return '$name (edited)';
   }
@@ -751,4 +748,65 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
+
+  @override
+  String get renameToTranscriptTitle => 'Rename the recording?';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return 'With the new transcript, “$current” would be called “$name”.';
+  }
+
+  @override
+  String get keepName => 'Keep name';
+
+  @override
+  String get piano => 'Piano';
+
+  @override
+  String get pianoHint =>
+      'Play a key to hear its note.\nSwipe over the small keyboard to move along it.';
+
+  @override
+  String get noteNames => 'C D E F G A B';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get pianoOnly => 'Piano only';
+
+  @override
+  String get pianoAndVoice => 'Piano and voice';
+
+  @override
+  String get pianoNothingPlayed => 'Nothing to save: no notes were played';
+
+  @override
+  String get stopPlayback => 'Stop playback';
+
+  @override
+  String get playAll => 'Play one after another';
+
+  @override
+  String get repeat => 'Repeat';
+
+  @override
+  String get compactView => 'Compact view';
+
+  @override
+  String get detailedView => 'Detailed view';
+
+  @override
+  String get addPiano => 'Add piano';
+
+  @override
+  String pianoOver(String name) {
+    return 'Over “$name”';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Piano added to “$name”';
+  }
 }

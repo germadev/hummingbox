@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
+import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
@@ -18,6 +19,7 @@ import 'package:voicerecorder/controllers/whisper_controller.dart';
 import 'package:voicerecorder/services/audio_recorder_service.dart';
 import 'package:voicerecorder/services/folder_access.dart';
 import 'package:voicerecorder/services/google_drive.dart';
+import 'package:voicerecorder/services/piano_sound.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 import 'package:voicerecorder/services/screen_awake.dart';
@@ -26,6 +28,7 @@ import 'package:voicerecorder/services/speech_recognition.dart';
 import 'package:voicerecorder/services/storage_sync.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/whisper_service.dart';
+import 'package:voicerecorder/utils/recording_names.dart';
 
 class FakeAudioRecorderService implements AudioRecorderService {
   FakeAudioRecorderService({
@@ -143,8 +146,10 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   /// Grabaciones cuyo audio se ha sacado de la app (ids).
   final released = <String>[];
 
-  @override
-  String defaultNamePrefix = 'Grabación';
+  /// Fecha de las grabaciones nuevas: siempre la misma, para que su nombre
+  /// provisional se conozca («2026-10-05 14.32»).
+  DateTime Function() clock = () => testNow;
+
   var _counter = 0;
 
   Recording byId(String id) => recordings.firstWhere((r) => r.id == id);
@@ -155,8 +160,13 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   }) async => '/fake/rec_${_counter++}${format.extension}';
 
   @override
-  Future<List<Recording>> loadAll() async =>
-      [...recordings]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  Future<List<Recording>> loadAll() async => [...recordings]
+    ..sort(
+      (a, b) => switch (a.createdAt.compareTo(b.createdAt)) {
+        0 => a.id.compareTo(b.id),
+        final order => order,
+      },
+    );
 
   @override
   Future<Recording?> add({
@@ -168,22 +178,28 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
     String folder = '',
+    List<PianoNote> notes = const [],
+    bool hasVoice = true,
   }) async {
+    final date = createdAt ?? clock();
     final recording = Recording(
       id: p.basenameWithoutExtension(path),
       path: path,
       name:
           name ??
-          FileRecordingsRepository.nextDefaultName(
-            recordings.map((r) => r.name),
-            prefix: defaultNamePrefix,
+          RecordingNames.unique(
+            RecordingNames.provisional(date),
+            _namesIn(folder),
           ),
-      createdAt: createdAt ?? DateTime.now(),
+      createdAt: date,
       duration: duration,
       waveform: waveform,
       audio: audio,
       copies: copies,
       folder: folder,
+      provisionalName: name == null,
+      notes: notes,
+      hasVoice: hasVoice,
     );
     recordings.add(recording);
     return recording;
@@ -191,7 +207,7 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
 
   @override
   Future<Recording> rename(Recording recording, String name) async =>
-      _replace(byId(recording.id).copyWith(name: name));
+      _replace(byId(recording.id).copyWith(name: name, provisionalName: false));
 
   @override
   Future<Recording> replaceAudio(
@@ -216,6 +232,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         folder: current.folder,
         transcript: current.transcript,
         transcriptionLanguage: current.transcriptionLanguage,
+        provisionalName: current.provisionalName,
+        notes: current.notes,
+        hasVoice: current.hasVoice,
       ),
     );
   }
@@ -239,11 +258,21 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
   }) async {
     final current = byId(recording.id);
     if (keepExisting && current.transcript != null) return current;
+    // Como el de verdad: con nombre provisional, pasa a llamarse como empieza
+    // la transcripción.
+    final transcriptName = transcript != null && current.provisionalName
+        ? RecordingNames.fromTranscript(current.createdAt, transcript.text)
+        : null;
     return _replace(
       Recording(
         id: current.id,
         path: current.path,
-        name: current.name,
+        name: transcriptName == null
+            ? current.name
+            : RecordingNames.unique(
+                transcriptName,
+                _namesIn(current.folder, except: current.id),
+              ),
         createdAt: current.createdAt,
         duration: current.duration,
         waveform: current.waveform,
@@ -254,9 +283,18 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         transcript: transcript,
         noAutoTranscript: transcript == null ? recording.revision : null,
         transcriptionLanguage: current.transcriptionLanguage,
+        provisionalName: transcriptName == null && current.provisionalName,
+        notes: current.notes,
+        hasVoice: current.hasVoice,
       ),
     );
   }
+
+  @override
+  Future<Recording> setNotes(
+    Recording recording,
+    List<PianoNote> notes,
+  ) async => _replace(byId(recording.id).copyWith(notes: notes));
 
   @override
   Future<Recording> setTranscriptionLanguage(
@@ -279,6 +317,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         transcript: current.transcript,
         noAutoTranscript: current.noAutoTranscript,
         transcriptionLanguage: language,
+        provisionalName: current.provisionalName,
+        notes: current.notes,
+        hasVoice: current.hasVoice,
       ),
     );
   }
@@ -337,6 +378,9 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
         transcript: current.transcript,
         noAutoTranscript: current.noAutoTranscript,
         transcriptionLanguage: current.transcriptionLanguage,
+        provisionalName: name == null && current.provisionalName,
+        notes: current.notes,
+        hasVoice: current.hasVoice,
       ),
     );
   }
@@ -359,6 +403,11 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
 
   @override
   Future<void> discard(String path) async => discarded.add(path);
+
+  Iterable<String> _namesIn(String folder, {String? except}) => [
+    for (final r in recordings)
+      if (r.id != except && r.folder == folder) r.name,
+  ];
 
   Recording _replace(Recording recording) {
     final index = recordings.indexWhere((r) => r.id == recording.id);
@@ -486,6 +535,39 @@ class FakeRecordingEditor extends RecordingEditor {
   Future<void> trimStart(String path, Duration start) async =>
       trims[path] = start;
 
+  /// Grabaciones solo de piano guardadas: sus notas y su duración.
+  final pianoSaves = <(List<PianoNote>, Duration)>[];
+
+  @override
+  Future<Recording> savePiano({
+    required List<PianoNote> notes,
+    required Duration duration,
+    required RecordingOptions options,
+    String folder = '',
+  }) async {
+    pianoSaves.add((notes, duration));
+    return (await repository.add(
+      path: await repository.createRecordingPath(format: options.format),
+      duration: duration,
+      folder: folder,
+      notes: notes,
+      hasVoice: false,
+    ))!;
+  }
+
+  /// Notas añadidas a grabaciones con voz, por id.
+  final pianoAdded = <String, List<PianoNote>>{};
+
+  @override
+  Future<Recording> addPiano(Recording recording, List<PianoNote> notes) async {
+    pianoAdded[recording.id] = notes;
+    return repository.setNotes(
+      recording,
+      [...recording.notes, ...notes]
+        ..sort((a, b) => a.start.compareTo(b.start)),
+    );
+  }
+
   /// Ediciones con las que se ha generado la escucha previa.
   final previews = <AudioEdit>[];
 
@@ -494,6 +576,23 @@ class FakeRecordingEditor extends RecordingEditor {
     previews.add(edit);
     return '/fake/editor/preview_${previews.length - 1}.wav';
   }
+}
+
+class FakePianoSound implements PianoSound {
+  /// Teclas tocadas, en orden.
+  final played = <int>[];
+
+  /// Teclas preparadas.
+  final prepared = <int>{};
+
+  @override
+  Future<void> prepare(Iterable<int> keys) async => prepared.addAll(keys);
+
+  @override
+  Future<void> play(int key) async => played.add(key);
+
+  @override
+  Future<void> dispose() async {}
 }
 
 class FakeScreenAwake implements ScreenAwake {
@@ -839,6 +938,10 @@ class FakeDriveService implements DriveService {
 }
 
 /// Carpeta del dispositivo de los tests de widgets.
+/// Fecha de las grabaciones nuevas en los tests: su nombre provisional es
+/// «2026-10-05 14.32».
+final testNow = DateTime(2026, 10, 5, 14, 32);
+
 const testFolder = FolderSettings(
   id: 'tree://grabaciones',
   name: 'Grabaciones',

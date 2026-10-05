@@ -58,11 +58,31 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 
 ## Recordings list
 
-- Sorted from newest to oldest, with the date ("Today", "Yesterday"…),
-  duration, **format and quality** ("AAC · 128 kbps · 44.1 kHz") and the
-  **full waveform** of each one. **Tap the name** to rename it.
+- Sorted from oldest to newest: new recordings appear at the bottom, and the
+  list scrolls to the end when the app opens and when one is added.
+- **Compact or detailed view**: the button to the left of Settings switches
+  the list between the detailed view and a compact one (one line with the
+  date and duration, and the waveform only on the selected recording). The
+  choice is remembered.
+- Each one shows the date ("Today", "Yesterday"…), duration, **format and
+  quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**. **Tap the name** to rename it.
+- **Names**: a new recording is called after its date and time
+  (`2026-10-05 14.32`) and, when it is transcribed for the first time, after
+  its date and the first words of the transcript
+  (`2026-10-05.Hello, how are you`, up to 40 characters, without characters
+  that aren't allowed in file names). Recordings with no words keep the date
+  and time. If the name is already taken in the same folder, a number is
+  added (`… (2)`). Its file in the folder or in Drive is renamed with it.
+  Recordings you have renamed are never renamed automatically. When you
+  transcribe one again or in another language, the app asks whether to rename
+  it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek (also on recordings that are not playing).
+- **Loop and playlist**: while a recording plays (or is paused), the bottom
+  panel shows a button to stop it in the middle, *Play one after another* on
+  the left (when it ends, the next one in the list plays) and *Repeat* on the
+  right (it starts again; with *Play one after another*, the whole list
+  repeats). Both stay on until you turn them off, while the app is open.
 - **Rename**, **share** (with the name you gave it) and **delete**.
 
 ## Folders
@@ -71,24 +91,87 @@ The folder button (top left), or swiping right anywhere on the list, opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, next to the folder button
-(the main folder has no title), the list shows its recordings and **new recordings go there**. Back
-returns to the main folder.
+(the main folder has no title), the list shows its recordings and **new recordings go there**.
+
+## Back button
+
+Back goes from the most specific to the most general: it closes the piano;
+it removes the focus from the search field and then the selection of a
+recording; it closes the search; in a subfolder it returns to the main
+folder, and in the main folder it opens the folders menu. With that menu
+open in the main folder, Back leaves the app. While recording it doesn't
+leave.
+
+## Piano
+
+The piano button (top bar), or swiping left anywhere on the list, opens a
+piano across the whole screen to find the notes of what you hummed. It is
+always shown in **landscape**: the screen rotates when it opens and goes back
+to the system's orientation when it closes.
+
+- The keyboard shows an octave and a half (11 white keys), starting at C3.
+  Play several keys at once or slide your finger across them. Each key shows
+  its note (solfège or letters, depending on the language) and the last one
+  played is shown at the top with its frequency.
+- Below it, all 88 keys (A0 to C8) are shown small across the whole width,
+  with the enlarged part highlighted. Tap or swipe on them to move it. The
+  position is kept when the piano is closed.
+- The sound is synthesized in the app (no samples). The piano can't be
+  opened while recording from the main screen.
+
+### Recording from the piano
+
+At the top of the piano choose what to record, **piano only** or **piano and
+voice**, and press *Record*; the button shows the time and stops the
+recording. Closing the piano (or Back) while recording stops and saves it.
+The recording goes to the open folder, like any other.
+
+- The app keeps when each key was pressed and released, so the recording
+  keeps the rhythm you played.
+- **Piano only**: no microphone. When you stop, the audio is generated from
+  the notes (in the format and quality of the settings) and lasts until the
+  last note fades out. If no key was played, nothing is saved.
+- **Piano and voice**: the microphone records as usual and, when you stop,
+  the notes are mixed on top, timed with the recorder so they match the
+  voice. With headphones the piano isn't picked up by the microphone; with
+  the speaker it is also heard faintly in the voice.
+- In the list, the notes are drawn like in a MIDI editor (piano roll): each
+  one at the height of its key, from when it was pressed until it was
+  released, over the voice's waveform (or alone, for piano only), on the
+  same timeline. They work as the progress bar too.
+- Trimming in the editor keeps the notes in place. Piano-only recordings
+  aren't transcribed.
+- **Adding piano to a recording**: *Add piano* in a recording's menu opens
+  the piano over it (the top shows which one). *Record* plays it from the
+  beginning and records what you play in time with it; it stops when the
+  recording ends, with the stop button or when closing the piano. The notes
+  are mixed into its audio and added to the ones it already had, so you can
+  add several layers. While accompanying, *Play one after another* and
+  *Repeat* don't move on.
+- The notes are also saved as a standard **MIDI file** (`.mid`) next to the
+  audio, with the same name (`Idea.m4a` and `Idea.mid`), in the folder and
+  in Drive. It is renamed and deleted with the recording. A `.mid` found next
+  to an audio file (for example after reinstalling the app, or edited in
+  another app) is read; if it is deleted outside the app, the notes are
+  removed.
 
 ## Search
 
-The magnifier (in the middle of the top bar), or **pulling the list down**
+The magnifier (at the left of the top bar, next to the folders button), or **pulling the list down**
 when it is already at the top, opens a search field that spans the top bar,
-from the folder button to ⚙, with the magnifier on the left and an X on the
-right. While pulling, the list moves down, a light grey circle appears behind
+from the folder button to ⚙, with the magnifier in the same place and an X
+where the view button was. While pulling, the list moves down, a light grey circle appears behind
 the bar's magnifier and "Pull to search" shows in the gap above the list;
 past a certain point the circle turns purple, the text changes to "Release
 to search" and the phone gives a short vibration, and **releasing** there
-opens the search (going back up before releasing cancels it). If the search
+opens the search: the circle disappears at once, without following the list
+back up (going back up before releasing cancels it). If the search
 field already has the focus, pulling shows the keyboard again (for example
 after hiding it with Back on Android). Tapping the list's background (outside
 the recordings) takes the focus away from the field and hides the keyboard
 (with nothing typed, the search closes), and deselects the recording unless
-it is playing.
+it is playing. Touching the bottom panel also takes the focus away from the
+field, and tapping it outside its buttons works like the list's background.
 
 It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.
@@ -99,8 +182,9 @@ less or different, or two letters swapped), and up to 3 extra letters at the
 end. Words of 3 letters or less, words with digits and Chinese or Japanese
 text are only searched as typed. Recordings that have the words as typed come
 first. Results highlight what was found (similar words too), show the part
-of the transcript where it appears and each recording's subfolder. The X or
-Back closes the search.
+of the transcript where it appears and each recording's subfolder. The X
+closes the search; Back first removes the focus from the field and then
+closes it.
 
 ## Editing
 

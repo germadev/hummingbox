@@ -1,5 +1,6 @@
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import 'piano_note.dart';
 import 'recording_options.dart';
 import 'transcription.dart';
 
@@ -20,6 +21,9 @@ class Recording {
     this.transcript,
     this.noAutoTranscript,
     this.transcriptionLanguage,
+    this.provisionalName = false,
+    this.notes = const [],
+    this.hasVoice = true,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -50,6 +54,9 @@ class Recording {
       transcript: Transcript.fromJson(json['transcript']),
       noAutoTranscript: json['noAutoTranscript'] as int?,
       transcriptionLanguage: json['transcriptionLanguage'] as String?,
+      provisionalName: json['provisionalName'] == true,
+      notes: PianoNote.listFromJson(json['notes']),
+      hasVoice: json['voice'] != false,
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -108,10 +115,24 @@ class Recording {
   /// Si es `null`, el de las opciones.
   final String? transcriptionLanguage;
 
-  /// Indica si se debe transcribir automáticamente: no tiene transcripción
-  /// y no se ha quedado sin ella a propósito (ver [noAutoTranscript]).
+  /// Indica si [name] es el provisional que se le dio al crearla (la fecha y
+  /// la hora, ver `RecordingNames`): al transcribirla por primera vez pasa a
+  /// llamarse como empieza su transcripción. Si el usuario la renombra, ya
+  /// no.
+  final bool provisionalName;
+
+  /// Notas tocadas en el piano mientras se grababa, en orden. Su sonido está
+  /// en el audio; aquí están para dibujarlas.
+  final List<PianoNote> notes;
+
+  /// Indica si se grabó la voz (con el micrófono). Si no, es solo el piano.
+  final bool hasVoice;
+
+  /// Indica si se debe transcribir automáticamente: tiene voz, no tiene
+  /// transcripción y no se ha quedado sin ella a propósito (ver
+  /// [noAutoTranscript]).
   bool get needsTranscript =>
-      transcript == null && noAutoTranscript != revision;
+      hasVoice && transcript == null && noAutoTranscript != revision;
 
   /// Indica si la transcripción es de otra versión del audio (si se editó o
   /// se cambió fuera de la app después de transcribirla).
@@ -147,6 +168,9 @@ class Recording {
     if (noAutoTranscript != null) 'noAutoTranscript': noAutoTranscript,
     if (transcriptionLanguage != null)
       'transcriptionLanguage': transcriptionLanguage,
+    if (provisionalName) 'provisionalName': true,
+    if (notes.isNotEmpty) 'notes': [for (final note in notes) note.toJson()],
+    if (!hasVoice) 'voice': false,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -161,6 +185,8 @@ class Recording {
     Map<String, CopyState>? copies,
     AudioInfo? audio,
     Transcript? Function()? transcript,
+    bool? provisionalName,
+    List<PianoNote>? notes,
   }) {
     return Recording(
       id: id,
@@ -176,6 +202,9 @@ class Recording {
       transcript: transcript == null ? this.transcript : transcript(),
       noAutoTranscript: noAutoTranscript,
       transcriptionLanguage: transcriptionLanguage,
+      provisionalName: provisionalName ?? this.provisionalName,
+      notes: notes ?? this.notes,
+      hasVoice: hasVoice,
     );
   }
 }
@@ -192,6 +221,7 @@ class CopyState {
     this.checksum,
     this.modified,
     this.transcript,
+    this.midi,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
@@ -224,6 +254,10 @@ class CopyState {
   /// destino, si se ha guardado o leído.
   final TranscriptFile? transcript;
 
+  /// Archivo `.mid` con las notas del piano, junto al audio en el mismo
+  /// destino, si se ha guardado o leído.
+  final TranscriptFile? midi;
+
   /// El mismo archivo con los datos indicados cambiados.
   CopyState copyWith({
     String? ref,
@@ -239,6 +273,7 @@ class CopyState {
     checksum: checksum ?? this.checksum,
     modified: modified ?? this.modified,
     transcript: transcript,
+    midi: midi,
   );
 
   /// El mismo archivo con [file] como archivo de la transcripción (o sin él,
@@ -252,6 +287,21 @@ class CopyState {
     checksum: checksum,
     modified: modified,
     transcript: file,
+    midi: midi,
+  );
+
+  /// El mismo archivo con [file] como archivo `.mid` de las notas (o sin él,
+  /// si es `null`).
+  CopyState withMidi(TranscriptFile? file) => CopyState(
+    destination: destination,
+    ref: ref,
+    revision: revision,
+    name: name,
+    size: size,
+    checksum: checksum,
+    modified: modified,
+    transcript: transcript,
+    midi: file,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -280,6 +330,7 @@ class CopyState {
           ? DateTime.fromMillisecondsSinceEpoch(modified)
           : null,
       transcript: TranscriptFile.fromJson(json['transcript']),
+      midi: TranscriptFile.fromJson(json['midi']),
     );
   }
 
@@ -292,6 +343,7 @@ class CopyState {
     if (checksum != null) 'md5': checksum,
     if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
     if (transcript != null) 'transcript': transcript!.toJson(),
+    if (midi != null) 'midi': midi!.toJson(),
   };
 
   @override
@@ -305,7 +357,8 @@ class CopyState {
       other.checksum == checksum &&
       other.modified?.millisecondsSinceEpoch ==
           modified?.millisecondsSinceEpoch &&
-      other.transcript == transcript;
+      other.transcript == transcript &&
+      other.midi == midi;
 
   @override
   int get hashCode => Object.hash(
@@ -317,11 +370,13 @@ class CopyState {
     checksum,
     modified?.millisecondsSinceEpoch,
     transcript,
+    midi,
   );
 }
 
-/// Archivo de texto con la transcripción de una grabación, junto a su audio
-/// y con el mismo nombre («Idea.txt» junto a «Idea.m4a»).
+/// Archivo que acompaña al audio de una grabación en el destino, con su
+/// mismo nombre: el `.txt` con la transcripción («Idea.txt» junto a
+/// «Idea.m4a») o el `.mid` con las notas del piano («Idea.mid»).
 class TranscriptFile {
   const TranscriptFile({
     required this.ref,

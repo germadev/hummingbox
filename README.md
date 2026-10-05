@@ -23,12 +23,17 @@ Google Drive.
 - **Your files, where you want them**: a device folder (internal storage, SD
   card, iCloud Drive…) or Google Drive, with subfolders. Changes made outside
   the app are picked up.
-- **Play and edit**: seek on the waveform, trim, change the volume,
-  normalize and add fades.
+- **Play and edit**: seek on the waveform, play in a loop or one after
+  another, trim, change the volume, normalize and add fades.
+- **Piano**: swipe left for a landscape piano to find your notes. Record the
+  piano alone, with your voice or over a recording; the notes are drawn like
+  a MIDI editor and saved as `.mid` files next to the audio.
+- **Named for you**: new recordings are named after their date and the first
+  words of their transcript (`2026-10-05.Hello, how are you`).
 - **Transcribe** automatically, in the background, on the device with the
   system speech recognizer or Whisper. Transcripts are saved as `.txt` files
   next to the audio.
-- **Search** recording names and transcripts.
+- **Search** recording names and transcripts, in a detailed or compact list.
 - Light and dark themes, in English, Spanish, Italian, Portuguese, French,
   German, Chinese and Japanese.
 

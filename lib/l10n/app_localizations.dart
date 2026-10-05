@@ -152,12 +152,6 @@ abstract class AppLocalizations {
   /// **'Name'**
   String get nameLabel;
 
-  /// Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»)
-  ///
-  /// In en, this message translates to:
-  /// **'Recording'**
-  String get defaultRecordingName;
-
   /// Nombre de la copia de una grabación editada
   ///
   /// In en, this message translates to:
@@ -1375,6 +1369,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
+
+  /// No description provided for @renameToTranscriptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename the recording?'**
+  String get renameToTranscriptTitle;
+
+  /// Al volver a transcribir una grabación, propone llamarla con su fecha y el principio de la nueva transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'With the new transcript, “{current}” would be called “{name}”.'**
+  String renameToTranscriptMessage(String current, String name);
+
+  /// No description provided for @keepName.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep name'**
+  String get keepName;
+
+  /// No description provided for @piano.
+  ///
+  /// In en, this message translates to:
+  /// **'Piano'**
+  String get piano;
+
+  /// En el piano, antes de tocar ninguna tecla
+  ///
+  /// In en, this message translates to:
+  /// **'Play a key to hear its note.\nSwipe over the small keyboard to move along it.'**
+  String get pianoHint;
+
+  /// Nombres de las siete notas naturales, de Do a Si, separados por espacios (solfeo o letras, según el idioma; en alemán, H para el Si)
+  ///
+  /// In en, this message translates to:
+  /// **'C D E F G A B'**
+  String get noteNames;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// En el piano: grabar solo las notas
+  ///
+  /// In en, this message translates to:
+  /// **'Piano only'**
+  String get pianoOnly;
+
+  /// En el piano: grabar las notas y la voz con el micrófono
+  ///
+  /// In en, this message translates to:
+  /// **'Piano and voice'**
+  String get pianoAndVoice;
+
+  /// No description provided for @pianoNothingPlayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to save: no notes were played'**
+  String get pianoNothingPlayed;
+
+  /// No description provided for @stopPlayback.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop playback'**
+  String get stopPlayback;
+
+  /// Interruptor del dock: al terminar una grabación, seguir con la siguiente de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Play one after another'**
+  String get playAll;
+
+  /// Interruptor del dock: al terminar, volver a empezar (la grabación o, con la lista, la lista)
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat'**
+  String get repeat;
+
+  /// Botón de la barra: pasar a la vista compacta de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Compact view'**
+  String get compactView;
+
+  /// Botón de la barra: pasar a la vista detallada de la lista
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed view'**
+  String get detailedView;
+
+  /// Opción del menú de una grabación: tocar el piano sobre ella mientras suena
+  ///
+  /// In en, this message translates to:
+  /// **'Add piano'**
+  String get addPiano;
+
+  /// En el piano, la grabación que se acompaña
+  ///
+  /// In en, this message translates to:
+  /// **'Over “{name}”'**
+  String pianoOver(String name);
+
+  /// Al terminar de acompañar una grabación al piano
+  ///
+  /// In en, this message translates to:
+  /// **'Piano added to “{name}”'**
+  String pianoAdded(String name);
 }
 
 class _AppLocalizationsDelegate

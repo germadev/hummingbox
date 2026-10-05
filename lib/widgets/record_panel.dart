@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app.dart';
+import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../l10n/l10n.dart';
 import '../services/audio_recorder_service.dart';
@@ -15,10 +16,18 @@ import 'waveform_view.dart';
 /// botón a cada lado: a la izquierda, grabar tras una cuenta atrás; a la
 /// derecha, grabar al detectar la voz. Al deslizarlo hacia abajo se vuelve a
 /// plegar. Mientras se graba o se espera para grabar está siempre desplegado.
+///
+/// Mientras suena una grabación (o está en pausa), el botón del centro la
+/// para, y a los lados se activa o desactiva seguir con la siguiente de la
+/// lista (izquierda) y repetir (derecha).
 class RecordPanel extends StatefulWidget {
   const RecordPanel({
     super.key,
     required this.controller,
+    required this.player,
+    required this.onStopPlayback,
+    this.onTouched,
+    this.onBackgroundTapped,
     required this.onRecordPressed,
     required this.onCancelPressed,
     required this.onCountdownPressed,
@@ -27,6 +36,19 @@ class RecordPanel extends StatefulWidget {
   });
 
   final RecorderController controller;
+
+  /// Reproductor de las grabaciones.
+  final PlayerController player;
+
+  /// Para la reproducción.
+  final VoidCallback onStopPlayback;
+
+  /// Al tocar el panel, en cualquier punto (p. ej. para quitar el foco del
+  /// campo de búsqueda).
+  final VoidCallback? onTouched;
+
+  /// Al tocar el panel fuera de sus botones (como el fondo de la lista).
+  final VoidCallback? onBackgroundTapped;
 
   /// Empieza o detiene la grabación según el estado actual (o, si se está
   /// esperando para empezar, empieza ya).
@@ -161,49 +183,61 @@ class _RecordPanelState extends State<RecordPanel>
       ),
       child: SafeArea(
         top: false,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: _onDragUpdate,
-          onVerticalDragEnd: _onDragEnd,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-            child: ListenableBuilder(
-              listenable: Listenable.merge([widget.controller, _expansion]),
-              builder: (context, _) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _DragHandle(
-                    visible: !_active,
-                    expanded: _expanded,
-                    onPressed: _toggle,
-                  ),
-                  SizeTransition(
-                    sizeFactor: _expansion,
-                    alignment: Alignment.bottomCenter,
-                    child: FadeTransition(
-                      opacity: _expansion,
-                      // Plegado del todo, el contenido no se pinta ni se
-                      // anuncia, pero se sigue midiendo para el arrastre.
-                      child: Offstage(
-                        offstage: _expansion.value == 0 && !_active,
-                        child: Padding(
-                          key: _infoKey,
-                          padding: const EdgeInsets.only(top: 4, bottom: 20),
-                          child: _RecordingInfo(controller: widget.controller),
+        child: Listener(
+          onPointerDown: (_) => widget.onTouched?.call(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onBackgroundTapped,
+            onVerticalDragUpdate: _onDragUpdate,
+            onVerticalDragEnd: _onDragEnd,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+              child: ListenableBuilder(
+                listenable: Listenable.merge([
+                  widget.controller,
+                  widget.player,
+                  _expansion,
+                ]),
+                builder: (context, _) => Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _DragHandle(
+                      visible: !_active,
+                      expanded: _expanded,
+                      onPressed: _toggle,
+                    ),
+                    SizeTransition(
+                      sizeFactor: _expansion,
+                      alignment: Alignment.bottomCenter,
+                      child: FadeTransition(
+                        opacity: _expansion,
+                        // Plegado del todo, el contenido no se pinta ni se
+                        // anuncia, pero se sigue midiendo para el arrastre.
+                        child: Offstage(
+                          offstage: _expansion.value == 0 && !_active,
+                          child: Padding(
+                            key: _infoKey,
+                            padding: const EdgeInsets.only(top: 4, bottom: 20),
+                            child: _RecordingInfo(
+                              controller: widget.controller,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  _Controls(
-                    controller: widget.controller,
-                    expanded: _expanded,
-                    countdownSeconds: widget.countdownSeconds,
-                    onRecordPressed: widget.onRecordPressed,
-                    onCancelPressed: widget.onCancelPressed,
-                    onCountdownPressed: widget.onCountdownPressed,
-                    onVoicePressed: widget.onVoicePressed,
-                  ),
-                ],
+                    _Controls(
+                      controller: widget.controller,
+                      player: widget.player,
+                      onStopPlayback: widget.onStopPlayback,
+                      expanded: _expanded,
+                      countdownSeconds: widget.countdownSeconds,
+                      onRecordPressed: widget.onRecordPressed,
+                      onCancelPressed: widget.onCancelPressed,
+                      onCountdownPressed: widget.onCountdownPressed,
+                      onVoicePressed: widget.onVoicePressed,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -363,6 +397,8 @@ class _RecordingInfo extends StatelessWidget {
 class _Controls extends StatelessWidget {
   const _Controls({
     required this.controller,
+    required this.player,
+    required this.onStopPlayback,
     required this.expanded,
     required this.countdownSeconds,
     required this.onRecordPressed,
@@ -372,6 +408,8 @@ class _Controls extends StatelessWidget {
   });
 
   final RecorderController controller;
+  final PlayerController player;
+  final VoidCallback onStopPlayback;
   final bool expanded;
   final int countdownSeconds;
   final VoidCallback onRecordPressed;
@@ -385,6 +423,41 @@ class _Controls extends StatelessWidget {
     final active = controller.isActive;
     final waiting = controller.pending != null;
     final paused = controller.status == RecorderStatus.paused;
+
+    // Mientras suena una grabación: parar, lista y repetir.
+    if (!active && !waiting && player.isPlayingOrPaused) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _SideButton(
+            visible: true,
+            child: IconButton.filledTonal(
+              key: const Key('playlist-button'),
+              tooltip: l10n.playAll,
+              iconSize: 28,
+              isSelected: player.playlist,
+              icon: const Icon(Icons.playlist_play),
+              onPressed: player.togglePlaylist,
+            ),
+          ),
+          const SizedBox(width: 32),
+          StopPlaybackButton(onPressed: onStopPlayback),
+          const SizedBox(width: 32),
+          _SideButton(
+            visible: true,
+            child: IconButton.filledTonal(
+              key: const Key('loop-button'),
+              tooltip: l10n.repeat,
+              iconSize: 28,
+              isSelected: player.loop,
+              icon: const Icon(Icons.repeat),
+              selectedIcon: const Icon(Icons.repeat_on),
+              onPressed: player.toggleLoop,
+            ),
+          ),
+        ],
+      );
+    }
 
     final Widget left = active || waiting
         ? IconButton.filledTonal(
@@ -507,6 +580,50 @@ class RecordButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: recordRed,
                 borderRadius: BorderRadius.circular(recording ? 8 : 32),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Botón central mientras suena una grabación: un cuadrado («parar») del
+/// color principal, del mismo tamaño que el de grabar.
+class StopPlaybackButton extends StatelessWidget {
+  const StopPlaybackButton({super.key, required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final label = context.l10n.stopPlayback;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: label,
+        child: InkResponse(
+          key: const Key('stop-playback-button'),
+          onTap: onPressed,
+          radius: RecordButton._size / 2,
+          child: Container(
+            width: RecordButton._size,
+            height: RecordButton._size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: colors.outlineVariant, width: 4),
+            ),
+            alignment: Alignment.center,
+            child: Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: colors.primary,
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
           ),

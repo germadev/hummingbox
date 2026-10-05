@@ -76,6 +76,7 @@ void main() {
           sync: fakeStorageSync(repository),
           transcriber: FakeTranscriber(),
           whisper: fakeWhisperController(),
+          piano: FakePianoSound(),
         ),
       );
       await tester.pumpAndSettle();
@@ -104,8 +105,9 @@ void main() {
       await tester.tap(find.byKey(const Key('record-button')));
       await tester.pumpAndSettle();
 
-      expect(repository.recordings.single.name, 'Recording 1');
-      expect(find.text('Saved as “Recording 1”'), findsOneWidget);
+      // El nombre provisional (la fecha y la hora) es igual en todos los
+      // idiomas.
+      expect(find.text('Saved as “2026-10-05 14.32”'), findsOneWidget);
     });
 
     testWidgets('si el idioma del sistema no está, usa el inglés', (

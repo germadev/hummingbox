@@ -31,9 +31,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get nameLabel => 'Name';
 
   @override
-  String get defaultRecordingName => 'Aufnahme';
-
-  @override
   String editedCopyName(String name) {
     return '$name (bearbeitet)';
   }
@@ -764,4 +761,66 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get themeDark => 'Dunkel';
+
+  @override
+  String get renameToTranscriptTitle => 'Aufnahme umbenennen?';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return 'Mit der neuen Transkription würde „$current“ „$name“ heißen.';
+  }
+
+  @override
+  String get keepName => 'Beibehalten';
+
+  @override
+  String get piano => 'Klavier';
+
+  @override
+  String get pianoHint =>
+      'Tippe auf eine Taste, um ihren Ton zu hören.\nWische über die kleine Tastatur, um dich darauf zu bewegen.';
+
+  @override
+  String get noteNames => 'C D E F G A H';
+
+  @override
+  String get close => 'Schließen';
+
+  @override
+  String get pianoOnly => 'Nur Klavier';
+
+  @override
+  String get pianoAndVoice => 'Klavier und Stimme';
+
+  @override
+  String get pianoNothingPlayed =>
+      'Nichts zu speichern: Es wurden keine Töne gespielt';
+
+  @override
+  String get stopPlayback => 'Wiedergabe beenden';
+
+  @override
+  String get playAll => 'Nacheinander abspielen';
+
+  @override
+  String get repeat => 'Wiederholen';
+
+  @override
+  String get compactView => 'Kompakte Ansicht';
+
+  @override
+  String get detailedView => 'Detaillierte Ansicht';
+
+  @override
+  String get addPiano => 'Klavier hinzufügen';
+
+  @override
+  String pianoOver(String name) {
+    return 'Zu „$name“';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Klavier zu „$name“ hinzugefügt';
+  }
 }

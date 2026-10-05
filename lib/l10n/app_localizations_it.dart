@@ -31,9 +31,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get nameLabel => 'Nome';
 
   @override
-  String get defaultRecordingName => 'Registrazione';
-
-  @override
   String editedCopyName(String name) {
     return '$name (modificata)';
   }
@@ -752,4 +749,66 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get themeDark => 'Scuro';
+
+  @override
+  String get renameToTranscriptTitle => 'Rinominare la registrazione?';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return 'Con la nuova trascrizione, «$current» si chiamerebbe «$name».';
+  }
+
+  @override
+  String get keepName => 'Mantieni';
+
+  @override
+  String get piano => 'Pianoforte';
+
+  @override
+  String get pianoHint =>
+      'Tocca un tasto per sentirne la nota.\nScorri sulla tastiera piccola per spostarti.';
+
+  @override
+  String get noteNames => 'Do Re Mi Fa Sol La Si';
+
+  @override
+  String get close => 'Chiudi';
+
+  @override
+  String get pianoOnly => 'Solo pianoforte';
+
+  @override
+  String get pianoAndVoice => 'Pianoforte e voce';
+
+  @override
+  String get pianoNothingPlayed =>
+      'Niente da salvare: non è stata suonata nessuna nota';
+
+  @override
+  String get stopPlayback => 'Interrompi la riproduzione';
+
+  @override
+  String get playAll => 'Riproduci una dopo l’altra';
+
+  @override
+  String get repeat => 'Ripeti';
+
+  @override
+  String get compactView => 'Vista compatta';
+
+  @override
+  String get detailedView => 'Vista dettagliata';
+
+  @override
+  String get addPiano => 'Aggiungi pianoforte';
+
+  @override
+  String pianoOver(String name) {
+    return 'Su «$name»';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return 'Pianoforte aggiunto a «$name»';
+  }
 }

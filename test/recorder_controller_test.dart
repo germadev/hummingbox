@@ -20,7 +20,10 @@ void main() {
     recorder = FakeAudioRecorderService(writeFiles: true);
     controller = RecorderController(
       recorder: recorder,
-      repository: FileRecordingsRepository(directory: () async => directory),
+      repository: FileRecordingsRepository(
+        directory: () async => directory,
+        clock: () => testNow,
+      ),
       maxAmplitudeSamples: 3,
     );
   });
@@ -59,7 +62,7 @@ void main() {
     expect(controller.status, RecorderStatus.idle);
     expect(controller.elapsed, Duration.zero);
     expect(recording, isNotNull);
-    expect(recording!.name, 'Grabación 1');
+    expect(recording!.name, '2026-10-05 14.32');
     expect(recording.path, recorder.path);
     expect(File(recording.path).existsSync(), isTrue);
     expect(recording.duration, greaterThanOrEqualTo(pausedAt));
@@ -86,7 +89,10 @@ void main() {
     final probed = <String>[];
     final probing = RecorderController(
       recorder: recorder,
-      repository: FileRecordingsRepository(directory: () async => directory),
+      repository: FileRecordingsRepository(
+        directory: () async => directory,
+        clock: () => testNow,
+      ),
       probe: (path) async {
         probed.add(path);
         return const AudioProbe(info, Duration(milliseconds: 1234));
@@ -113,7 +119,10 @@ void main() {
       trims = {};
       voice = RecorderController(
         recorder: recorder,
-        repository: FileRecordingsRepository(directory: () async => directory),
+        repository: FileRecordingsRepository(
+          directory: () async => directory,
+          clock: () => testNow,
+        ),
         trimStart: (path, start) async => trims[path] = start,
       );
     });
@@ -170,7 +179,10 @@ void main() {
     test('si no se puede recortar, la duración incluye la espera', () async {
       final untrimmed = RecorderController(
         recorder: recorder,
-        repository: FileRecordingsRepository(directory: () async => directory),
+        repository: FileRecordingsRepository(
+          directory: () async => directory,
+          clock: () => testNow,
+        ),
         trimStart: (path, start) async => throw Exception('códec'),
       );
       addTearDown(untrimmed.dispose);

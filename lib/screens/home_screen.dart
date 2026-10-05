@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../controllers/piano_recorder.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../controllers/transcription_controller.dart';
@@ -15,6 +16,7 @@ import '../models/recording_options.dart';
 import '../models/transcription.dart';
 import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
+import '../services/piano_sound.dart';
 import '../services/recording_editor.dart';
 import '../services/recordings_repository.dart';
 import '../services/screen_awake.dart';
@@ -23,9 +25,11 @@ import '../services/share_service.dart';
 import '../services/storage_sync.dart';
 import '../services/transcriber.dart';
 import '../utils/languages.dart';
+import '../utils/recording_names.dart';
 import '../utils/search.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/folder_drawer.dart';
+import '../widgets/piano.dart';
 import '../widgets/record_panel.dart';
 import '../widgets/recording_tile.dart';
 import 'editor_screen.dart';
@@ -43,6 +47,7 @@ class HomeScreen extends StatefulWidget {
     required this.sync,
     required this.transcriber,
     required this.whisper,
+    required this.piano,
     this.screen = const PlatformScreenAwake(),
   });
 
@@ -62,6 +67,9 @@ class HomeScreen extends StatefulWidget {
   /// Instalación de Whisper.
   final WhisperController whisper;
 
+  /// Sonido de las teclas del piano.
+  final PianoSound piano;
+
   /// Mantiene la pantalla encendida mientras se graba (si está activado en
   /// las opciones).
   final ScreenAwake screen;
@@ -77,9 +85,25 @@ class _HomeScreenState extends State<HomeScreen> {
     probe: widget.editor.probe,
     trimStart: widget.editor.trimStart,
   );
+
+  /// Graba desde el piano (con la misma grabadora, si es con voz).
+  late final PianoRecorder _pianoRecorder = PianoRecorder(
+    voice: _recorder,
+    editor: widget.editor,
+  );
+
+  /// Qué se graba desde el piano: se conserva al cerrarlo.
+  final _pianoMode = ValueNotifier(PianoRecordingMode.piano);
+
+  /// La grabación a la que se va a añadir piano, si se ha abierto el piano
+  /// para acompañarla (hasta que se cierra).
+  final _pianoTarget = ValueNotifier<Recording?>(null);
+
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
     audioPath: widget.sync.audioPath,
+    // Con «reproducir lista», sigue con la siguiente de las que se ven.
+    queue: () => _visibleRecordings,
   );
   late final TranscriptionController _transcriptions = TranscriptionController(
     transcriber: widget.transcriber,
@@ -102,9 +126,21 @@ class _HomeScreenState extends State<HomeScreen> {
   /// indica.
   final _pull = ValueNotifier(_Pull.none);
 
-  /// Todas las grabaciones, de todas las carpetas.
+  /// Parte ampliada del piano: se conserva al cerrarlo.
+  final _pianoFirstKey = ValueNotifier(PianoPanel.initialFirstKey);
+
+  /// Todas las grabaciones, de todas las carpetas, de la más antigua a la
+  /// más reciente.
   List<Recording> _recordings = const [];
   bool _loading = true;
+
+  /// Desplazamiento de la lista: las grabaciones más recientes están al
+  /// final.
+  final _scroll = ScrollController();
+
+  /// Lo que muestra la lista (la carpeta o los resultados de la búsqueda):
+  /// al cambiar, la de una carpeta se muestra desde el final.
+  Object? _shownList;
 
   /// Si ya se puede transcribir automáticamente: tras leer el destino la
   /// primera vez, para no adelantarse a los `.txt` que ya hay.
@@ -137,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _lifecycle = AppLifecycleListener(onResume: _onResume);
     _changes = widget.sync.changes.listen(_onStorageChanged);
     _recorder.addListener(_updateScreen);
+    _player.addListener(_onPlayerChangedWhileAccompanying);
     _recorder.addListener(_pauseAutoTranscription);
     widget.sync.addListener(_updateScreen);
     widget.sync.addListener(_onSettingsChanged);
@@ -148,22 +185,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Las grabaciones nuevas se llaman «Grabación N» en el idioma de la app.
-    widget.repository.defaultNamePrefix = context.l10n.defaultRecordingName;
-  }
-
-  @override
   void dispose() {
     _lifecycle.dispose();
     _changes.cancel();
     _search.dispose();
     _searchFocus.dispose();
     _pull.dispose();
+    _pianoFirstKey.dispose();
+    _pianoMode.dispose();
+    _pianoTarget.dispose();
+    _pianoRecorder.dispose();
+    _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
     widget.sync.removeListener(_onSettingsChanged);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
+    if (_pianoOpen) {
+      unawaited(SystemChrome.setPreferredOrientations(const []));
+    }
     _recorder.dispose();
     _player.dispose();
     _transcriptions.dispose();
@@ -328,9 +366,37 @@ class _HomeScreenState extends State<HomeScreen> {
       await _player.stop();
     }
     setState(() => _recordings = recordings);
-    if (added > 0) _showMessage((l10n) => l10n.newRecordingsFound(added));
+    if (added > 0) {
+      _scrollToEnd(animate: true);
+      _showMessage((l10n) => l10n.newRecordingsFound(added));
+    }
     unawaited(_addMissingDetails());
     unawaited(_transcribeMissing());
+  }
+
+  /// Lleva la lista al final, donde están las grabaciones más recientes (no
+  /// en los resultados de una búsqueda), cuando se haya dibujado.
+  void _scrollToEnd({bool animate = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || !_query.isEmpty || !_scroll.hasClients) return;
+      if (animate) {
+        final position = _scroll.position;
+        await position.animateTo(
+          position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+      // La altura de las grabaciones que aún no se han dibujado es estimada:
+      // al dibujarlas puede crecer, y se vuelve a bajar hasta el final.
+      for (var i = 0; i < 10; i++) {
+        if (!mounted || !_scroll.hasClients) return;
+        final position = _scroll.position;
+        if (position.pixels >= position.maxScrollExtent) return;
+        position.jumpTo(position.maxScrollExtent);
+        await WidgetsBinding.instance.endOfFrame;
+      }
+    });
   }
 
   // --- Búsqueda ---
@@ -408,6 +474,111 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.sync.openFolder(folder);
   }
 
+  // --- Piano ---
+
+  bool _pianoOpen = false;
+
+  /// El piano se ve siempre en horizontal: al abrirlo la pantalla gira y al
+  /// cerrarlo vuelve a girar como diga el sistema.
+  void _onPianoChanged(bool opened) {
+    _pianoOpen = opened;
+    unawaited(
+      SystemChrome.setPreferredOrientations(
+        opened ? PianoPanel.landscape : const [],
+      ),
+    );
+    // Al cerrarlo mientras se graba, se guarda lo grabado.
+    if (!opened && _pianoRecorder.isRecording) {
+      unawaited(_stopPianoRecording());
+    }
+    if (!opened) _pianoTarget.value = null;
+  }
+
+  /// Abre el piano para tocar sobre [recording] mientras suena.
+  void _openPianoOver(Recording recording) {
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToPlay);
+      return;
+    }
+    _pianoTarget.value = recording;
+    _scaffoldKey.currentState?.openEndDrawer();
+  }
+
+  /// Mientras se acompaña una grabación, al terminar de sonar (o si se para)
+  /// se guarda lo tocado.
+  void _onPlayerChangedWhileAccompanying() {
+    final target = _pianoRecorder.target;
+    if (target == null || _pianoRecorder.isSaving) return;
+    if (!_player.isPlayingOrPaused || !_player.isCurrent(target)) {
+      unawaited(_stopPianoRecording());
+    }
+  }
+
+  /// Empieza a grabar desde el piano: sobre la grabación que se acompaña, si
+  /// se abrió para eso, o según [mode]. Con voz, para la reproducción (el
+  /// micrófono la grabaría). Devuelve el aviso que se muestra en el piano si
+  /// no se puede empezar.
+  Future<String?> _startPianoRecording(PianoRecordingMode mode) async {
+    final l10n = context.l10n;
+    if (_pianoTarget.value case final target?) {
+      // Suena desde el principio, sin seguir con otra al terminar.
+      try {
+        await _pianoRecorder.startOver(
+          _latest(target),
+          play: () async {
+            _player.autoAdvance = false;
+            await _player.stop();
+            await _player.playFrom(_latest(target), Duration.zero);
+          },
+        );
+      } catch (_) {
+        _player.autoAdvance = true;
+        return l10n.playFailed;
+      }
+      return null;
+    }
+    if (mode == PianoRecordingMode.pianoAndVoice) await _player.stop();
+    try {
+      final started = await _pianoRecorder.start(
+        mode,
+        options: widget.sync.settings.recording,
+        folder: _folder,
+      );
+      return started ? null : l10n.microphonePermission;
+    } catch (_) {
+      return l10n.startRecordingFailed;
+    }
+  }
+
+  /// Termina la grabación del piano y la añade a la lista.
+  Future<Recording?> _stopPianoRecording() async {
+    final accompanying = _pianoRecorder.target != null;
+    Recording? recording;
+    try {
+      if (accompanying) {
+        // Se para antes de cambiar su audio.
+        _player.autoAdvance = true;
+        await _player.stop();
+      }
+      recording = await _pianoRecorder.stop();
+    } catch (_) {
+      recording = null;
+    }
+    if (!mounted || recording == null) return null;
+    final saved = recording;
+    if (_recordings.any((r) => r.id == saved.id)) {
+      _replaceRecording(saved);
+      _showMessage((l10n) => l10n.pianoAdded(saved.name));
+    } else {
+      setState(() => _recordings = [..._recordings, saved]);
+      _scrollToEnd(animate: true);
+      _showMessage((l10n) => l10n.savedAs(saved.name));
+    }
+    _syncStorage();
+    unawaited(_transcribeMissing());
+    return saved;
+  }
+
   Future<void> _createFolder() async {
     final input = await showNameDialog(
       context,
@@ -483,7 +654,8 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     final saved = recording;
-    setState(() => _recordings = [saved, ..._recordings]);
+    setState(() => _recordings = [..._recordings, saved]);
+    _scrollToEnd(animate: true);
     _showMessage((l10n) => l10n.savedAs(saved.name));
     _syncStorage();
     unawaited(_transcribeMissing());
@@ -547,6 +719,8 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (action) {
       case RecordingAction.edit:
         await _edit(recording);
+      case RecordingAction.addPiano:
+        _openPianoOver(recording);
       case RecordingAction.rename:
         await _rename(recording);
       case RecordingAction.transcribe:
@@ -583,9 +757,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final edited = result.recording;
     setState(() {
       _recordings = result.isCopy
-          ? [edited, ..._recordings]
+          ? [..._recordings, edited]
           : [for (final r in _recordings) r.id == edited.id ? edited : r];
     });
+    if (result.isCopy) _scrollToEnd(animate: true);
     _showMessage(
       (l10n) => result.isCopy ? l10n.savedAs(edited.name) : l10n.changesSaved,
     );
@@ -597,6 +772,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _rename(Recording recording) async {
     final name = await showRenameDialog(context, recording.name);
     if (name == null || name == recording.name) return;
+    await _applyName(recording, name);
+  }
+
+  /// Cambia el nombre de [recording] (y el de su archivo, al guardarla).
+  Future<void> _applyName(Recording recording, String name) async {
     try {
       final renamed = await widget.repository.rename(recording, name);
       if (!mounted) return;
@@ -658,7 +838,14 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Transcribe [recording] con lo elegido en las opciones (y su idioma, si
   /// se ha elegido uno para ella). Si no se puede, explica por qué y qué
   /// hacer.
-  Future<void> _transcribe(Recording recording) async {
+  ///
+  /// Si ya tenía transcripción o se ha cambiado su idioma
+  /// ([languageChanged]), pregunta si pasa a llamarse como empieza la nueva
+  /// (la primera vez, con el nombre provisional, cambia sin preguntar).
+  Future<void> _transcribe(
+    Recording recording, {
+    bool languageChanged = false,
+  }) async {
     if (_recorder.isBusy) {
       _showMessage((l10n) => l10n.stopToTranscribe);
       return;
@@ -690,6 +877,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         );
+      if (languageChanged || current.transcript != null) {
+        await _offerTranscriptName(transcribed);
+      }
     } on TranscriptionException catch (e) {
       await _explainTranscriptionError(e, current);
     } catch (_) {
@@ -744,7 +934,32 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     _replaceRecording(updated);
-    await _transcribe(updated);
+    await _transcribe(updated, languageChanged: true);
+  }
+
+  /// Pregunta si [recording] pasa a llamarse con su fecha y el principio de
+  /// su transcripción (p. ej. al volver a transcribirla), si no se llama ya
+  /// así.
+  Future<void> _offerTranscriptName(Recording recording) async {
+    final text = recording.transcript?.text;
+    if (text == null) return;
+    final proposed = RecordingNames.fromTranscript(recording.createdAt, text);
+    if (proposed == null) return;
+    final name = RecordingNames.unique(proposed, [
+      for (final r in _recordings)
+        if (r.folder == recording.folder && r.id != recording.id) r.name,
+    ]);
+    if (name == recording.name) return;
+    final l10n = context.l10n;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.renameToTranscriptTitle,
+      message: l10n.renameToTranscriptMessage(recording.name, name),
+      confirmLabel: l10n.rename,
+      cancelLabel: l10n.keepName,
+    );
+    if (!confirmed || !mounted) return;
+    await _applyName(_latest(recording), name);
   }
 
   // --- Transcripción automática ---
@@ -765,7 +980,8 @@ class _HomeScreenState extends State<HomeScreen> {
       do {
         _transcriptionsPending = false;
         await widget.sync.load();
-        for (final recording in _recordings) {
+        // De la más reciente a la más antigua.
+        for (final recording in _recordings.reversed) {
           if (!mounted || !_autoTranscribing) return;
           if (!_needsAutoTranscript(recording)) continue;
           if (!await widget.sync.hasLocalAudio(recording)) continue;
@@ -1110,43 +1326,23 @@ class _HomeScreenState extends State<HomeScreen> {
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        // El botón de carpetas y, en una subcarpeta, su nombre (en la
-        // principal, nada), hasta la lupa.
-        leadingWidth: searching || folder.isEmpty
-            ? null
-            : MediaQuery.sizeOf(context).width / 2 - 32,
+        // El botón de carpetas.
         leading: Padding(
           padding: const EdgeInsetsDirectional.only(start: 4),
-          child: Row(
-            children: [
-              // Abre el menú de carpetas (mientras se graba no se cambia de
-              // carpeta).
-              IconButton(
-                key: const Key('folders-button'),
-                tooltip: context.l10n.folders,
-                icon: const Icon(Icons.folder_outlined),
-                onPressed: _recorder.isBusy
-                    ? null
-                    : () => _scaffoldKey.currentState?.openDrawer(),
-              ),
-              if (!searching && folder.isNotEmpty)
-                Flexible(
-                  child: Padding(
-                    padding: const EdgeInsetsDirectional.only(start: 12),
-                    child: Text(
-                      folder,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                ),
-            ],
+          // Mientras se graba no se cambia de carpeta.
+          child: IconButton(
+            key: const Key('folders-button'),
+            tooltip: context.l10n.folders,
+            icon: const Icon(Icons.folder_outlined),
+            onPressed: _recorder.isBusy
+                ? null
+                : () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        // La lupa, en el centro. Mientras se busca, el campo ocupa desde las
-        // carpetas hasta las opciones, con la lupa a la izquierda.
-        centerTitle: !searching,
+        // La lupa, siempre a la izquierda, junto a las carpetas, y en una
+        // subcarpeta su nombre. Al buscar, el campo ocupa desde ahí hasta las
+        // opciones, con la lupa en el mismo sitio.
+        centerTitle: false,
         titleSpacing: 0,
         title: searching
             ? _SearchField(
@@ -1155,10 +1351,55 @@ class _HomeScreenState extends State<HomeScreen> {
                 pull: _pull,
                 onClear: _closeSearch,
               )
-            : _SearchButton(pull: _pull, onPressed: _startSearch),
+            : Row(
+                children: [
+                  _SearchButton(pull: _pull, onPressed: _startSearch),
+                  if (folder.isNotEmpty)
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.only(start: 4),
+                        child: Text(
+                          folder,
+                          key: const Key('folder-title'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
+          // Abre el piano (mientras se graba, no: su sonido podría cortar la
+          // grabación).
+          if (!searching)
+            IconButton(
+              key: const Key('piano-button'),
+              tooltip: context.l10n.piano,
+              icon: const Icon(Icons.piano),
+              onPressed: _recorder.isBusy
+                  ? null
+                  : () => _scaffoldKey.currentState?.openEndDrawer(),
+            ),
+          // Vista compacta o detallada de la lista, donde al buscar está la
+          // X del campo. Muestra la vista a la que cambia.
+          if (!searching)
+            IconButton(
+              key: const Key('view-mode-button'),
+              tooltip: sync.settings.compactList
+                  ? context.l10n.detailedView
+                  : context.l10n.compactView,
+              icon: Icon(
+                sync.settings.compactList
+                    ? Icons.view_agenda_outlined
+                    : Icons.view_headline,
+              ),
+              onPressed: () => unawaited(
+                widget.sync.setCompactList(!sync.settings.compactList),
+              ),
+            ),
           IconButton(
             key: const Key('settings-button'),
             tooltip: context.l10n.settings,
@@ -1188,11 +1429,32 @@ class _HomeScreenState extends State<HomeScreen> {
       },
       // Mientras se graba no se cambia de carpeta.
       drawerEnableOpenDragGesture: !_recorder.isBusy,
-      // También se abre deslizando hacia la derecha en cualquier punto de la
-      // lista, no solo desde el borde.
-      body: _SwipeToOpenDrawer(
+      // El piano, que se abre deslizando desde la derecha y ocupa todo el
+      // ancho.
+      endDrawer: Drawer(
+        key: const Key('piano-drawer'),
+        width: MediaQuery.sizeOf(context).width,
+        shape: const RoundedRectangleBorder(),
+        child: PianoPanel(
+          sound: widget.piano,
+          firstKey: _pianoFirstKey,
+          recorder: _pianoRecorder,
+          mode: _pianoMode,
+          target: _pianoTarget,
+          onRecord: _startPianoRecording,
+          onStop: _stopPianoRecording,
+          onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
+        ),
+      ),
+      endDrawerEnableOpenDragGesture: !_recorder.isBusy,
+      onEndDrawerChanged: _onPianoChanged,
+      // También se abren deslizando en cualquier punto de la lista, no solo
+      // desde el borde: hacia la derecha las carpetas y hacia la izquierda
+      // el piano.
+      body: _SwipeToOpenDrawers(
         enabled: !_recorder.isBusy,
-        onOpen: () => _scaffoldKey.currentState?.openDrawer(),
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
+        onOpenEndDrawer: () => _scaffoldKey.currentState?.openEndDrawer(),
         // Los toques en las grabaciones no llegan aquí.
         child: GestureDetector(
           key: const Key('list-background'),
@@ -1205,6 +1467,12 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
         countdownSeconds: widget.sync.settings.countdownSeconds,
+        player: _player,
+        onStopPlayback: () => unawaited(_player.stop()),
+        // Como el fondo de la lista: quita el foco del campo de búsqueda y,
+        // fuera de los botones, la selección.
+        onTouched: _searchFocus.unfocus,
+        onBackgroundTapped: _onBackgroundTapped,
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
         onCountdownPressed: _startAfterCountdown,
@@ -1212,54 +1480,86 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Evita salir de la app por accidente en mitad de una grabación. Si se
-    // está buscando, «atrás» cierra la búsqueda; en una subcarpeta, vuelve a
-    // la principal.
+    // «Atrás» lo decide siempre la app (ver [_onBack]).
     return PopScope(
-      canPop: !_recorder.isBusy && folder.isEmpty && !searching,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        if (_searchOpen) {
-          _closeSearch();
-        } else if (_recorder.pending != null) {
-          _recorder.cancel();
-        } else if (_recorder.isActive) {
-          _showMessage((l10n) => l10n.stopToLeave);
-        } else {
-          _openFolder('');
-        }
+        if (!didPop) unawaited(_onBack());
       },
       child: scaffold,
     );
   }
 
+  /// «Atrás» del sistema, de lo más concreto a lo más general: cierra el
+  /// piano; quita el foco del campo de búsqueda y después la selección de la
+  /// grabación; cierra la búsqueda; en una subcarpeta vuelve a la principal
+  /// y en la principal abre el menú de las carpetas. Con ese menú abierto en
+  /// la principal, se sale de la app. En mitad de una grabación no se sale.
+  Future<void> _onBack() async {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold == null) return;
+    if (scaffold.isEndDrawerOpen) {
+      scaffold.closeEndDrawer();
+    } else if (scaffold.isDrawerOpen) {
+      if (_folder.isEmpty) {
+        await SystemNavigator.pop();
+      } else {
+        scaffold.closeDrawer();
+      }
+    } else if (_searchFocus.hasFocus) {
+      _searchFocus.unfocus();
+    } else if (_player.currentId != null) {
+      await _player.stop();
+    } else if (_searchOpen) {
+      _closeSearch();
+    } else if (_recorder.pending != null) {
+      await _recorder.cancel();
+    } else if (_recorder.isActive) {
+      _showMessage((l10n) => l10n.stopToLeave);
+    } else if (_folder.isNotEmpty) {
+      await _openFolder('');
+    } else {
+      scaffold.openDrawer();
+    }
+  }
+
   int _countIn(String folder) =>
       _recordings.where((recording) => recording.folder == folder).length;
+
+  /// Las grabaciones que se ven, en orden: las de la carpeta abierta o, al
+  /// buscar, de todas las carpetas, primero las que tienen las palabras tal
+  /// cual y después las que tienen alguna parecida.
+  List<Recording> get _visibleRecordings {
+    final query = _query;
+    if (query.isEmpty) {
+      return [
+        for (final recording in _recordings)
+          if (recording.folder == _folder) recording,
+      ];
+    }
+    final matches = {
+      for (final recording in _recordings) recording: query.matchOf(recording),
+    };
+    return [
+      for (final kind in [SearchMatch.exact, SearchMatch.similar])
+        for (final MapEntry(key: recording, value: match) in matches.entries)
+          if (match == kind) recording,
+    ];
+  }
 
   Widget _buildBody(String folder) {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    // Al buscar, en todas las carpetas: primero las que tienen las palabras
-    // tal cual y después las que tienen alguna parecida.
     final query = _query;
     final searching = !query.isEmpty;
-    final List<Recording> recordings;
-    if (searching) {
-      final matches = {
-        for (final recording in _recordings)
-          recording: query.matchOf(recording),
-      };
-      recordings = [
-        for (final kind in [SearchMatch.exact, SearchMatch.similar])
-          for (final MapEntry(key: recording, value: match) in matches.entries)
-            if (match == kind) recording,
-      ];
-    } else {
-      recordings = [
-        for (final recording in _recordings)
-          if (recording.folder == folder) recording,
-      ];
+    final recordings = _visibleRecordings;
+    // Al abrir la app o una carpeta (o al terminar de buscar), desde el
+    // final, con las más recientes; los resultados, desde el principio.
+    final Object shown = searching ? const _SearchResults() : folder;
+    if (shown != _shownList) {
+      _shownList = shown;
+      if (!searching) _scrollToEnd();
     }
     final l10n = context.l10n;
     // Tirando hacia abajo desde arriba de la lista se busca.
@@ -1284,12 +1584,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 hint: l10n.emptyFolderHint,
               ),
             }
-          : _buildList(recordings, searching ? query : null),
+          : _buildList(recordings, shown, searching ? query : null),
     );
   }
 
-  Widget _buildList(List<Recording> recordings, SearchQuery? query) {
+  Widget _buildList(
+    List<Recording> recordings,
+    Object shown,
+    SearchQuery? query,
+  ) {
     return ListView.builder(
+      // Una lista nueva para cada carpeta y para los resultados.
+      key: ValueKey(shown),
+      controller: _scroll,
       // También con pocas grabaciones, para poder tirar hacia abajo.
       physics: _PullToSearch.physics,
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1304,6 +1611,7 @@ class _HomeScreenState extends State<HomeScreen> {
           search: query,
           // En los resultados de una búsqueda, su subcarpeta.
           showFolder: query != null,
+          compact: widget.sync.settings.compactList,
           onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
           onSeek: (position) => _seek(recording, position),
@@ -1315,26 +1623,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Llama a [onOpen] al deslizar hacia la derecha (hacia la izquierda en los
-/// idiomas que se escriben de derecha a izquierda) en cualquier punto de
-/// [child]. Lo que se arrastra dentro de [child] (p. ej. la onda para saltar)
-/// tiene prioridad.
-class _SwipeToOpenDrawer extends StatefulWidget {
-  const _SwipeToOpenDrawer({
+/// Llama a [onOpenDrawer] al deslizar hacia la derecha y a [onOpenEndDrawer]
+/// al deslizar hacia la izquierda (al revés en los idiomas que se escriben
+/// de derecha a izquierda) en cualquier punto de [child]. Lo que se arrastra
+/// dentro de [child] (p. ej. la onda para saltar) tiene prioridad.
+class _SwipeToOpenDrawers extends StatefulWidget {
+  const _SwipeToOpenDrawers({
     required this.enabled,
-    required this.onOpen,
+    required this.onOpenDrawer,
+    required this.onOpenEndDrawer,
     required this.child,
   });
 
   final bool enabled;
-  final VoidCallback onOpen;
+  final VoidCallback onOpenDrawer;
+  final VoidCallback onOpenEndDrawer;
   final Widget child;
 
   @override
-  State<_SwipeToOpenDrawer> createState() => _SwipeToOpenDrawerState();
+  State<_SwipeToOpenDrawers> createState() => _SwipeToOpenDrawersState();
 }
 
-class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
+class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Lo que hay que deslizar para abrir el menú.
   static const _distance = 48.0;
 
@@ -1347,10 +1657,12 @@ class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
   double get _direction =>
       Directionality.of(context) == TextDirection.rtl ? -1 : 1;
 
-  void _open() {
+  /// Abre el menú de las carpetas si [forward] (hacia la derecha) o, si no,
+  /// el piano.
+  void _open({required bool forward}) {
     if (_opened) return;
     _opened = true;
-    widget.onOpen();
+    (forward ? widget.onOpenDrawer : widget.onOpenEndDrawer)();
   }
 
   @override
@@ -1364,11 +1676,15 @@ class _SwipeToOpenDrawerState extends State<_SwipeToOpenDrawer> {
       },
       onHorizontalDragUpdate: (details) {
         _dragged += (details.primaryDelta ?? 0) * _direction;
-        if (_dragged > _distance) _open();
+        if (_dragged.abs() > _distance) _open(forward: _dragged > 0);
       },
       onHorizontalDragEnd: (details) {
         final velocity = (details.primaryVelocity ?? 0) * _direction;
-        if (_dragged > 0 && velocity > _flingVelocity) _open();
+        if (_dragged > 0 && velocity > _flingVelocity) {
+          _open(forward: true);
+        } else if (_dragged < 0 && velocity < -_flingVelocity) {
+          _open(forward: false);
+        }
       },
       child: widget.child,
     );
@@ -1500,6 +1816,13 @@ class _SearchField extends StatelessWidget {
   }
 }
 
+/// Lo que muestra la lista mientras se busca: los resultados, de todas las
+/// carpetas.
+@immutable
+class _SearchResults {
+  const _SearchResults();
+}
+
 /// Cuánto se ha tirado de la lista hacia abajo para buscar.
 @immutable
 class _Pull {
@@ -1568,6 +1891,10 @@ class _PullToSearchState extends State<_PullToSearch> {
 
   bool get _armed => widget.pull.value.armed;
 
+  /// Si ya se ha buscado al soltar: mientras la lista vuelve a su sitio, la
+  /// lupa ya no indica nada (pasa directamente a no tener fondo).
+  bool _searched = false;
+
   bool _onScroll(ScrollNotification notification) {
     if (notification.depth != 0) return false;
     final metrics = notification.metrics;
@@ -1588,8 +1915,13 @@ class _PullToSearchState extends State<_PullToSearch> {
         if (_dragging) _release();
         _pulling = false;
         armed = false;
+        _searched = false;
       default:
         break;
+    }
+    if (_searched) {
+      widget.pull.value = _Pull.none;
+      return false;
     }
     if (armed && !_armed) unawaited(HapticFeedback.mediumImpact());
     // El color de la lupa se mantiene mientras la lista vuelve a su sitio.
@@ -1597,10 +1929,19 @@ class _PullToSearchState extends State<_PullToSearch> {
     return false;
   }
 
+  void _onPointerUp() {
+    if (!_dragging) return;
+    _release();
+    _pulling = false;
+  }
+
   /// Al soltar tras pasar el punto, se busca.
   void _release() {
     _dragging = false;
-    if (_armed) widget.onPull();
+    if (!_armed) return;
+    _searched = true;
+    widget.pull.value = _Pull.none;
+    widget.onPull();
   }
 
   /// Margen de la lista sobre la primera grabación: el texto no pasa de ahí.
@@ -1610,46 +1951,52 @@ class _PullToSearchState extends State<_PullToSearch> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    return NotificationListener<ScrollNotification>(
-      onNotification: _onScroll,
-      child: Stack(
-        children: [
-          widget.child,
-          // En el hueco que deja la lista al bajar, sin tapar nada.
-          Positioned.fill(
-            child: IgnorePointer(
-              child: ValueListenableBuilder<_Pull>(
-                valueListenable: widget.pull,
-                builder: (context, pull, _) {
-                  if (pull.distance <= 0) return const SizedBox.shrink();
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
-                      height: pull.distance + _listPadding,
-                      child: ClipRect(
-                        child: Center(
-                          child: Opacity(
-                            opacity: pull.progress,
-                            child: Text(
-                              pull.armed
-                                  ? l10n.releaseToSearch
-                                  : l10n.pullToSearch,
-                              key: const Key('pull-to-search-hint'),
-                              maxLines: 1,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.outline,
+    // Al levantar el dedo se busca ya, sin esperar a que la lista empiece a
+    // volver a su sitio.
+    return Listener(
+      onPointerUp: (_) => _onPointerUp(),
+      onPointerCancel: (_) => _onPointerUp(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: Stack(
+          children: [
+            widget.child,
+            // En el hueco que deja la lista al bajar, sin tapar nada.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<_Pull>(
+                  valueListenable: widget.pull,
+                  builder: (context, pull, _) {
+                    if (pull.distance <= 0) return const SizedBox.shrink();
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: pull.distance + _listPadding,
+                        child: ClipRect(
+                          child: Center(
+                            child: Opacity(
+                              opacity: pull.progress,
+                              child: Text(
+                                pull.armed
+                                    ? l10n.releaseToSearch
+                                    : l10n.pullToSearch,
+                                key: const Key('pull-to-search-hint'),
+                                maxLines: 1,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

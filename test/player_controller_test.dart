@@ -157,4 +157,78 @@ void main() {
       expect(controller.isCurrent(second), isTrue);
     });
   });
+
+  group('al terminar', () {
+    final third = Recording(
+      id: 'c',
+      path: '/c.m4a',
+      name: 'C',
+      createdAt: DateTime(2026),
+      duration: const Duration(seconds: 5),
+    );
+
+    setUp(() {
+      controller.dispose();
+      player = FakeAudioPlayerService();
+      controller = PlayerController(
+        player: player,
+        queue: () => [first, second, third],
+      );
+    });
+
+    Future<void> finish() async {
+      player.statusController.add(PlaybackStatus.completed);
+      await flush();
+      await flush();
+    }
+
+    test('sin bucle ni lista, se para', () async {
+      await controller.toggle(first);
+      await finish();
+
+      expect(player.calls, ['play /a.m4a @0']);
+      expect(controller.isPlayingOrPaused, isFalse);
+      expect(controller.currentId, 'a');
+    });
+
+    test('en bucle, vuelve a empezar la misma', () async {
+      controller.toggleLoop();
+      await controller.toggle(second);
+      await finish();
+
+      expect(player.calls, ['play /b.m4a @0', 'play /b.m4a @0']);
+      expect(controller.isPlaying(second), isTrue);
+    });
+
+    test('con la lista, sigue con la siguiente y se para al final', () async {
+      controller.togglePlaylist();
+      await controller.toggle(second);
+      await finish();
+      expect(controller.isPlaying(third), isTrue);
+      expect(controller.duration, third.duration);
+
+      await finish();
+      expect(player.calls, ['play /b.m4a @0', 'play /c.m4a @0']);
+      expect(controller.isPlayingOrPaused, isFalse);
+    });
+
+    test('con la lista en bucle, al final vuelve a la primera', () async {
+      controller
+        ..togglePlaylist()
+        ..toggleLoop();
+      await controller.toggle(third);
+      await finish();
+
+      expect(player.calls.last, 'play /a.m4a @0');
+      expect(controller.isPlaying(first), isTrue);
+    });
+
+    test('los interruptores se conservan al parar', () async {
+      controller.toggleLoop();
+      await controller.toggle(first);
+      await controller.stop();
+      expect(controller.loop, isTrue);
+      expect(controller.playlist, isFalse);
+    });
+  });
 }

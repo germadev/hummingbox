@@ -31,9 +31,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get nameLabel => '名称';
 
   @override
-  String get defaultRecordingName => '录音';
-
-  @override
   String editedCopyName(String name) {
     return '$name（已编辑）';
   }
@@ -722,4 +719,64 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get themeDark => '深色';
+
+  @override
+  String get renameToTranscriptTitle => '重命名录音？';
+
+  @override
+  String renameToTranscriptMessage(String current, String name) {
+    return '根据新的转写内容，“$current”将改名为“$name”。';
+  }
+
+  @override
+  String get keepName => '保留原名';
+
+  @override
+  String get piano => '钢琴';
+
+  @override
+  String get pianoHint => '点按琴键即可听到音符。\n在小键盘上滑动可移动位置。';
+
+  @override
+  String get noteNames => 'C D E F G A B';
+
+  @override
+  String get close => '关闭';
+
+  @override
+  String get pianoOnly => '仅钢琴';
+
+  @override
+  String get pianoAndVoice => '钢琴和人声';
+
+  @override
+  String get pianoNothingPlayed => '没有可保存的内容：未弹奏任何音符';
+
+  @override
+  String get stopPlayback => '停止播放';
+
+  @override
+  String get playAll => '连续播放';
+
+  @override
+  String get repeat => '重复播放';
+
+  @override
+  String get compactView => '紧凑视图';
+
+  @override
+  String get detailedView => '详细视图';
+
+  @override
+  String get addPiano => '添加钢琴';
+
+  @override
+  String pianoOver(String name) {
+    return '为“$name”伴奏';
+  }
+
+  @override
+  String pianoAdded(String name) {
+    return '已为“$name”添加钢琴';
+  }
 }

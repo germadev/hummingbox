@@ -7,29 +7,30 @@ import 'package:path_provider/path_provider.dart';
 
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import '../models/piano_note.dart';
 import '../models/recording.dart';
 import '../models/recording_options.dart';
 import '../models/transcription.dart';
 import '../utils/files.dart';
+import '../utils/recording_names.dart';
 
 /// Almacén de las grabaciones del usuario.
 abstract interface class RecordingsRepository {
-  /// Nombre de las grabaciones nuevas, seguido de un número («Grabación 3»).
-  /// Lo fija la interfaz según el idioma.
-  abstract String defaultNamePrefix;
-
   /// Devuelve una ruta libre donde guardar una nueva grabación en [format].
   Future<String> createRecordingPath({
     RecordingFormat format = RecordingFormat.aac,
   });
 
-  /// Devuelve todas las grabaciones, de la más reciente a la más antigua.
+  /// Devuelve todas las grabaciones, de la más antigua a la más reciente.
   Future<List<Recording>> loadAll();
 
   /// Registra el archivo de audio de [path] como una nueva grabación de la
-  /// subcarpeta [folder], con [name] o, si no se indica, el siguiente nombre
-  /// libre ("Grabación N"), y con fecha [createdAt] o, si no se indica, la
-  /// actual.
+  /// subcarpeta [folder], con [name] o, si no se indica, uno provisional con
+  /// la fecha y la hora («2026-10-05 14.32», ver [Recording.provisionalName]),
+  /// y con fecha [createdAt] o, si no se indica, la actual.
+  ///
+  /// [notes] son las notas del piano tocadas mientras se grababa y
+  /// [hasVoice], si se grabó también la voz (ver [Recording.notes]).
   ///
   /// Si [copies] no está vacío, el audio puede no estar en [path]: la
   /// grabación está guardada fuera de la app (en la carpeta del dispositivo o
@@ -43,8 +44,11 @@ abstract interface class RecordingsRepository {
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
     String folder = '',
+    List<PianoNote> notes = const [],
+    bool hasVoice = true,
   });
 
+  /// Cambia el nombre de [recording] (ya no es provisional).
   Future<Recording> rename(Recording recording, String name);
 
   /// Sustituye el audio de [recording] por el archivo de [sourcePath], que se
@@ -74,11 +78,18 @@ abstract interface class RecordingsRepository {
   ///
   /// Con [keepExisting], no sustituye la que ya tenga (p. ej. leída de su
   /// `.txt` mientras se transcribía en segundo plano).
+  ///
+  /// Si su nombre es provisional ([Recording.provisionalName]), pasa a
+  /// llamarse con la fecha y el principio de la transcripción
+  /// («2026-10-05.hola qué tal»), sin repetir el de otra de su carpeta.
   Future<Recording> setTranscript(
     Recording recording,
     Transcript? transcript, {
     bool keepExisting = false,
   });
+
+  /// Sustituye las notas del piano de [recording] (p. ej. al recortarla).
+  Future<Recording> setNotes(Recording recording, List<PianoNote> notes);
 
   /// Guarda el idioma en que se transcribe [recording] (ver
   /// [Recording.transcriptionLanguage]); `null` para usar el de las opciones.
@@ -98,7 +109,8 @@ abstract interface class RecordingsRepository {
   /// Guarda que [recording] está en el archivo [file] del destino [key] y
   /// que ese archivo tiene su audio y su nombre actuales (p. ej. si se
   /// renombró fuera de la app o se reconoce como suyo). Si se indica [name],
-  /// la grabación pasa a llamarse así. Si [audioChanged], el audio se cambió
+  /// la grabación pasa a llamarse así (y deja de ser provisional). Si
+  /// [audioChanged], el audio se cambió
   /// fuera de la app: la revisión aumenta y se olvidan la onda, la duración y
   /// el formato para volver a calcularlos.
   Future<Recording> updateStoredFile(
@@ -134,12 +146,16 @@ abstract interface class RecordingsRepository {
 /// grabaciones guardadas fuera de la app (en la carpeta del dispositivo o en
 /// Google Drive) solo están los metadatos, salvo mientras falta guardarlas.
 class FileRecordingsRepository implements RecordingsRepository {
-  FileRecordingsRepository({Future<Directory> Function()? directory})
-    : _directoryProvider = directory ?? _defaultDirectory;
+  FileRecordingsRepository({
+    Future<Directory> Function()? directory,
+    DateTime Function()? clock,
+  }) : _directoryProvider = directory ?? _defaultDirectory,
+       _clock = clock ?? DateTime.now;
 
   static const _indexFileName = 'recordings.json';
-  @override
-  String defaultNamePrefix = 'Grabación';
+
+  /// Fecha actual (sustituible en los tests).
+  final DateTime Function() _clock;
 
   final Future<Directory> Function() _directoryProvider;
   Directory? _directory;
@@ -228,7 +244,14 @@ class FileRecordingsRepository implements RecordingsRepository {
       );
     }
 
-    recordings.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    // De la más antigua a la más reciente: las nuevas, al final (con la misma
+    // fecha, por su id, que lleva la hora en que se creó).
+    recordings.sort(
+      (a, b) => switch (a.createdAt.compareTo(b.createdAt)) {
+        0 => a.id.compareTo(b.id),
+        final order => order,
+      },
+    );
     return recordings;
   }
 
@@ -242,27 +265,33 @@ class FileRecordingsRepository implements RecordingsRepository {
     AudioInfo? audio,
     Map<String, CopyState> copies = const {},
     String folder = '',
+    List<PianoNote> notes = const [],
+    bool hasVoice = true,
   }) async {
     if (copies.isEmpty && !await File(path).exists()) return null;
 
     return _synchronized(() async {
       final directory = await _getDirectory();
       final index = await _readIndex(directory);
+      final date = createdAt ?? _clock();
       final recording = Recording(
         id: p.basenameWithoutExtension(path),
         path: path,
         name:
             name ??
-            nextDefaultName(
-              index.values.map((m) => m['name'] as String?),
-              prefix: defaultNamePrefix,
+            RecordingNames.unique(
+              RecordingNames.provisional(date),
+              _namesIn(index, folder),
             ),
-        createdAt: createdAt ?? DateTime.now(),
+        createdAt: date,
         duration: duration,
         waveform: waveform,
         audio: audio,
         copies: copies,
         folder: folder,
+        provisionalName: name == null,
+        notes: notes,
+        hasVoice: hasVoice,
       );
       index[recording.id] = recording.toMetadata();
       await _writeIndex(directory, index);
@@ -272,7 +301,10 @@ class FileRecordingsRepository implements RecordingsRepository {
 
   @override
   Future<Recording> rename(Recording recording, String name) {
-    return _update(recording, (metadata) => metadata['name'] = name.trim());
+    return _update(recording, (metadata) {
+      metadata['name'] = name.trim();
+      metadata.remove('provisionalName');
+    });
   }
 
   @override
@@ -287,7 +319,7 @@ class FileRecordingsRepository implements RecordingsRepository {
     // [releaseAudio]).
     return _synchronized(() async {
       await moveFile(sourcePath, recording.path);
-      return _updateUnlocked(recording, (metadata) {
+      return _updateUnlocked(recording, (metadata, _) {
         metadata['durationMs'] = duration.inMilliseconds;
         metadata['revision'] = (metadata['revision'] as int? ?? 0) + 1;
         if (waveform != null) {
@@ -324,14 +356,43 @@ class FileRecordingsRepository implements RecordingsRepository {
     Transcript? transcript, {
     bool keepExisting = false,
   }) {
-    return _update(recording, (metadata) {
-      if (keepExisting && metadata['transcript'] != null) return;
-      if (transcript == null) {
-        metadata.remove('transcript');
-        metadata['noAutoTranscript'] = recording.revision;
-      } else {
+    return _synchronized(
+      () => _updateUnlocked(recording, (metadata, index) {
+        if (keepExisting && metadata['transcript'] != null) return;
+        if (transcript == null) {
+          metadata.remove('transcript');
+          metadata['noAutoTranscript'] = recording.revision;
+          return;
+        }
         metadata['transcript'] = transcript.toJson();
         metadata.remove('noAutoTranscript');
+        if (metadata['provisionalName'] != true) return;
+        final current = Recording.fromMetadata(
+          id: recording.id,
+          path: recording.path,
+          json: metadata,
+        );
+        final name = RecordingNames.fromTranscript(
+          current.createdAt,
+          transcript.text,
+        );
+        if (name == null) return;
+        metadata['name'] = RecordingNames.unique(
+          name,
+          _namesIn(index, current.folder, except: recording.id),
+        );
+        metadata.remove('provisionalName');
+      }),
+    );
+  }
+
+  @override
+  Future<Recording> setNotes(Recording recording, List<PianoNote> notes) {
+    return _update(recording, (metadata) {
+      if (notes.isEmpty) {
+        metadata.remove('notes');
+      } else {
+        metadata['notes'] = [for (final note in notes) note.toJson()];
       }
     });
   }
@@ -388,7 +449,10 @@ class FileRecordingsRepository implements RecordingsRepository {
           ..remove('waveform')
           ..remove('audio');
       }
-      if (name != null) metadata['name'] = name;
+      if (name != null) {
+        metadata['name'] = name;
+        metadata.remove('provisionalName');
+      }
       metadata['copies'] = {
         ...?(metadata['copies'] as Map<String, dynamic>?),
         key: CopyState(
@@ -400,6 +464,7 @@ class FileRecordingsRepository implements RecordingsRepository {
           checksum: file.checksum,
           modified: file.modified,
           transcript: file.transcript,
+          midi: file.midi,
         ).toJson(),
       };
     });
@@ -445,22 +510,17 @@ class FileRecordingsRepository implements RecordingsRepository {
     if (await file.exists()) await file.delete();
   }
 
-  /// Siguiente nombre libre del tipo "Grabación N".
-  static String nextDefaultName(
-    Iterable<String?> existingNames, {
-    String prefix = 'Grabación',
-  }) {
-    final pattern = RegExp('^${RegExp.escape(prefix)} (\\d+)\$');
-    var highest = 0;
-    for (final name in existingNames) {
-      final match = name == null ? null : pattern.firstMatch(name);
-      if (match != null) {
-        final number = int.parse(match.group(1)!);
-        if (number > highest) highest = number;
-      }
-    }
-    return '$prefix ${highest + 1}';
-  }
+  /// Nombres de las grabaciones de la subcarpeta [folder] del índice,
+  /// salvo la de id [except].
+  static Iterable<String> _namesIn(
+    Map<String, Map<String, dynamic>> index,
+    String folder, {
+    String? except,
+  }) => [
+    for (final MapEntry(key: id, value: metadata) in index.entries)
+      if (id != except && (metadata['folder'] as String? ?? '') == folder)
+        ?metadata['name'] as String?,
+  ];
 
   /// Modifica los metadatos de [recording] partiendo de los guardados (y no
   /// de [recording], que puede estar desactualizada) y devuelve el resultado.
@@ -470,11 +530,19 @@ class FileRecordingsRepository implements RecordingsRepository {
   Future<Recording> _update(
     Recording recording,
     void Function(Map<String, dynamic> metadata) change,
-  ) => _synchronized(() => _updateUnlocked(recording, change));
+  ) => _synchronized(
+    () => _updateUnlocked(recording, (metadata, _) => change(metadata)),
+  );
 
+  /// Como [_update], sin el bloqueo. [change] recibe también el índice (sin
+  /// los cambios), p. ej. para ver los nombres de las demás.
   Future<Recording> _updateUnlocked(
     Recording recording,
-    void Function(Map<String, dynamic> metadata) change,
+    void Function(
+      Map<String, dynamic> metadata,
+      Map<String, Map<String, dynamic>> index,
+    )
+    change,
   ) async {
     final directory = await _getDirectory();
     final index = await _readIndex(directory);
@@ -485,7 +553,7 @@ class FileRecordingsRepository implements RecordingsRepository {
       return recording;
     }
     final metadata = {...(stored ?? recording.toMetadata())};
-    change(metadata);
+    change(metadata, index);
     index[recording.id] = metadata;
     await _writeIndex(directory, index);
     return Recording.fromMetadata(

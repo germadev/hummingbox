@@ -29,6 +29,16 @@ recordings whose audio is edited.
 - Choosing *Transcribe* in a recording's menu moves it ahead of the automatic
   ones and shows its progress.
 
+### Names from the transcript
+
+A new recording is called after its date and time (`2026-10-05 14.32`) until
+it is transcribed for the first time; then it is called after its date and
+the first words of the transcript (`2026-10-05.Hello, how are you`), and its
+files in the folder or in Drive are renamed with it. Recordings you have
+renamed keep their name. When you transcribe a recording again, or in
+another language, the app asks whether to rename it after the new transcript
+(see [Recordings list](features.md#recordings-list)).
+
 ## Engines
 
 *Settings → Transcription → Transcribe with*:
