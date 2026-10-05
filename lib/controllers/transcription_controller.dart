@@ -54,8 +54,9 @@ class TranscriptionController extends ChangeNotifier {
 
   /// Transcribe [recording] con [engine] en [language] (ver
   /// [Transcriber.transcribe]) y devuelve la grabación con su texto. Si ya
-  /// se está transcribiendo, espera a que termine esa misma petición; si era
-  /// en segundo plano, pasa delante de las demás de segundo plano.
+  /// se está transcribiendo, espera a que termine esa misma petición (si era
+  /// en segundo plano, pasa delante de las demás de segundo plano; si era con
+  /// otro motor u otro idioma, vuelve a empezar con estos).
   Future<Recording> transcribe(
     Recording recording, {
     required TranscriptionEngine engine,
@@ -74,15 +75,24 @@ class TranscriptionController extends ChangeNotifier {
       existing.completer = Completer();
       existing.background = false;
       if (existing != _current) {
-        existing
-          ..engine = engine
-          ..language = language;
         _queue
           ..remove(existing)
           ..insert(_requestedCount, existing);
       }
-      _start();
     }
+    if (existing.engine != engine || existing.language != language) {
+      // P. ej. si se ha elegido otro idioma para la grabación: si ya había
+      // empezado, vuelve a empezar.
+      existing
+        ..engine = engine
+        ..language = language;
+      if (existing == _current) {
+        existing
+          ..interrupted = true
+          ..cancel.cancel();
+      }
+    }
+    _start();
     return _resultOf(existing);
   }
 

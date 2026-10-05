@@ -490,6 +490,30 @@ void main() {
       expect(recording.noAutoTranscript, isNull);
     });
 
+    test('guarda el idioma elegido para la grabación', () async {
+      final path = await repository.createRecordingPath();
+      await File(path).writeAsBytes([1]);
+      final recording = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      expect(recording.transcriptionLanguage, isNull);
+
+      final chosen = await repository.setTranscriptionLanguage(recording, 'en');
+      expect(chosen.transcriptionLanguage, 'en');
+      expect((await repository.loadAll()).single.transcriptionLanguage, 'en');
+
+      // Se conserva al guardar la transcripción.
+      await repository.setTranscript(
+        chosen,
+        Transcript(text: 'Hi', revision: 0, createdAt: DateTime(2026, 10, 5)),
+      );
+      expect((await repository.loadAll()).single.transcriptionLanguage, 'en');
+
+      await repository.setTranscriptionLanguage(chosen, null);
+      expect((await repository.loadAll()).single.transcriptionLanguage, isNull);
+    });
+
     test('puede no sustituir la transcripción que ya tiene', () async {
       final path = await repository.createRecordingPath();
       await File(path).writeAsBytes([1]);

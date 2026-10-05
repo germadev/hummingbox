@@ -8,7 +8,15 @@ import '../utils/formatters.dart';
 import '../utils/search.dart';
 import 'waveform_seek_bar.dart';
 
-enum RecordingAction { edit, rename, transcribe, viewTranscript, share, delete }
+enum RecordingAction {
+  edit,
+  rename,
+  transcribe,
+  viewTranscript,
+  transcribeInLanguage,
+  share,
+  delete,
+}
 
 /// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
 /// toda la grabación. La onda hace de barra de progreso: muestra lo
@@ -195,6 +203,13 @@ class RecordingTile extends StatelessWidget {
                             title: Text(l10n.viewTranscript),
                           ),
                         ),
+                      PopupMenuItem(
+                        value: RecordingAction.transcribeInLanguage,
+                        child: ListTile(
+                          leading: const Icon(Icons.translate),
+                          title: Text(l10n.transcribeInLanguage),
+                        ),
+                      ),
                       PopupMenuItem(
                         value: RecordingAction.share,
                         child: ListTile(

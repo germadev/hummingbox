@@ -282,13 +282,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       };
 
   String _languageTitle(String language, AppLocalizations l10n) =>
-      switch (language) {
-        TranscriptionSettings.appLanguage => l10n.appLanguageOption(
-          languageName(Localizations.localeOf(context).languageCode),
-        ),
-        TranscriptionSettings.detectLanguage => l10n.detectLanguageOption,
-        final code => languageName(code),
-      };
+      transcriptionLanguageTitle(
+        language,
+        l10n,
+        appLanguage: Localizations.localeOf(context).languageCode,
+      );
 
   String _whisperSubtitle(AppLocalizations l10n) {
     if (_whisper.downloading case final model?) {

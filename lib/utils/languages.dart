@@ -1,3 +1,6 @@
+import '../l10n/app_localizations.dart';
+import '../models/transcription.dart';
+
 /// Idiomas que se pueden elegir para transcribir: los de la app.
 const transcriptionLanguages = ['es', 'en', 'it', 'pt', 'fr', 'de', 'zh', 'ja'];
 
@@ -18,3 +21,17 @@ String languageName(String tag) {
     _ => tag,
   };
 }
+
+/// Cómo se muestra el idioma de la transcripción elegido en las opciones
+/// ([TranscriptionSettings.language]), con [appLanguage] el de la app.
+String transcriptionLanguageTitle(
+  String language,
+  AppLocalizations l10n, {
+  required String appLanguage,
+}) => switch (language) {
+  TranscriptionSettings.appLanguage => l10n.appLanguageOption(
+    languageName(appLanguage),
+  ),
+  TranscriptionSettings.detectLanguage => l10n.detectLanguageOption,
+  final code => languageName(code),
+};

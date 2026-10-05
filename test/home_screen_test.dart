@@ -1204,6 +1204,108 @@ void main() {
     });
   });
 
+  group('idioma de cada grabación', () {
+    Future<void> chooseInMenu(WidgetTester tester, String item) async {
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(item));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> chooseLanguage(WidgetTester tester, String language) async {
+      expect(find.text('Idioma de la grabación'), findsOneWidget);
+      await tester.tap(find.text(language));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('se transcribe en el idioma elegido para la grabación, también '
+        'al volver a transcribir', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Interview')]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      // Por defecto, el de las opciones.
+      expect(find.text('Como en las opciones'), findsOneWidget);
+      expect(find.text('El de la app (Español)'), findsOneWidget);
+      await chooseLanguage(tester, 'English');
+
+      expect(repository.byId('a').transcriptionLanguage, 'en');
+      expect(transcriber.calls, [('a', TranscriptionEngine.system, 'en')]);
+      expect(find.text('Transcripción lista'), findsOneWidget);
+
+      // «Volver a transcribir» lo respeta.
+      await chooseInMenu(tester, 'Ver transcripción');
+      await chooseInMenu(tester, 'Volver a transcribir');
+      expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'en'));
+    });
+
+    testWidgets('desde la transcripción, y «Como en las opciones» vuelve al '
+        'de las opciones', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: 'Interview',
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: 'en',
+          transcript: Transcript(
+            text: 'Hello everyone.',
+            engine: TranscriptionEngine.system,
+            language: 'en-US',
+            revision: 0,
+            createdAt: DateTime(2026, 9, 28, 9),
+          ),
+        ),
+      ]);
+      await pumpApp(tester);
+
+      await chooseInMenu(tester, 'Ver transcripción');
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await chooseLanguage(tester, 'Français');
+      expect(transcriber.calls, [('a', TranscriptionEngine.system, 'fr')]);
+      expect(repository.byId('a').transcriptionLanguage, 'fr');
+
+      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await chooseLanguage(tester, 'Como en las opciones');
+      expect(repository.byId('a').transcriptionLanguage, isNull);
+      expect(transcriber.calls.last, ('a', TranscriptionEngine.system, 'es'));
+    });
+
+    testWidgets('la transcripción automática usa el idioma de la grabación, y '
+        'si no se puede, solo se salta esa', (tester) async {
+      store.settings = const AppSettings(folder: testFolder);
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'de',
+          path: '/fake/de.m4a',
+          name: 'Gespräch',
+          createdAt: DateTime(2026, 9, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: 'de',
+        ),
+        sample('es', 'Entrevista'),
+      ]);
+      transcriber.errorFor = (language) => language == 'de'
+          ? const TranscriptionException(
+              TranscriptionError.needsDownload,
+              language: 'de-DE',
+            )
+          : null;
+      await pumpApp(tester);
+
+      expect(transcriber.calls, [
+        ('de', TranscriptionEngine.system, 'de'),
+        ('es', TranscriptionEngine.system, 'es'),
+      ]);
+      expect(repository.byId('es').transcript, isNotNull);
+      expect(
+        find.text('No se pueden transcribir las grabaciones automáticamente'),
+        findsNothing,
+      );
+    });
+  });
+
   group('barra superior y búsqueda', () {
     Recording withTranscript(
       String id,

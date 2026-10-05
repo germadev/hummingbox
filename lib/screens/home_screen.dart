@@ -530,6 +530,8 @@ class _HomeScreenState extends State<HomeScreen> {
         await _transcribe(recording);
       case RecordingAction.viewTranscript:
         await _viewTranscript(recording);
+      case RecordingAction.transcribeInLanguage:
+        await _transcribeInLanguage(recording);
       case RecordingAction.share:
         await _share(recording, tileContext);
       case RecordingAction.delete:
@@ -608,11 +610,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Transcripción ---
 
-  /// Idioma con el que se transcribe: el elegido en las opciones o el de la
-  /// app.
-  String _transcriptionLanguage(TranscriptionSettings settings) {
+  /// Idioma con el que se transcribe [recording]: el elegido para ella, el
+  /// de las opciones o el de la app.
+  String _transcriptionLanguage(
+    TranscriptionSettings settings,
+    Recording recording,
+  ) {
     final app = Localizations.localeOf(context).languageCode;
-    return switch (settings.language) {
+    return switch (recording.transcriptionLanguage ?? settings.language) {
       TranscriptionSettings.appLanguage => app,
       // Solo Whisper sabe detectarlo.
       TranscriptionSettings.detectLanguage =>
@@ -623,8 +628,13 @@ class _HomeScreenState extends State<HomeScreen> {
     };
   }
 
-  /// Transcribe [recording] con lo elegido en las opciones. Si no se puede,
-  /// explica por qué y qué hacer.
+  /// La versión de [recording] de la lista, que puede estar más al día.
+  Recording _latest(Recording recording) =>
+      _recordings.where((r) => r.id == recording.id).firstOrNull ?? recording;
+
+  /// Transcribe [recording] con lo elegido en las opciones (y su idioma, si
+  /// se ha elegido uno para ella). Si no se puede, explica por qué y qué
+  /// hacer.
   Future<void> _transcribe(Recording recording) async {
     if (_recorder.isBusy) {
       _showMessage((l10n) => l10n.stopToTranscribe);
@@ -633,11 +643,12 @@ class _HomeScreenState extends State<HomeScreen> {
     await widget.sync.load();
     if (!mounted) return;
     final settings = widget.sync.settings.transcription;
+    final current = _latest(recording);
     try {
       final transcribed = await _transcriptions.transcribe(
-        recording,
+        current,
         engine: settings.engine,
-        language: _transcriptionLanguage(settings),
+        language: _transcriptionLanguage(settings, current),
       );
       if (!mounted) return;
       _replaceRecording(transcribed);
@@ -657,10 +668,60 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         );
     } on TranscriptionException catch (e) {
-      await _explainTranscriptionError(e);
+      await _explainTranscriptionError(e, current);
     } catch (_) {
       _showMessage((l10n) => l10n.transcriptionFailed);
     }
+  }
+
+  /// Valor del diálogo del idioma de una grabación para usar el de las
+  /// opciones (en la grabación, `null`).
+  static const _sameAsSettings = '';
+
+  /// Pregunta en qué idioma se transcribe [recording], lo guarda con ella y
+  /// la vuelve a transcribir en él.
+  Future<void> _transcribeInLanguage(Recording recording) async {
+    if (_recorder.isBusy) {
+      _showMessage((l10n) => l10n.stopToTranscribe);
+      return;
+    }
+    await widget.sync.load();
+    if (!mounted) return;
+    final l10n = context.l10n;
+    final settings = widget.sync.settings.transcription;
+    final current = _latest(recording);
+    final language = await showChoiceDialog(
+      context,
+      title: l10n.recordingLanguage,
+      selected: current.transcriptionLanguage ?? _sameAsSettings,
+      choices: [
+        Choice(
+          _sameAsSettings,
+          l10n.sameAsSettings,
+          subtitle: transcriptionLanguageTitle(
+            settings.language,
+            l10n,
+            appLanguage: Localizations.localeOf(context).languageCode,
+          ),
+        ),
+        Choice(TranscriptionSettings.detectLanguage, l10n.detectLanguageOption),
+        for (final code in transcriptionLanguages)
+          Choice(code, languageName(code)),
+      ],
+    );
+    if (language == null || !mounted) return;
+    final Recording updated;
+    try {
+      updated = await widget.repository.setTranscriptionLanguage(
+        current,
+        language == _sameAsSettings ? null : language,
+      );
+    } catch (_) {
+      _showMessage((l10n) => l10n.transcriptionFailed);
+      return;
+    }
+    _replaceRecording(updated);
+    await _transcribe(updated);
   }
 
   // --- Transcripción automática ---
@@ -720,7 +781,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .transcribeInBackground(
             recording,
             engine: settings.engine,
-            language: _transcriptionLanguage(settings),
+            language: _transcriptionLanguage(settings, recording),
           )
           .then(
             _onTranscribedInBackground,
@@ -769,22 +830,30 @@ class _HomeScreenState extends State<HomeScreen> {
       case TranscriptionError.canceled:
       case TranscriptionError.failed:
         _autoTranscriptionSkipped.add(recording.id);
+      // Con el idioma elegido para la grabación: solo afecta a ella.
+      case TranscriptionError.unsupportedLanguage ||
+              TranscriptionError.needsDownload ||
+              TranscriptionError.downloading
+          when recording.transcriptionLanguage != null:
+        _autoTranscriptionSkipped.add(recording.id);
       case TranscriptionError.downloading:
         // Se reanuda al volver a la app.
-        _stopAutoTranscription(exception, report: false);
+        _stopAutoTranscription(recording, exception, report: false);
       case TranscriptionError.systemUnavailable:
       case TranscriptionError.unsupportedLanguage:
       case TranscriptionError.needsDownload:
       case TranscriptionError.denied:
       case TranscriptionError.microphone:
       case TranscriptionError.whisperNotInstalled:
-        _stopAutoTranscription(exception);
+        _stopAutoTranscription(recording, exception);
     }
   }
 
-  /// Detiene la transcripción automática por [error], que afectaría a todas,
-  /// y lo avisa (una vez por sesión) con la opción de ver por qué.
+  /// Detiene la transcripción automática por [error] (al transcribir
+  /// [recording]), que afectaría a todas, y lo avisa (una vez por sesión) con
+  /// la opción de ver por qué.
   void _stopAutoTranscription(
+    Recording recording,
     TranscriptionException error, {
     bool report = true,
   }) {
@@ -799,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Text(l10n.autoTranscriptionFailed),
           action: SnackBarAction(
             label: l10n.view,
-            onPressed: () => _explainTranscriptionError(error),
+            onPressed: () => _explainTranscriptionError(error, recording),
           ),
         ),
       );
@@ -828,7 +897,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _resumeAutoTranscription();
   }
 
-  Future<void> _explainTranscriptionError(TranscriptionException e) async {
+  Future<void> _explainTranscriptionError(
+    TranscriptionException e,
+    Recording recording,
+  ) async {
     if (!mounted) return;
     final l10n = context.l10n;
     Future<void> offerSettings(String title, String message) async {
@@ -855,7 +927,10 @@ class _HomeScreenState extends State<HomeScreen> {
           l10n.unsupportedLanguageMessage(
             languageName(
               e.language ??
-                  _transcriptionLanguage(widget.sync.settings.transcription),
+                  _transcriptionLanguage(
+                    widget.sync.settings.transcription,
+                    recording,
+                  ),
             ),
           ),
         );
@@ -907,6 +982,8 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (action) {
       case TranscriptAction.transcribeAgain:
         await _transcribe(current);
+      case TranscriptAction.transcribeInLanguage:
+        await _transcribeInLanguage(current);
       case TranscriptAction.delete:
         try {
           _replaceRecording(

@@ -262,6 +262,29 @@ void main() {
       expect(repository.byId('a').transcript, fromFile);
     });
 
+    test(
+      'pedirla en otro idioma mientras se transcribe vuelve a empezar',
+      () async {
+        final gate = transcriber.gate = Completer<void>();
+        final running = inBackground(sample('a'));
+        await Future<void>.delayed(Duration.zero);
+
+        final asked = controller.transcribe(
+          sample('a'),
+          engine: TranscriptionEngine.system,
+          language: 'en',
+        );
+        expect(await running, isNull);
+        gate.complete();
+
+        expect((await asked).transcript!.language, 'en');
+        expect(transcriber.calls, [
+          ('a', TranscriptionEngine.system, 'es'),
+          ('a', TranscriptionEngine.system, 'en'),
+        ]);
+      },
+    );
+
     test('si ya se está transcribiendo, no la repite', () async {
       final asked = requested(sample('a'));
       expect(await inBackground(sample('a')), isNull);

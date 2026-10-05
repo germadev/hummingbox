@@ -606,6 +606,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get transcribeAgain => 'もう一度文字起こし';
 
   @override
+  String get transcribeInLanguage => '別の言語で文字起こし';
+
+  @override
+  String get recordingLanguage => '録音の言語';
+
+  @override
+  String get sameAsSettings => '設定と同じ';
+
+  @override
   String get deleteTranscript => '文字起こしを削除';
 
   @override

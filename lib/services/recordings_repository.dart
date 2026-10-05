@@ -80,6 +80,13 @@ abstract interface class RecordingsRepository {
     bool keepExisting = false,
   });
 
+  /// Guarda el idioma en que se transcribe [recording] (ver
+  /// [Recording.transcriptionLanguage]); `null` para usar el de las opciones.
+  Future<Recording> setTranscriptionLanguage(
+    Recording recording,
+    String? language,
+  );
+
   /// Guarda (o borra, si [state] es `null`) el estado de la copia de
   /// [recording] en el destino [target].
   Future<Recording> setCopy(
@@ -325,6 +332,20 @@ class FileRecordingsRepository implements RecordingsRepository {
       } else {
         metadata['transcript'] = transcript.toJson();
         metadata.remove('noAutoTranscript');
+      }
+    });
+  }
+
+  @override
+  Future<Recording> setTranscriptionLanguage(
+    Recording recording,
+    String? language,
+  ) {
+    return _update(recording, (metadata) {
+      if (language == null) {
+        metadata.remove('transcriptionLanguage');
+      } else {
+        metadata['transcriptionLanguage'] = language;
       }
     });
   }

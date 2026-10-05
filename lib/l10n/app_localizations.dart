@@ -1154,6 +1154,24 @@ abstract class AppLocalizations {
   /// **'Transcribe again'**
   String get transcribeAgain;
 
+  /// Acción para elegir el idioma de una grabación y volver a transcribirla en él
+  ///
+  /// In en, this message translates to:
+  /// **'Transcribe in another language'**
+  String get transcribeInLanguage;
+
+  /// Título del diálogo para elegir el idioma en que se transcribe una grabación
+  ///
+  /// In en, this message translates to:
+  /// **'Recording language'**
+  String get recordingLanguage;
+
+  /// Opción del idioma de una grabación: usar el idioma elegido en las opciones de la transcripción
+  ///
+  /// In en, this message translates to:
+  /// **'As in Settings'**
+  String get sameAsSettings;
+
   /// No description provided for @deleteTranscript.
   ///
   /// In en, this message translates to:

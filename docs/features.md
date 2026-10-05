@@ -110,10 +110,12 @@ From a recording's menu → *Edit*:
 Recordings are **transcribed automatically in the background** (it can be
 turned off in Settings), with the system speech recognizer or with
 **Whisper** on the device; a recording can also be transcribed from its menu
-→ *Transcribe*. A recording's card shows its transcript **while it is
-playing** (or paused) or when it **matches the search**; tapping it, or
-*View transcript* in the menu, opens the whole text to read, copy, share,
-transcribe again or delete it. The text is also saved as a `.txt` file next
+→ *Transcribe*, and in **another language** (*Transcribe in another
+language*: each recording keeps the language chosen for it). A recording's
+card shows its transcript **while it is playing** (or paused) or when it
+**matches the search**; tapping it, or *View transcript* in the menu, opens
+the whole text to read, copy, share, transcribe again (also in another
+language) or delete it. The text is also saved as a `.txt` file next
 to the audio. See [Transcription](transcription.md).
 
 ## Settings

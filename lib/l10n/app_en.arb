@@ -477,6 +477,18 @@
   "copy": "Copy",
   "copied": "Copied to the clipboard",
   "transcribeAgain": "Transcribe again",
+  "transcribeInLanguage": "Transcribe in another language",
+  "@transcribeInLanguage": {
+    "description": "Acción para elegir el idioma de una grabación y volver a transcribirla en él"
+  },
+  "recordingLanguage": "Recording language",
+  "@recordingLanguage": {
+    "description": "Título del diálogo para elegir el idioma en que se transcribe una grabación"
+  },
+  "sameAsSettings": "As in Settings",
+  "@sameAsSettings": {
+    "description": "Opción del idioma de una grabación: usar el idioma elegido en las opciones de la transcripción"
+  },
   "deleteTranscript": "Delete transcript",
   "transcriptDeleted": "Transcript deleted",
   "transcriptOutdated": "The recording has changed since it was transcribed.",

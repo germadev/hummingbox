@@ -601,6 +601,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get transcribeAgain => '重新转写';
 
   @override
+  String get transcribeInLanguage => '用其他语言转写';
+
+  @override
+  String get recordingLanguage => '录音的语言';
+
+  @override
+  String get sameAsSettings => '与设置相同';
+
+  @override
   String get deleteTranscript => '删除转写';
 
   @override

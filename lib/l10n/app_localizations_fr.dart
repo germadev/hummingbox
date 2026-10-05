@@ -631,6 +631,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get transcribeAgain => 'Transcrire à nouveau';
 
   @override
+  String get transcribeInLanguage => 'Transcrire dans une autre langue';
+
+  @override
+  String get recordingLanguage => 'Langue de l\'enregistrement';
+
+  @override
+  String get sameAsSettings => 'Comme dans les réglages';
+
+  @override
   String get deleteTranscript => 'Supprimer la transcription';
 
   @override

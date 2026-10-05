@@ -57,6 +57,20 @@ recordings whose audio is edited.
 *Language*: the app's language (default), one of the app's eight languages
 or, with Whisper only, automatic detection.
 
+### A recording's language
+
+Each recording can have its own language: *Transcribe in another language*,
+in the recording's menu or in its transcript's menu, asks for it (*As in
+Settings*, automatic detection with Whisper, or one of the eight languages)
+and transcribes the recording again in it. The choice is kept with the
+recording, so *Transcribe again* and automatic transcription (for example
+after editing the audio) use it too. *As in Settings* goes back to the
+language chosen in Settings.
+
+If the system recognizer does not support a recording's own language, or it
+is not downloaded, automatic transcription only skips that recording; the
+others go on.
+
 ## How it works
 
 Before transcribing, the audio is converted to 16 kHz mono (what the

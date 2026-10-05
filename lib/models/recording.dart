@@ -19,6 +19,7 @@ class Recording {
     this.folder = '',
     this.transcript,
     this.noAutoTranscript,
+    this.transcriptionLanguage,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -48,6 +49,7 @@ class Recording {
       folder: json['folder'] as String? ?? '',
       transcript: Transcript.fromJson(json['transcript']),
       noAutoTranscript: json['noAutoTranscript'] as int?,
+      transcriptionLanguage: json['transcriptionLanguage'] as String?,
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -101,6 +103,11 @@ class Recording {
   /// la app o borrando su `.txt`). Si se edita el audio, ya no cuenta.
   final int? noAutoTranscript;
 
+  /// Idioma en que se transcribe, si se ha elegido para esta grabación: un
+  /// código ISO 639-1 («es», «en»…) o `TranscriptionSettings.detectLanguage`.
+  /// Si es `null`, el de las opciones.
+  final String? transcriptionLanguage;
+
   /// Indica si se debe transcribir automáticamente: no tiene transcripción
   /// y no se ha quedado sin ella a propósito (ver [noAutoTranscript]).
   bool get needsTranscript =>
@@ -138,6 +145,8 @@ class Recording {
     if (folder.isNotEmpty) 'folder': folder,
     if (transcript != null) 'transcript': transcript!.toJson(),
     if (noAutoTranscript != null) 'noAutoTranscript': noAutoTranscript,
+    if (transcriptionLanguage != null)
+      'transcriptionLanguage': transcriptionLanguage,
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -166,6 +175,7 @@ class Recording {
       folder: folder,
       transcript: transcript == null ? this.transcript : transcript(),
       noAutoTranscript: noAutoTranscript,
+      transcriptionLanguage: transcriptionLanguage,
     );
   }
 }
