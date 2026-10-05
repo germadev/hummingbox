@@ -266,7 +266,7 @@ void main() {
   });
 
   testWidgets('en la vista compacta, las grabaciones con notas del piano '
-      'llevan la etiqueta MIDI', (tester) async {
+      'llevan un piano a la izquierda del botón de reproducir', (tester) async {
     store.settings = const AppSettings(
       folder: testFolder,
       compactList: true,
@@ -286,14 +286,26 @@ void main() {
     ]);
     await pumpApp(tester);
 
-    expect(find.byKey(const Key('midi-badge-b')), findsOneWidget);
-    expect(find.byKey(const Key('midi-badge-a')), findsNothing);
-    expect(find.text('MIDI'), findsOneWidget);
+    Finder pianoIn(String id) => find.descendant(
+      of: find.byKey(Key('notes-icon-$id')),
+      matching: find.byIcon(Icons.piano),
+    );
+    expect(pianoIn('b'), findsOneWidget);
+    expect(pianoIn('a'), findsNothing);
+    final play = tester.getRect(
+      find.descendant(
+        of: find.byKey(const Key('notes-icon-b')),
+        matching: find.byTooltip('Reproducir'),
+      ),
+    );
+    final icon = tester.getRect(pianoIn('b'));
+    expect(icon.center.dx, lessThan(play.center.dx));
+    expect(icon.center.dy, moreOrLessEquals(play.center.dy, epsilon: 1));
 
-    // En la detallada se ven las notas: sin etiqueta.
+    // En la detallada se ven las notas: sin el piano.
     await tester.tap(find.byKey(const Key('view-mode-button')));
     await tester.pumpAndSettle();
-    expect(find.text('MIDI'), findsNothing);
+    expect(pianoIn('b'), findsNothing);
   });
 
   testWidgets('no reproduce mientras se graba', (tester) async {

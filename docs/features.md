@@ -68,8 +68,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   tap it to play it from the start. There is room below the last one for the
   message saying it was saved, so the message doesn't cover it.
 - In the compact list, recordings with piano notes (and their `.mid`) show a
-  **MIDI** badge next to their name, since the notes are only drawn when the
-  recording is selected.
+  small **piano** on the left edge of their play button, since the notes are
+  only drawn when the recording is selected.
 - While a recording plays (or is paused), a thin vertical line on its
   waveform marks where it is.
 - **Compact or detailed view**: the button to the left of Settings switches
