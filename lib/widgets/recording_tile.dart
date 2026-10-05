@@ -135,27 +135,44 @@ class RecordingTile extends StatelessWidget {
                   ),
                   // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
                   title: Builder(
-                    builder: (titleContext) => Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Semantics(
-                        button: true,
-                        hint: l10n.rename,
-                        child: InkWell(
-                          key: Key('name-${recording.id}'),
-                          borderRadius: BorderRadius.circular(4),
-                          onTap: () =>
-                              onAction(RecordingAction.rename, titleContext),
-                          child: Text.rich(
-                            _highlighted(
-                              recording.name,
-                              search,
-                              highlightStyle,
+                    builder: (titleContext) => Row(
+                      children: [
+                        Flexible(
+                          child: Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            // Tan ancho como el nombre: la etiqueta, justo
+                            // detrás.
+                            widthFactor: 1,
+                            child: Semantics(
+                              button: true,
+                              hint: l10n.rename,
+                              child: InkWell(
+                                key: Key('name-${recording.id}'),
+                                borderRadius: BorderRadius.circular(4),
+                                onTap: () => onAction(
+                                  RecordingAction.rename,
+                                  titleContext,
+                                ),
+                                child: Text.rich(
+                                  _highlighted(
+                                    recording.name,
+                                    search,
+                                    highlightStyle,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
+                        // En la vista compacta no se ven las notas hasta
+                        // seleccionarla: se indica que las tiene.
+                        if (compact && recording.notes.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          _MidiBadge(key: Key('midi-badge-${recording.id}')),
+                        ],
+                      ],
                     ),
                   ),
                   subtitle: Column(
@@ -397,6 +414,32 @@ class _TranscriptionProgress extends StatelessWidget {
             onPressed: onCancel,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Etiqueta «MIDI» de las grabaciones con notas del piano (y su `.mid`).
+class _MidiBadge extends StatelessWidget {
+  const _MidiBadge({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: colors.tertiaryContainer,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        'MIDI',
+        style: TextStyle(
+          color: colors.onTertiaryContainer,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }

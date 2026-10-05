@@ -234,6 +234,68 @@ void main() {
     expect(find.byTooltip('Reproducir'), findsOneWidget);
   });
 
+  testWidgets('mientras suena, una línea fina marca por dónde va', (
+    tester,
+  ) async {
+    repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+    await pumpApp(tester);
+    PlayheadPainter? playhead() =>
+        tester
+                .widget<CustomPaint>(
+                  find.descendant(
+                    of: find.byKey(const Key('waveform-a')),
+                    matching: find.byKey(const Key('playhead')),
+                  ),
+                )
+                .foregroundPainter
+            as PlayheadPainter?;
+    expect(playhead(), isNull);
+
+    await tester.tap(find.byTooltip('Reproducir'));
+    await tester.pumpAndSettle();
+    expect(playhead()?.progress, 0);
+
+    // Tocando la onda en la mitad y en un cuarto, la línea va con ella.
+    final box = tester.getRect(find.byKey(const Key('waveform-a')));
+    await tester.tapAt(Offset(box.left + box.width / 2, box.top + 10));
+    await tester.pumpAndSettle();
+    expect(playhead()?.progress, closeTo(0.5, 0.01));
+    await tester.tapAt(Offset(box.left + box.width / 4, box.top + 10));
+    await tester.pumpAndSettle();
+    expect(playhead()?.progress, closeTo(0.25, 0.01));
+  });
+
+  testWidgets('en la vista compacta, las grabaciones con notas del piano '
+      'llevan la etiqueta MIDI', (tester) async {
+    store.settings = const AppSettings(
+      folder: testFolder,
+      compactList: true,
+      transcription: manual,
+    );
+    repository = InMemoryRecordingsRepository([
+      sample('a', 'Solo voz'),
+      sample('b', 'Con piano').copyWith(
+        notes: const [
+          PianoNote(
+            key: 60,
+            start: Duration.zero,
+            duration: Duration(milliseconds: 300),
+          ),
+        ],
+      ),
+    ]);
+    await pumpApp(tester);
+
+    expect(find.byKey(const Key('midi-badge-b')), findsOneWidget);
+    expect(find.byKey(const Key('midi-badge-a')), findsNothing);
+    expect(find.text('MIDI'), findsOneWidget);
+
+    // En la detallada se ven las notas: sin etiqueta.
+    await tester.tap(find.byKey(const Key('view-mode-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('MIDI'), findsNothing);
+  });
+
   testWidgets('no reproduce mientras se graba', (tester) async {
     repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
     await pumpApp(tester);
@@ -2908,12 +2970,14 @@ void main() {
       await pumpApp(tester);
 
       final paint = tester.widget<CustomPaint>(
-        find
-            .descendant(
-              of: find.byKey(const Key('waveform-p')),
-              matching: find.byType(CustomPaint),
-            )
-            .first,
+        find.descendant(
+          of: find.byKey(const Key('waveform-p')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is CustomPaint &&
+                widget.foregroundPainter is PianoRollPainter,
+          ),
+        ),
       );
       expect(paint.painter, isNull);
       expect((paint.foregroundPainter! as PianoRollPainter).notes, notes);
