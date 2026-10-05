@@ -130,6 +130,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get clearSearch => '検索をクリア';
 
   @override
+  String get pullToSearch => '引っ張って検索';
+
+  @override
+  String get releaseToSearch => '指を離して検索';
+
+  @override
   String get noSearchResultsTitle => '結果なし';
 
   @override

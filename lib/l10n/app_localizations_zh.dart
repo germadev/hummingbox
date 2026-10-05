@@ -130,6 +130,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get clearSearch => '清除搜索';
 
   @override
+  String get pullToSearch => '下拉搜索';
+
+  @override
+  String get releaseToSearch => '松开即可搜索';
+
+  @override
   String get noSearchResultsTitle => '无结果';
 
   @override

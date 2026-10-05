@@ -79,10 +79,11 @@ returns to the main folder.
 The magnifier (in the middle of the top bar), or **pulling the list down**
 when it is already at the top, opens a search field that spans the top bar,
 from the folder button to ⚙, with the magnifier on the left and an X on the
-right. While pulling, the list moves down and the bar's magnifier comes down
-with it, inside a circle; past a certain point the circle changes colour and
-the phone gives a short vibration, and **releasing** there opens the search
-(going back up before releasing cancels it). If the search field already has
+right. While pulling, the list moves down, a light grey circle appears behind
+the bar's magnifier and "Pull to search" shows in the gap above the list;
+past a certain point the circle turns purple, the text changes to "Release
+to search" and the phone gives a short vibration, and **releasing** there
+opens the search (going back up before releasing cancels it). If the search field already has
 the focus, pulling shows the keyboard again (for example after hiding it with
 Back on Android).
 

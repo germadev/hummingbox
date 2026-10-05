@@ -1462,7 +1462,8 @@ void main() {
       expect(searchField(), findsNothing);
     });
 
-    testWidgets('al pasar el punto vibra y cambia de color; se busca al '
+    testWidgets('al tirar aparece un fondo tras la lupa y un texto; al '
+        'pasar el punto, el fondo se pone morado y vibra; se busca al '
         'soltar, y volviendo atrás se cancela', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       final haptics = <Object?>[];
@@ -1484,18 +1485,18 @@ void main() {
       await pumpApp(tester);
       final colors = Theme.of(tester.element(find.byType(ListView)))
           .colorScheme;
-      final indicator = find.byKey(const Key('pull-to-search'));
+      final background = find.byKey(const Key('pull-to-search'));
+      final hint = find.byKey(const Key('pull-to-search-hint'));
       Color? color() =>
-          (tester.widget<AnimatedContainer>(indicator).decoration!
+          (tester.widget<AnimatedContainer>(background).decoration!
                   as BoxDecoration)
               .color;
-      // Distancia de la lupa a la primera grabación.
-      double gap() =>
-          tester.getTopLeft(find.byKey(const ValueKey('a'))).dy -
-          tester.getBottomLeft(indicator).dy;
+      String hintText() => tester.widget<Text>(hint).data!;
       final button = find.byKey(const Key('search-button'));
       final atRest = tester.getCenter(button);
-      expect(indicator, findsNothing);
+      final barBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
+      expect(background, findsNothing);
+      expect(hint, findsNothing);
 
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(ListView)),
@@ -1504,15 +1505,30 @@ void main() {
       while (haptics.isEmpty) {
         await gesture.moveBy(const Offset(0, 10));
         await tester.pump();
-        // Nada detrás de la lupa.
-        if (indicator.evaluate().isNotEmpty) expect(gap(), greaterThan(0));
+        // La lupa no se mueve; el fondo, gris claro, aparece detrás.
+        expect(tester.getCenter(button), atRest);
+        if (background.evaluate().isNotEmpty && haptics.isEmpty) {
+          expect(tester.getCenter(background), atRest);
+          expect(color(), colors.surfaceContainerHighest);
+          // El texto, entre la barra y la primera grabación.
+          expect(hintText(), 'Tira para buscar');
+          final text = tester.getRect(find.text('Tira para buscar'));
+          final visible = tester.getRect(
+            find.ancestor(of: hint, matching: find.byType(ClipRect)).first,
+          );
+          expect(visible.top, greaterThanOrEqualTo(barBottom - 1e-6));
+          expect(
+            visible.bottom,
+            lessThanOrEqualTo(
+              tester.getTopLeft(find.byKey(const ValueKey('a'))).dy + 1e-6,
+            ),
+          );
+          expect(text.center.dx, atRest.dx);
+        }
       }
       expect(haptics, ['HapticFeedbackType.mediumImpact']);
       expect(color(), colors.primary);
-      // Es la lupa de la barra, que ha bajado con la lista.
-      expect(tester.getCenter(indicator), tester.getCenter(button));
-      expect(tester.getCenter(button).dx, atRest.dx);
-      expect(tester.getCenter(button).dy, greaterThan(atRest.dy + 70));
+      expect(hintText(), 'Suelta para buscar');
       // Hasta soltar, no se busca.
       expect(searchField(), findsNothing);
 
@@ -1521,12 +1537,13 @@ void main() {
         await gesture.moveBy(const Offset(0, -5));
         await tester.pump();
       }
-      expect(color(), colors.secondaryContainer);
+      expect(color(), colors.surfaceContainerHighest);
+      expect(hintText(), 'Tira para buscar');
       await gesture.up();
       await tester.pumpAndSettle();
       expect(searchField(), findsNothing);
-      expect(indicator, findsNothing);
-      expect(tester.getCenter(button), atRest);
+      expect(background, findsNothing);
+      expect(hint, findsNothing);
 
       // Pasándolo y soltando, sí.
       await tester.drag(find.byType(ListView), const Offset(0, 300));

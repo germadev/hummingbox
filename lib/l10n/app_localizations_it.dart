@@ -133,6 +133,12 @@ class AppLocalizationsIt extends AppLocalizations {
   String get clearSearch => 'Cancella la ricerca';
 
   @override
+  String get pullToSearch => 'Trascina per cercare';
+
+  @override
+  String get releaseToSearch => 'Rilascia per cercare';
+
+  @override
   String get noSearchResultsTitle => 'Nessun risultato';
 
   @override

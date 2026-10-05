@@ -98,8 +98,8 @@ class _HomeScreenState extends State<HomeScreen> {
   /// lista hacia abajo; se cierra al perder el foco sin nada escrito).
   bool _searchOpen = false;
 
-  /// Cuánto se ha tirado de la lista hacia abajo: la lupa de la barra baja
-  /// con ella.
+  /// Cuánto se ha tirado de la lista hacia abajo: la lupa de la barra lo
+  /// indica.
   final _pull = ValueNotifier(_Pull.none);
 
   /// Todas las grabaciones, de todas las carpetas.
@@ -1010,8 +1010,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        // Al tirar de la lista, la lupa baja por debajo de la barra.
-        clipBehavior: Clip.none,
         // El botón de carpetas y, en una subcarpeta, su nombre (en la
         // principal, nada), hasta la lupa.
         leadingWidth: searching || folder.isEmpty
@@ -1391,7 +1389,7 @@ class _Pull {
 
   static const none = _Pull(0);
 
-  /// Lo que ha bajado la lista (y la lupa de la barra con ella).
+  /// Lo que ha bajado la lista.
   final double distance;
 
   /// Si se ha pasado el punto: al soltar, se busca.
@@ -1411,11 +1409,12 @@ class _Pull {
 /// Llama a [onPull] al tirar de [child] hacia abajo cuando ya está arriba del
 /// todo y soltar tras pasar un punto ([distance]); si se suelta antes, no
 /// hace nada. Mientras tanto, publica en [pull] lo que se ha tirado, para que
-/// la lupa de la barra baje con la lista.
+/// la lupa de la barra lo indique.
 ///
-/// La lista baja (rebota también en Android) y deja sitio a la lupa, sin
-/// nada detrás. Al pasar el punto la lupa cambia de color y el móvil vibra;
-/// volviendo a subir antes de soltar se cancela.
+/// La lista baja (rebota también en Android) y en el hueco que deja aparece
+/// «Tira para buscar» y, pasado el punto, «Suelta para buscar». Al pasarlo,
+/// la lupa se pone del color principal y el móvil vibra; volviendo a subir
+/// antes de soltar se cancela.
 class _PullToSearch extends StatefulWidget {
   const _PullToSearch({
     required this.pull,
@@ -1486,18 +1485,61 @@ class _PullToSearchState extends State<_PullToSearch> {
     if (_armed) widget.onPull();
   }
 
+  /// Margen de la lista sobre la primera grabación: el texto no pasa de ahí.
+  static const _listPadding = 8.0;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
     return NotificationListener<ScrollNotification>(
       onNotification: _onScroll,
-      child: widget.child,
+      child: Stack(
+        children: [
+          widget.child,
+          // En el hueco que deja la lista al bajar, sin tapar nada.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ValueListenableBuilder<_Pull>(
+                valueListenable: widget.pull,
+                builder: (context, pull, _) {
+                  if (pull.distance <= 0) return const SizedBox.shrink();
+                  return Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox(
+                      height: pull.distance + _listPadding,
+                      child: ClipRect(
+                        child: Center(
+                          child: Opacity(
+                            opacity: pull.progress,
+                            child: Text(
+                              pull.armed
+                                  ? l10n.releaseToSearch
+                                  : l10n.pullToSearch,
+                              key: const Key('pull-to-search-hint'),
+                              maxLines: 1,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
 /// La lupa de la barra superior: en el centro o, mientras se busca, a la
-/// izquierda del campo. Al tirar de la lista hacia abajo ([pull]) baja con
-/// ella dentro de un círculo que va apareciendo y que cambia de color al
+/// izquierda del campo. Al tirar de la lista hacia abajo ([pull]) aparece
+/// detrás de ella un círculo gris claro, que pasa al color principal al
 /// pasar el punto en que se busca.
 class _SearchButton extends StatelessWidget {
   const _SearchButton({required this.pull, this.onPressed});
@@ -1516,48 +1558,39 @@ class _SearchButton extends StatelessWidget {
     return ValueListenableBuilder<_Pull>(
       valueListenable: pull,
       builder: (context, pull, _) {
-        final pulling = pull.distance > 0;
         final icon = Icon(
           Icons.search,
-          color: pull.armed
-              ? colors.onPrimary
-              : (pulling ? colors.onSecondaryContainer : null),
+          color: pull.armed ? colors.onPrimary : null,
         );
-        return Transform.translate(
-          offset: Offset(0, pull.distance),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (pulling)
-                Opacity(
-                  opacity: pull.progress,
-                  child: AnimatedContainer(
-                    key: const Key('pull-to-search'),
-                    duration: const Duration(milliseconds: 150),
-                    width: _size,
-                    height: _size,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: pull.armed
-                          ? colors.primary
-                          : colors.secondaryContainer,
-                    ),
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            if (pull.distance > 0)
+              Opacity(
+                opacity: pull.progress,
+                child: AnimatedContainer(
+                  key: const Key('pull-to-search'),
+                  duration: const Duration(milliseconds: 150),
+                  width: _size,
+                  height: _size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: pull.armed
+                        ? colors.primary
+                        : colors.surfaceContainerHighest,
                   ),
                 ),
-              if (onPressed case final onPressed?)
-                IconButton(
-                  key: const Key('search-button'),
-                  tooltip: context.l10n.search,
-                  icon: icon,
-                  onPressed: onPressed,
-                )
-              else
-                SizedBox.square(
-                  dimension: kMinInteractiveDimension,
-                  child: icon,
-                ),
-            ],
-          ),
+              ),
+            if (onPressed case final onPressed?)
+              IconButton(
+                key: const Key('search-button'),
+                tooltip: context.l10n.search,
+                icon: icon,
+                onPressed: onPressed,
+              )
+            else
+              SizedBox.square(dimension: kMinInteractiveDimension, child: icon),
+          ],
         );
       },
     );

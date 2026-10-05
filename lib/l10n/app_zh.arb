@@ -38,6 +38,8 @@
   "search": "搜索",
   "searchHint": "名称或转写内容",
   "clearSearch": "清除搜索",
+  "pullToSearch": "下拉搜索",
+  "releaseToSearch": "松开即可搜索",
   "noSearchResultsTitle": "无结果",
   "noSearchResultsHint": "没有录音的名称或转写内容包含“{query}”。",
   "play": "播放",

@@ -38,6 +38,8 @@
   "search": "Suchen",
   "searchHint": "Name oder Transkript",
   "clearSearch": "Suche löschen",
+  "pullToSearch": "Ziehen zum Suchen",
+  "releaseToSearch": "Loslassen zum Suchen",
   "noSearchResultsTitle": "Keine Ergebnisse",
   "noSearchResultsHint": "Keine Aufnahme enthält „{query}“ im Namen oder im Transkript.",
   "play": "Abspielen",

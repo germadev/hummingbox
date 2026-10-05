@@ -99,6 +99,14 @@
     "description": "Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)"
   },
   "clearSearch": "Clear search",
+  "pullToSearch": "Pull to search",
+  "@pullToSearch": {
+    "description": "Texto que aparece al tirar de la lista hacia abajo, antes del punto en que se busca al soltar"
+  },
+  "releaseToSearch": "Release to search",
+  "@releaseToSearch": {
+    "description": "Texto que aparece al tirar de la lista hacia abajo, pasado el punto: al soltar se busca"
+  },
   "noSearchResultsTitle": "No results",
   "noSearchResultsHint": "No recording has “{query}” in its name or transcript.",
   "@noSearchResultsHint": {

@@ -38,6 +38,8 @@
   "search": "Rechercher",
   "searchHint": "Nom ou transcription",
   "clearSearch": "Effacer la recherche",
+  "pullToSearch": "Tirez pour rechercher",
+  "releaseToSearch": "Relâchez pour rechercher",
   "noSearchResultsTitle": "Aucun résultat",
   "noSearchResultsHint": "Aucun enregistrement ne contient « {query} » dans son nom ou sa transcription.",
   "play": "Lire",

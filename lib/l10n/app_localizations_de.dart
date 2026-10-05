@@ -138,6 +138,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get clearSearch => 'Suche löschen';
 
   @override
+  String get pullToSearch => 'Ziehen zum Suchen';
+
+  @override
+  String get releaseToSearch => 'Loslassen zum Suchen';
+
+  @override
   String get noSearchResultsTitle => 'Keine Ergebnisse';
 
   @override

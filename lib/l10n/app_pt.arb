@@ -38,6 +38,8 @@
   "search": "Pesquisar",
   "searchHint": "Nome ou transcrição",
   "clearSearch": "Limpar a pesquisa",
+  "pullToSearch": "Puxe para pesquisar",
+  "releaseToSearch": "Solte para pesquisar",
   "noSearchResultsTitle": "Nenhum resultado",
   "noSearchResultsHint": "Nenhuma gravação tem “{query}” no nome ou na transcrição.",
   "play": "Reproduzir",

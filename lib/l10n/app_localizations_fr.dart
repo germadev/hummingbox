@@ -136,6 +136,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get clearSearch => 'Effacer la recherche';
 
   @override
+  String get pullToSearch => 'Tirez pour rechercher';
+
+  @override
+  String get releaseToSearch => 'Relâchez pour rechercher';
+
+  @override
   String get noSearchResultsTitle => 'Aucun résultat';
 
   @override

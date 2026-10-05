@@ -338,6 +338,18 @@ abstract class AppLocalizations {
   /// **'Clear search'**
   String get clearSearch;
 
+  /// Texto que aparece al tirar de la lista hacia abajo, antes del punto en que se busca al soltar
+  ///
+  /// In en, this message translates to:
+  /// **'Pull to search'**
+  String get pullToSearch;
+
+  /// Texto que aparece al tirar de la lista hacia abajo, pasado el punto: al soltar se busca
+  ///
+  /// In en, this message translates to:
+  /// **'Release to search'**
+  String get releaseToSearch;
+
   /// No description provided for @noSearchResultsTitle.
   ///
   /// In en, this message translates to:

@@ -38,6 +38,8 @@
   "search": "検索",
   "searchHint": "名前または文字起こし",
   "clearSearch": "検索をクリア",
+  "pullToSearch": "引っ張って検索",
+  "releaseToSearch": "指を離して検索",
   "noSearchResultsTitle": "結果なし",
   "noSearchResultsHint": "名前や文字起こしに「{query}」を含む録音はありません。",
   "play": "再生",
