@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/recording_options.dart';
 import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/services/settings_store.dart';
@@ -80,6 +81,19 @@ void main() {
     await store.save(const AppSettings(theme: AppTheme.dark));
     expect((await store.load()).theme, AppTheme.dark);
     expect(const AppSettings().toJson().containsKey('theme'), isFalse);
+  });
+
+  test('guarda el instrumento del piano; por defecto, el piano', () async {
+    expect((await store.load()).instrument, Instrument.piano);
+
+    await store.save(const AppSettings(instrument: Instrument.synth));
+    expect((await store.load()).instrument, Instrument.synth);
+    expect(const AppSettings().toJson().containsKey('instrument'), isFalse);
+    // Uno que no se conoce (de una versión más nueva), el piano.
+    expect(
+      AppSettings.fromJson({'instrument': 'theremin'}).instrument,
+      Instrument.piano,
+    );
   });
 
   test('mantiene la pantalla encendida salvo que se desactive', () async {

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
+import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
@@ -582,14 +583,30 @@ class FakePianoSound implements PianoSound {
   /// Teclas tocadas, en orden.
   final played = <int>[];
 
-  /// Teclas preparadas.
+  /// Con qué instrumento se tocó cada una.
+  final instruments = <Instrument>[];
+
+  /// Teclas soltadas, en orden.
+  final released = <int>[];
+
+  /// Teclas preparadas, y el último instrumento preparado.
   final prepared = <int>{};
+  Instrument? preparedInstrument;
 
   @override
-  Future<void> prepare(Iterable<int> keys) async => prepared.addAll(keys);
+  Future<void> prepare(Iterable<int> keys, Instrument instrument) async {
+    prepared.addAll(keys);
+    preparedInstrument = instrument;
+  }
 
   @override
-  Future<void> play(int key) async => played.add(key);
+  Future<void> play(int key, Instrument instrument) async {
+    played.add(key);
+    instruments.add(instrument);
+  }
+
+  @override
+  Future<void> release(int key) async => released.add(key);
 
   @override
   Future<void> dispose() async {}

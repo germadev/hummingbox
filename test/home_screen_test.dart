@@ -5,8 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:voicerecorder/app.dart';
+import 'package:voicerecorder/audio/piano_tone.dart';
 import 'package:voicerecorder/controllers/piano_recorder.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
+import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
@@ -2303,7 +2305,7 @@ void main() {
     /// Centro de la tecla blanca [index] (desde la izquierda) del teclado.
     Offset whiteKey(WidgetTester tester, int index) {
       final rect = tester.getRect(keyboard());
-      final width = rect.width / PianoPanel.visibleWhiteKeys;
+      final width = rect.width / PianoPanel.initialKeyCount;
       // Abajo, donde no hay negras.
       return Offset(rect.left + (index + 0.5) * width, rect.bottom - 20);
     }
@@ -2333,7 +2335,7 @@ void main() {
 
       // Una negra: arriba, entre el Do y el Re.
       final rect = tester.getRect(keyboard());
-      final width = rect.width / PianoPanel.visibleWhiteKeys;
+      final width = rect.width / PianoPanel.initialKeyCount;
       await tester.tapAt(Offset(rect.left + width, rect.top + 20));
       await tester.pump();
       expect(piano.played.last, 49);
@@ -2370,7 +2372,9 @@ void main() {
       final strip = tester.getRect(overview());
       await tester.dragFrom(strip.center, Offset(strip.width, 0));
       await tester.pumpAndSettle();
-      await tester.tapAt(whiteKey(tester, PianoPanel.visibleWhiteKeys - 1));
+      await tester.tapAt(
+        whiteKey(tester, PianoPanel.initialKeyCount.toInt() - 1),
+      );
       await tester.pump();
       expect(piano.played, [108]);
 
@@ -2380,7 +2384,9 @@ void main() {
 
       await tester.tap(find.byKey(const Key('piano-button')));
       await tester.pumpAndSettle();
-      await tester.tapAt(whiteKey(tester, PianoPanel.visibleWhiteKeys - 1));
+      await tester.tapAt(
+        whiteKey(tester, PianoPanel.initialKeyCount.toInt() - 1),
+      );
       await tester.pump();
       expect(piano.played, [108, 108]);
     });
@@ -2470,7 +2476,7 @@ void main() {
       expect(orientations, [
         ['DeviceOrientation.portraitUp'],
       ]);
-      final height = rect.height / PianoPanel.visibleWhiteKeys;
+      final height = rect.height / PianoPanel.initialKeyCount;
       await tester.tapAt(Offset(rect.left + 20, rect.top + height / 2));
       await tester.tapAt(Offset(rect.left + 20, rect.bottom - height / 2));
       await tester.pump();
@@ -2553,6 +2559,102 @@ void main() {
       await tester.tap(find.byTooltip('Piano y voz'));
       await tester.pump();
       expect(selected(), {PianoRecordingMode.piano});
+    });
+
+    testWidgets('se elige el instrumento, que suena, se graba con cada nota '
+        'y se recuerda', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Piano'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+      await tester.tapAt(whiteKey(tester, 0));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byKey(const Key('piano-instrument')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Órgano'));
+      await tester.pumpAndSettle();
+      expect(store.settings.instrument, Instrument.organ);
+      expect(piano.preparedInstrument, Instrument.organ);
+      expect(find.text('Órgano'), findsOneWidget);
+
+      await tester.tapAt(whiteKey(tester, 2));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(piano.instruments, [Instrument.piano, Instrument.organ]);
+      // Al soltar, para que el órgano deje de sonar.
+      expect(piano.released, [48, 52]);
+
+      await tester.tap(find.byKey(const Key('piano-stop')));
+      await tester.pumpAndSettle();
+      expect(
+        repository.recordings.single.notes.map(
+          (note) => (note.key, note.instrument),
+        ),
+        [(48, Instrument.piano), (52, Instrument.organ)],
+      );
+
+      // Al volver a abrirlo, el órgano.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      expect(find.text('Órgano'), findsOneWidget);
+    });
+
+    testWidgets('las octavas se mueven sin saltos, y pellizcando cambia el '
+        'tamaño de las teclas', (tester) async {
+      await pumpApp(tester);
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      PianoKeyboard keys() => tester.widget<PianoKeyboard>(keyboard());
+      final strip = tester.getRect(overview());
+      final whiteWidth = strip.width / PianoKeys.whiteKeys.length;
+
+      // Moviendo un tercio de tecla, la parte ampliada empieza a mitad de
+      // una tecla.
+      final start = keys().firstKey;
+      final drag = await tester.startGesture(strip.center);
+      await drag.moveBy(const Offset(30, 0));
+      await tester.pump();
+      await drag.moveBy(Offset(whiteWidth / 3, 0));
+      await tester.pump();
+      await drag.up();
+      expect(keys().firstKey, isNot(keys().firstKey.roundToDouble()));
+      expect(keys().firstKey, greaterThan(start));
+
+      // Separando dos dedos, menos teclas y más grandes.
+      Future<void> pinch(double from, double to) async {
+        final center = strip.center;
+        final a = await tester.startGesture(center - Offset(from, 0));
+        final b = await tester.startGesture(center + Offset(from, 0));
+        for (var step = 1; step <= 4; step++) {
+          final half = from + (to - from) * step / 4;
+          await a.moveTo(center - Offset(half, 0));
+          await b.moveTo(center + Offset(half, 0));
+          await tester.pump();
+        }
+        await a.up();
+        await b.up();
+        await tester.pump();
+      }
+
+      await pinch(40, 80);
+      expect(keys().whiteKeys, closeTo(5.5, 0.01));
+      await pinch(80, 20);
+      expect(keys().whiteKeys, closeTo(22, 0.01));
+      // Sin pasarse.
+      await pinch(80, 10);
+      expect(keys().whiteKeys, PianoPanel.maxKeyCount);
+
+      // Se conserva al cerrarlo.
+      await tester.tap(find.byTooltip('Cerrar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('piano-button')));
+      await tester.pumpAndSettle();
+      expect(keys().whiteKeys, PianoPanel.maxKeyCount);
     });
 
     testWidgets('graba solo el piano y lo guarda en la carpeta abierta', (

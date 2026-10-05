@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../models/instrument.dart';
 import '../models/piano_note.dart';
-import 'piano_tone.dart';
+import 'instrument_tone.dart';
 import 'wav.dart';
 
 /// Volumen de las notas en una grabación solo de piano (deja margen para
@@ -58,21 +59,40 @@ Future<void> mixPianoIntoWav({
   }
 }
 
-/// Suma el sonido de unas notas a bloques de muestras.
+/// Suma el sonido de unas notas a bloques de muestras, cada una con su
+/// instrumento.
 class PianoMixer {
   PianoMixer(this.format, List<PianoNote> notes, {required this.gain}) {
-    // Cada tecla se sintetiza una sola vez.
-    final tones = <int, Float32List>{};
+    // Cada sonido se sintetiza una sola vez (en los sostenidos, cuánto se
+    // mantuvo la tecla cambia el sonido).
+    final tones = <(Instrument, int, Duration), Float32List>{};
     _notes = [
       for (final note in notes)
         (
           format.framesIn(note.start),
-          tones[note.key] ??= pianoTone(
+          tones[(
+            note.instrument,
             note.key,
-            sampleRate: format.sampleRate,
+            note.instrument.sustained ? note.duration : Duration.zero,
+          )] ??= _scaled(
+            instrumentTone(
+              note.instrument,
+              note.key,
+              held: note.duration,
+              sampleRate: format.sampleRate,
+            ),
+            toneLevel(note.instrument),
           ),
         ),
     ];
+  }
+
+  static Float32List _scaled(Float32List tone, double level) {
+    if (level == 1) return tone;
+    for (var i = 0; i < tone.length; i++) {
+      tone[i] *= level;
+    }
+    return tone;
   }
 
   final PcmFormat format;

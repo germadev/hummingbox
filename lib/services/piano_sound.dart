@@ -5,23 +5,29 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-import '../audio/piano_tone.dart';
+import '../audio/instrument_tone.dart';
+import '../models/instrument.dart';
 
 /// Sonido de las teclas del piano. Abstraído para poder sustituirlo en los
 /// tests.
 abstract interface class PianoSound {
-  /// Prepara el sonido de las teclas [keys] (números MIDI), para que suenen
-  /// sin esperar al tocarlas.
-  Future<void> prepare(Iterable<int> keys);
+  /// Prepara el sonido de las teclas [keys] (números MIDI) con
+  /// [instrument], para que suenen sin esperar al tocarlas.
+  Future<void> prepare(Iterable<int> keys, Instrument instrument);
 
-  /// Toca la tecla [key] (número MIDI). Varias pueden sonar a la vez.
-  Future<void> play(int key);
+  /// Toca la tecla [key] (número MIDI) con [instrument]. Varias pueden sonar
+  /// a la vez.
+  Future<void> play(int key, Instrument instrument);
+
+  /// Se ha soltado la tecla [key]: si su instrumento es sostenido, deja de
+  /// sonar.
+  Future<void> release(int key);
 
   Future<void> dispose();
 }
 
 /// Toca las notas con `audioplayers`: el sonido de cada tecla se sintetiza
-/// la primera vez ([pianoToneWav]) y se guarda en un archivo temporal.
+/// la primera vez ([instrumentToneWav]) y se guarda en un archivo temporal.
 class AudioplayersPianoSound implements PianoSound {
   AudioplayersPianoSound({Future<Directory> Function()? directory})
     : _directoryProvider = directory ?? getTemporaryDirectory;
@@ -49,20 +55,38 @@ class AudioplayersPianoSound implements PianoSound {
     ),
   );
 
+  /// Lo que puede sonar como mucho una nota sostenida mientras se mantiene
+  /// la tecla.
+  static const sustainedLength = Duration(seconds: 5);
+
+  /// Cuánto tarda en apagarse una nota sostenida al soltar la tecla.
+  static const _fadeOut = Duration(milliseconds: 60);
+
   final Future<Directory> Function() _directoryProvider;
-  final _files = <int, Future<String>>{};
+  final _files = <(Instrument, int), Future<String>>{};
   final _players = <AudioPlayer>[];
   var _next = 0;
 
-  Future<String> _fileFor(int key) => _files[key] ??= _write(key);
+  /// Las notas sostenidas que suenan: el reproductor de cada una y la vez
+  /// que se usó (si se reutiliza para otra nota, ya no es suya).
+  final _sounding = <int, List<(AudioPlayer, int)>>{};
+  final _uses = <AudioPlayer, int>{};
 
-  Future<String> _write(int key) async {
+  Future<String> _fileFor(Instrument instrument, int key) =>
+      _files[(instrument, key)] ??= _write(instrument, key);
+
+  Future<String> _write(Instrument instrument, int key) async {
     final directory = await _directoryProvider();
     // Con la versión del sonido, por si cambia.
-    final file = File(p.join(directory.path, 'piano', 'v1_$key.wav'));
+    final file = File(
+      p.join(directory.path, 'piano', 'v2_${instrument.name}_$key.wav'),
+    );
     if (!await file.exists()) {
       await file.parent.create(recursive: true);
-      await file.writeAsBytes(pianoToneWav(key), flush: true);
+      await file.writeAsBytes(
+        instrumentToneWav(instrument, key, held: sustainedLength),
+        flush: true,
+      );
     }
     return file.path;
   }
@@ -87,27 +111,56 @@ class AudioplayersPianoSound implements PianoSound {
   }
 
   @override
-  Future<void> prepare(Iterable<int> keys) async {
+  Future<void> prepare(Iterable<int> keys, Instrument instrument) async {
     for (final key in keys) {
       try {
-        await _fileFor(key);
+        await _fileFor(instrument, key);
       } catch (_) {
         // Se volverá a intentar al tocarla.
-        _files.remove(key);
+        _files.remove((instrument, key));
       }
     }
   }
 
   @override
-  Future<void> play(int key) async {
+  Future<void> play(int key, Instrument instrument) async {
     try {
-      final path = await _fileFor(key);
+      final path = await _fileFor(instrument, key);
       final player = await _nextPlayer();
+      final use = (_uses[player] ?? 0) + 1;
+      _uses[player] = use;
       await player.stop();
+      await player.setVolume(1);
+      if (instrument.sustained) {
+        (_sounding[key] ??= []).add((player, use));
+      }
       await player.play(DeviceFileSource(path));
     } catch (_) {
       // Sin sonido no pasa nada grave: la tecla se sigue viendo pulsada.
-      _files.remove(key);
+      _files.remove((instrument, key));
+    }
+  }
+
+  @override
+  Future<void> release(int key) async {
+    final sounding = _sounding.remove(key);
+    if (sounding == null) return;
+    // Se baja el volumen en unos pasos antes de parar, para que no chasquee.
+    const steps = 4;
+    for (var step = steps - 1; step >= 0; step--) {
+      for (final (player, use) in sounding) {
+        if (_uses[player] != use) continue;
+        try {
+          if (step == 0) {
+            await player.stop();
+          } else {
+            await player.setVolume(step / steps);
+          }
+        } catch (_) {}
+      }
+      if (step > 0) {
+        await Future<void>.delayed(_fadeOut ~/ steps);
+      }
     }
   }
 
@@ -117,5 +170,6 @@ class AudioplayersPianoSound implements PianoSound {
       await player.dispose();
     }
     _players.clear();
+    _sounding.clear();
   }
 }

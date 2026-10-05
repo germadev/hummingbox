@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../models/instrument.dart';
 import '../models/piano_note.dart';
 
 /// Archivos MIDI estándar (`.mid`) con las notas del piano de una grabación,
@@ -8,7 +9,8 @@ import '../models/piano_note.dart';
 ///
 /// Se escriben en formato 0 (una sola pista), a 120 negras por minuto con
 /// 480 divisiones por negra, de modo que los tiempos se conservan al
-/// milisegundo aproximadamente.
+/// milisegundo aproximadamente. Cada instrumento va en su canal, con su
+/// programa General MIDI ([Instrument.program]).
 abstract final class Midi {
   /// Divisiones por negra.
   static const ticksPerQuarter = 480;
@@ -27,10 +29,10 @@ abstract final class Midi {
     // Pulsaciones y sueltas en orden; con el mismo tiempo, primero las
     // sueltas (para repetir una tecla sin que se solapen).
     final events =
-        <(int, bool, int)>[
+        <(int, bool, int, int)>[
           for (final note in notes) ...[
-            (_ticksOf(note.start), true, note.key),
-            (_ticksOf(note.end), false, note.key),
+            (_ticksOf(note.start), true, note.key, _channelOf(note)),
+            (_ticksOf(note.end), false, note.key, _channelOf(note)),
           ],
         ]..sort((a, b) {
           final byTime = a.$1.compareTo(b.$1);
@@ -55,11 +57,19 @@ abstract final class Midi {
         microsecondsPerQuarter >> 8 & 0xFF,
         microsecondsPerQuarter & 0xFF,
       ]);
+    // El programa de cada canal, al principio.
+    final instruments = {for (final note in notes) note.instrument};
+    for (final instrument in Instrument.values) {
+      if (!instruments.contains(instrument)) continue;
+      track
+        ..add(_varLength(0))
+        ..add([0xC0 | instrument.index, instrument.program]);
+    }
     var last = 0;
-    for (final (tick, on, key) in events) {
+    for (final (tick, on, key, channel) in events) {
       track
         ..add(_varLength(tick - last))
-        ..add([on ? 0x90 : 0x80, key & 0x7F, on ? velocity : 0]);
+        ..add([(on ? 0x90 : 0x80) | channel, key & 0x7F, on ? velocity : 0]);
       last = tick;
     }
     track
@@ -80,7 +90,9 @@ abstract final class Midi {
   }
 
   /// Las notas de un archivo MIDI (de cualquier canal y pista), con sus
-  /// cambios de tempo. Lanza [FormatException] si no es un archivo MIDI.
+  /// cambios de tempo, y con el instrumento más parecido al programa de su
+  /// canal ([Instrument.forProgram]). Lanza [FormatException] si no es un
+  /// archivo MIDI.
   static List<PianoNote> decode(List<int> bytes) {
     final data = ByteData.sublistView(Uint8List.fromList(bytes));
     if (bytes.length < 14 ||
@@ -96,7 +108,10 @@ abstract final class Midi {
 
     // Todos los eventos de todas las pistas, con su tiempo en divisiones.
     final tempos = <(int, int)>[(0, microsecondsPerQuarter)];
-    final noteEvents = <(int, bool, int)>[];
+    // Pulsaciones y sueltas: tiempo, si es pulsación, tecla y canal; y el
+    // programa de cada canal cuando cambia.
+    final noteEvents = <(int, bool, int, int)>[];
+    final programs = <(int, int, int)>[];
     var offset = 8 + headerLength;
     for (var t = 0; t < tracks && offset + 8 <= bytes.length; t++) {
       final id = String.fromCharCodes(bytes.sublist(offset, offset + 4));
@@ -153,10 +168,13 @@ abstract final class Midi {
         final first = bytes[position];
         final second = dataBytes == 2 ? bytes[position + 1] : 0;
         position += dataBytes;
+        final channel = status & 0x0F;
         if (kind == 0x90 && second > 0) {
-          noteEvents.add((tick, true, first));
+          noteEvents.add((tick, true, first, channel));
         } else if (kind == 0x80 || (kind == 0x90 && second == 0)) {
-          noteEvents.add((tick, false, first));
+          noteEvents.add((tick, false, first, channel));
+        } else if (kind == 0xC0) {
+          programs.add((tick, channel, first));
         }
       }
     }
@@ -181,20 +199,39 @@ abstract final class Midi {
       if (byTime != 0) return byTime;
       return (a.$2 ? 1 : 0).compareTo(b.$2 ? 1 : 0);
     });
-    final open = <int, int>{};
+    programs.sort((a, b) => a.$1.compareTo(b.$1));
+    Instrument instrumentAt(int tick, int channel) {
+      var program = 0;
+      for (final (at, programChannel, value) in programs) {
+        if (at > tick) break;
+        if (programChannel == channel) program = value;
+      }
+      return Instrument.forProgram(program);
+    }
+
+    final open = <(int, int), int>{};
     final notes = <PianoNote>[];
-    for (final (tick, on, key) in noteEvents) {
+    for (final (tick, on, key, channel) in noteEvents) {
       if (on) {
-        open[key] ??= tick;
-      } else if (open.remove(key) case final start?) {
+        open[(key, channel)] ??= tick;
+      } else if (open.remove((key, channel)) case final start?) {
         final from = timeOf(start);
         notes.add(
-          PianoNote(key: key, start: from, duration: timeOf(tick) - from),
+          PianoNote(
+            key: key,
+            start: from,
+            duration: timeOf(tick) - from,
+            instrument: instrumentAt(start, channel),
+          ),
         );
       }
     }
     return notes..sort((a, b) => a.start.compareTo(b.start));
   }
+
+  /// Canal de las notas de cada instrumento (sin llegar al 10, el de la
+  /// percusión).
+  static int _channelOf(PianoNote note) => note.instrument.index;
 
   static List<int> _varLength(int value) {
     final bytes = [value & 0x7F];

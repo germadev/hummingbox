@@ -129,6 +129,9 @@ class _HomeScreenState extends State<HomeScreen> {
   /// Parte ampliada del piano: se conserva al cerrarlo.
   final _pianoFirstKey = ValueNotifier(PianoPanel.initialFirstKey);
 
+  /// Teclas blancas de la parte ampliada: se conservan al cerrarlo.
+  final _pianoKeyCount = ValueNotifier(PianoPanel.initialKeyCount);
+
   /// Cómo se gira el piano con la pantalla en vertical: se conserva al
   /// cerrarlo.
   final _pianoPortraitTurns = ValueNotifier(1);
@@ -196,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _searchFocus.dispose();
     _pull.dispose();
     _pianoFirstKey.dispose();
+    _pianoKeyCount.dispose();
     _pianoPortraitTurns.dispose();
     _pianoMode.dispose();
     _pianoTarget.dispose();
@@ -1446,6 +1450,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: PianoPanel(
           sound: widget.piano,
           firstKey: _pianoFirstKey,
+          keyCount: _pianoKeyCount,
+          instrument: sync.settings.instrument,
+          onInstrumentChanged: (instrument) =>
+              unawaited(widget.sync.setInstrument(instrument)),
           recorder: _pianoRecorder,
           mode: _pianoMode,
           target: _pianoTarget,

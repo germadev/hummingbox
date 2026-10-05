@@ -8,7 +8,7 @@ import '../audio/audio_edit.dart';
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import '../audio/piano_mix.dart';
-import '../audio/piano_tone.dart';
+import '../audio/instrument_tone.dart';
 import '../audio/wav.dart';
 import '../models/piano_note.dart';
 import '../models/recording.dart';
@@ -163,7 +163,7 @@ class RecordingEditor {
     try {
       var length = duration;
       for (final note in notes) {
-        final end = note.start + pianoToneLength;
+        final end = note.start + toneLength(note.instrument, note.duration);
         if (end > length) length = end;
       }
       final wav = p.join(directory.path, 'piano.wav');
