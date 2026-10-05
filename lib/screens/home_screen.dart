@@ -1342,25 +1342,47 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Evita salir de la app por accidente en mitad de una grabación. Si se
-    // está buscando, «atrás» cierra la búsqueda; en una subcarpeta, vuelve a
-    // la principal.
+    // «Atrás» lo decide siempre la app (ver [_onBack]).
     return PopScope(
-      canPop: !_recorder.isBusy && folder.isEmpty && !searching,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
-        if (_searchOpen) {
-          _closeSearch();
-        } else if (_recorder.pending != null) {
-          _recorder.cancel();
-        } else if (_recorder.isActive) {
-          _showMessage((l10n) => l10n.stopToLeave);
-        } else {
-          _openFolder('');
-        }
+        if (!didPop) unawaited(_onBack());
       },
       child: scaffold,
     );
+  }
+
+  /// «Atrás» del sistema, de lo más concreto a lo más general: cierra el
+  /// piano; quita el foco del campo de búsqueda y después la selección de la
+  /// grabación; cierra la búsqueda; en una subcarpeta vuelve a la principal
+  /// y en la principal abre el menú de las carpetas. Con ese menú abierto en
+  /// la principal, se sale de la app. En mitad de una grabación no se sale.
+  Future<void> _onBack() async {
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold == null) return;
+    if (scaffold.isEndDrawerOpen) {
+      scaffold.closeEndDrawer();
+    } else if (scaffold.isDrawerOpen) {
+      if (_folder.isEmpty) {
+        await SystemNavigator.pop();
+      } else {
+        scaffold.closeDrawer();
+      }
+    } else if (_searchFocus.hasFocus) {
+      _searchFocus.unfocus();
+    } else if (_player.currentId != null) {
+      await _player.stop();
+    } else if (_searchOpen) {
+      _closeSearch();
+    } else if (_recorder.pending != null) {
+      await _recorder.cancel();
+    } else if (_recorder.isActive) {
+      _showMessage((l10n) => l10n.stopToLeave);
+    } else if (_folder.isNotEmpty) {
+      await _openFolder('');
+    } else {
+      scaffold.openDrawer();
+    }
   }
 
   int _countIn(String folder) =>

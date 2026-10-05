@@ -1755,13 +1755,21 @@ void main() {
       expect(find.byKey(const Key('search-button')), findsOneWidget);
     });
 
-    testWidgets('«atrás» cierra la búsqueda', (tester) async {
+    testWidgets('«atrás» quita el foco de la búsqueda y después la cierra', (
+      tester,
+    ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
       await tester.tap(find.byTooltip('Buscar'));
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'nada');
       await tester.pumpAndSettle();
+
+      // Primero quita el foco del campo (con algo escrito, sigue abierto).
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(searchField(), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
@@ -2040,6 +2048,42 @@ void main() {
       expect(store.settings.openFolder, '');
     });
 
+    testWidgets('«atrás» quita la selección de la grabación, después abre el '
+        'menú de las carpetas y con él abierto sale de la app', (tester) async {
+      final calls = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          calls.add(call.method);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'stop');
+      expect(find.byKey(const Key('new-folder')), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
+      expect(calls, isNot(contains('SystemNavigator.pop')));
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(calls, contains('SystemNavigator.pop'));
+    });
+
     testWidgets('muestra las grabaciones que había en la carpeta', (
       tester,
     ) async {
@@ -2215,8 +2259,11 @@ void main() {
         ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
       ]);
 
-      await tester.tap(find.byTooltip('Cerrar'));
+      // «Atrás» vuelve a la vista principal.
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      expect(keyboard(), findsNothing);
+      expect(find.text('Entrevista'), findsOneWidget);
       expect(orientations.last, isEmpty);
     });
 
