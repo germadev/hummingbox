@@ -129,6 +129,20 @@ class PlayerController extends ChangeNotifier {
     _load(recording);
   }
 
+  /// Selecciona [recording] sin reproducirla, en [position] (si ya estaba
+  /// seleccionada y no se indica, donde estaba). Si sonaba otra, se para.
+  Future<void> pick(Recording recording, {Duration? position}) async {
+    if (isCurrent(recording)) {
+      if (position != null) await seek(position);
+      return;
+    }
+    final wasLoaded = isPlayingOrPaused || _loading;
+    _status = PlaybackStatus.stopped;
+    _loading = false;
+    _load(recording, position: position ?? Duration.zero);
+    if (wasLoaded) await _player.stop();
+  }
+
   /// Carga [recording] y la reproduce desde [position].
   Future<void> playFrom(Recording recording, Duration position) async {
     if (isCurrent(recording)) {

@@ -323,7 +323,7 @@ void main() {
       // del principio.
       expect(
         transcribed.name,
-        '2026-10-05.Hola, qué tal Esto es una prueba de',
+        '2026-10-05.Hola, qué tal Esto es una prueba de nombres largos',
       );
       expect(transcribed.provisionalName, isFalse);
       final reloaded = (await newRepository().loadAll()).single;

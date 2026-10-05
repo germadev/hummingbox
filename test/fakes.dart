@@ -621,6 +621,12 @@ class FakePianoSound implements PianoSound {
   @override
   Future<void> release(int key) async => released.add(key);
 
+  /// Teclas que se han hecho callar, en orden.
+  final stopped = <int>[];
+
+  @override
+  Future<void> stop(int key) async => stopped.add(key);
+
   @override
   Future<void> dispose() async {}
 }

@@ -28,6 +28,12 @@ later stop using that destination.
 
   While waiting, the X cancels and the red button starts right away.
 
+  With a recording selected, sliding the panel up shows that recording's
+  menu as icon buttons (edit, add piano, rename, transcribe or view the
+  transcript, transcribe in another language, share and delete; press and
+  hold one to see its name) instead of the timer, and without the countdown
+  and start-on-voice buttons.
+
 ### Format and quality
 
 *Settings → Recording*:
@@ -65,7 +71,7 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   list scrolls to the end when the app opens and when one is added. A
   recording you have just made (with the microphone, the piano or as an
   edited copy) is shown selected, with its transcript, without playing;
-  tap it to play it from the start. There is room below the last one for the
+  its play button plays it from the start. There is room below the last one for the
   message saying it was saved, so the message doesn't cover it.
 - In the compact list, recordings with piano notes (and their `.mid`) show a
   small **piano** on the left edge of their play button, since the notes are
@@ -77,11 +83,18 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   date and duration, and the waveform only on the selected recording). The
   choice is remembered.
 - Each one shows the date ("Today", "Yesterday"…), duration, **format and
-  quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**. **Tap the name** to rename it.
+  quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**
+  (none if it has no audible sound, such as piano-only or silent
+  recordings). **Tap the name** to rename it. The name is shown without the
+  date at its start (`2026-10-05.Hello` shows as `Hello`), since the date is
+  right below it.
+- **Tap a recording to select it**, without playing it: it is highlighted,
+  with its transcript. It plays only with its **play button**. Selecting
+  another one stops the one playing.
 - **Names**: a new recording is called after its date and time
   (`2026-10-05 14.32`) and, when it is transcribed for the first time, after
   its date and the first words of the transcript
-  (`2026-10-05.Hello, how are you`, up to 40 characters, without characters
+  (`2026-10-05.Hello, how are you`, up to 100 characters, without characters
   that aren't allowed in file names). Recordings with no words keep the date
   and time. If the name is already taken in the same folder, a number is
   added (`… (2)`). Its file in the folder or in Drive is renamed with it.
@@ -89,7 +102,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   transcribe one again or in another language, the app asks whether to rename
   it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
-  seek (also on recordings that are not playing).
+  seek. On a recording that isn't selected, it selects it at that point
+  without playing it.
 - **Loop and playlist**: while a recording plays (or is paused), the bottom
   panel shows a button to stop it in the middle, *Play one after another* on
   the left (when it ends, the next one in the list plays) and *Repeat* on the
@@ -117,17 +131,20 @@ leave.
 ## Piano
 
 The piano button (at the bottom of the folders menu), or swiping left
-anywhere on the list, opens a piano across the whole screen to find the
-notes of what you hummed. It is always laid out in **landscape**, and the
-screen doesn't rotate while it is open:
+anywhere on the list (not from the right edge, where the system's Back
+gesture is), opens a piano across the whole screen to find the notes of what
+you hummed. It is always laid out in **landscape**, and the screen rotates as
+usual while it is open:
 
 - With the phone in **portrait**, the piano is drawn sideways, already while
-  it slides in, so you turn the phone to play it in landscape. The button
-  next to the close button turns it around if it shows upside down (it is
-  remembered).
-- With the phone in **landscape**, it stays in landscape.
-- Horizontal swipes don't close it (it's easy to swipe while playing): close
-  it with its button or Back.
+  it slides in. The button next to the close button turns it around if it
+  shows upside down (it is remembered). Swiping sideways closes it; the key
+  touched when the swipe starts stops sounding and isn't recorded.
+- With the phone in **landscape**, it is drawn normally, and horizontal
+  swipes don't close it (it's easy to swipe while playing): close it with its
+  button or Back.
+- Each key has its own player with its sound already loaded, so it sounds as
+  soon as it is touched.
 
 The keyboard:
 
@@ -207,7 +224,8 @@ The recording goes to the open folder, like any other.
 ## Search
 
 The magnifier (at the left of the top bar, next to the folders button), or **pulling the list down**
-when it is already at the top, opens a search field that spans the top bar,
+when it is already at the top (a drag that scrolls up to the top and keeps
+pulling doesn't count), opens a search field that spans the top bar,
 from the folder button to ⚙, with the magnifier in the same place and an X
 where the view button was. While pulling, the list moves down, a light grey circle appears behind
 the bar's magnifier and "Pull to search" shows in the gap above the list;

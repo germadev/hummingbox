@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../audio/levels.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/transcription_controller.dart';
 import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../utils/formatters.dart';
+import '../utils/recording_names.dart';
 import '../utils/search.dart';
 import 'waveform_seek_bar.dart';
 
@@ -17,6 +19,120 @@ enum RecordingAction {
   transcribeInLanguage,
   share,
   delete,
+}
+
+/// Una acción del menú de una grabación: su icono, su nombre y si se puede
+/// elegir.
+typedef RecordingActionEntry = ({
+  RecordingAction action,
+  IconData icon,
+  String label,
+  bool enabled,
+});
+
+/// Lo que se puede hacer con [recording]: en su menú y, si está
+/// seleccionada, en el panel de abajo ([RecordingActionsBar]).
+List<RecordingActionEntry> recordingActions(
+  Recording recording,
+  TranscriptionController transcriptions,
+  AppLocalizations l10n,
+) => [
+  (
+    action: RecordingAction.edit,
+    icon: Icons.content_cut,
+    label: l10n.edit,
+    enabled: true,
+  ),
+  (
+    action: RecordingAction.addPiano,
+    icon: Icons.piano,
+    label: l10n.addPiano,
+    enabled: true,
+  ),
+  (
+    action: RecordingAction.rename,
+    icon: Icons.edit_outlined,
+    label: l10n.rename,
+    enabled: true,
+  ),
+  // Solo el piano: no hay voz que transcribir.
+  if (recording.hasVoice) ...[
+    if (recording.transcript == null)
+      (
+        action: RecordingAction.transcribe,
+        icon: Icons.notes,
+        label: l10n.transcribe,
+        // Si va en segundo plano, se adelanta.
+        enabled: !transcriptions.isRequested(recording),
+      )
+    else
+      (
+        action: RecordingAction.viewTranscript,
+        icon: Icons.subject,
+        label: l10n.viewTranscript,
+        enabled: true,
+      ),
+    (
+      action: RecordingAction.transcribeInLanguage,
+      icon: Icons.translate,
+      label: l10n.transcribeInLanguage,
+      enabled: true,
+    ),
+  ],
+  (
+    action: RecordingAction.share,
+    icon: Icons.share_outlined,
+    label: l10n.share,
+    enabled: true,
+  ),
+  (
+    action: RecordingAction.delete,
+    icon: Icons.delete_outline,
+    label: l10n.delete,
+    enabled: true,
+  ),
+];
+
+/// Las acciones del menú de [recording] como botones (solo el icono, con su
+/// nombre al mantenerlos pulsados): en el panel de abajo, desplegado, con
+/// la grabación seleccionada.
+class RecordingActionsBar extends StatelessWidget {
+  const RecordingActionsBar({
+    super.key,
+    required this.recording,
+    required this.transcriptions,
+    required this.onAction,
+  });
+
+  final Recording recording;
+  final TranscriptionController transcriptions;
+  final void Function(RecordingAction action, BuildContext buttonContext)
+  onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return ListenableBuilder(
+      listenable: transcriptions,
+      builder: (context, _) => Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 4,
+        children: [
+          for (final entry in recordingActions(recording, transcriptions, l10n))
+            Builder(
+              builder: (buttonContext) => IconButton(
+                key: Key('action-${entry.action.name}'),
+                tooltip: entry.label,
+                icon: Icon(entry.icon),
+                onPressed: entry.enabled
+                    ? () => onAction(entry.action, buttonContext)
+                    : null,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
@@ -35,6 +151,7 @@ class RecordingTile extends StatelessWidget {
     required this.player,
     required this.transcriptions,
     required this.onTogglePlay,
+    required this.onSelect,
     required this.onSeek,
     required this.onAction,
     this.onCancelTranscription,
@@ -59,9 +176,14 @@ class RecordingTile extends StatelessWidget {
 
   /// Si se muestra en la vista compacta.
   final bool compact;
+
+  /// El botón de reproducir: reproduce o pausa.
   final VoidCallback onTogglePlay;
 
-  /// Salta a una posición, empezando a reproducir si hace falta.
+  /// Al tocar la tarjeta: la selecciona, sin reproducirla.
+  final VoidCallback onSelect;
+
+  /// Salta a una posición (si no está seleccionada, la selecciona ahí).
   final ValueChanged<Duration> onSeek;
   final void Function(RecordingAction action, BuildContext tileContext)
   onAction;
@@ -98,6 +220,8 @@ class RecordingTile extends StatelessWidget {
         final cardColor = isCurrent
             ? theme.colorScheme.secondaryContainer
             : theme.colorScheme.surfaceContainerLow;
+        // Sin audio (solo piano, o en silencio), sin onda.
+        final showWaveform = recording.hasVoice && hasAudio(recording.waveform);
         final showProgress =
             transcriptions.isRequested(recording) ||
             (isCurrent && transcriptions.isTranscribing(recording));
@@ -116,7 +240,7 @@ class RecordingTile extends StatelessWidget {
                 ListTile(
                   contentPadding: const EdgeInsets.only(left: 12, right: 4),
                   isThreeLine: !compact,
-                  onTap: onTogglePlay,
+                  onTap: onSelect,
                   // En la vista compacta no se ven las notas del piano hasta
                   // seleccionarla: un piano pequeño, a la izquierda del
                   // botón, indica que las tiene.
@@ -142,7 +266,8 @@ class RecordingTile extends StatelessWidget {
                       onPressed: onTogglePlay,
                     ),
                   ),
-                  // Tocar el nombre lo edita (el resto de la tarjeta reproduce).
+                  // Tocar el nombre lo edita (el resto de la tarjeta la
+                  // selecciona).
                   title: Builder(
                     builder: (titleContext) => Align(
                       alignment: AlignmentDirectional.centerStart,
@@ -154,9 +279,10 @@ class RecordingTile extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                           onTap: () =>
                               onAction(RecordingAction.rename, titleContext),
+                          // Sin la fecha del principio: ya está debajo.
                           child: Text.rich(
                             _highlighted(
-                              recording.name,
+                              RecordingNames.withoutDate(recording.name),
                               search,
                               highlightStyle,
                             ),
@@ -198,75 +324,28 @@ class RecordingTile extends StatelessWidget {
                       tooltip: l10n.moreOptions,
                       onSelected: (action) => onAction(action, tileContext),
                       itemBuilder: (context) => [
-                        PopupMenuItem(
-                          value: RecordingAction.edit,
-                          child: ListTile(
-                            leading: const Icon(Icons.content_cut),
-                            title: Text(l10n.edit),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: RecordingAction.addPiano,
-                          child: ListTile(
-                            leading: const Icon(Icons.piano),
-                            title: Text(l10n.addPiano),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: RecordingAction.rename,
-                          child: ListTile(
-                            leading: const Icon(Icons.edit_outlined),
-                            title: Text(l10n.rename),
-                          ),
-                        ),
-                        // Solo el piano: no hay voz que transcribir.
-                        if (recording.hasVoice) ...[
-                          if (recording.transcript == null)
-                            PopupMenuItem(
-                              value: RecordingAction.transcribe,
-                              // Si va en segundo plano, se adelanta.
-                              enabled: !transcriptions.isRequested(recording),
-                              child: ListTile(
-                                leading: const Icon(Icons.notes),
-                                title: Text(l10n.transcribe),
-                              ),
-                            )
-                          else
-                            PopupMenuItem(
-                              value: RecordingAction.viewTranscript,
-                              child: ListTile(
-                                leading: const Icon(Icons.subject),
-                                title: Text(l10n.viewTranscript),
-                              ),
-                            ),
+                        for (final entry in recordingActions(
+                          recording,
+                          transcriptions,
+                          l10n,
+                        ))
                           PopupMenuItem(
-                            value: RecordingAction.transcribeInLanguage,
+                            value: entry.action,
+                            enabled: entry.enabled,
                             child: ListTile(
-                              leading: const Icon(Icons.translate),
-                              title: Text(l10n.transcribeInLanguage),
+                              leading: Icon(entry.icon),
+                              title: Text(entry.label),
                             ),
                           ),
-                        ],
-                        PopupMenuItem(
-                          value: RecordingAction.share,
-                          child: ListTile(
-                            leading: const Icon(Icons.share_outlined),
-                            title: Text(l10n.share),
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: RecordingAction.delete,
-                          child: ListTile(
-                            leading: const Icon(Icons.delete_outline),
-                            title: Text(l10n.delete),
-                          ),
-                        ),
                       ],
                     ),
                   ),
                 ),
-                // En la vista compacta, solo la seleccionada.
-                if (!compact || isCurrent)
+                // En la vista compacta, solo la seleccionada. Sin voz que se
+                // oiga ni notas, no hay nada que dibujar: solo se ve
+                // seleccionada, para saltar y ver por dónde va.
+                if (isCurrent ||
+                    (!compact && (showWaveform || recording.notes.isNotEmpty)))
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: WaveformSeekBar(
@@ -277,7 +356,7 @@ class RecordingTile extends StatelessWidget {
                           : recording.duration,
                       position: isCurrent ? player.position : null,
                       notes: recording.notes,
-                      showWaveform: recording.hasVoice,
+                      showWaveform: showWaveform,
                       onSeek: onSeek,
                     ),
                   ),

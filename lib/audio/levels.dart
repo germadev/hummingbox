@@ -3,6 +3,15 @@ import 'dart:math' as math;
 /// Nivel (en dBFS) que se considera silencio al normalizar la amplitud.
 const silenceDb = -50.0;
 
+/// Nivel (0–1) por debajo del cual se considera que no hay sonido: unos
+/// -42 dBFS, el ruido de fondo de un micrófono.
+const audibleLevel = 0.15;
+
+/// Si [levels] (la onda de una grabación) tiene algo que se oiga. Sin onda
+/// (`null`, si aún no se conoce o no se pudo leer), no.
+bool hasAudio(List<double>? levels) =>
+    levels != null && levels.any((level) => level >= audibleLevel);
+
 /// Número de niveles que se guardan de la onda de cada grabación.
 const waveformResolution = 100;
 
