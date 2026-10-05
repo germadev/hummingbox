@@ -124,6 +124,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get folders => 'Pastas';
 
   @override
+  String get search => 'Pesquisar';
+
+  @override
+  String get searchHint => 'Nome ou transcrição';
+
+  @override
+  String get clearSearch => 'Limpar a pesquisa';
+
+  @override
+  String get noSearchResultsTitle => 'Nenhum resultado';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'Nenhuma gravação tem “$query” no nome ou na transcrição.';
+  }
+
+  @override
   String get play => 'Reproduzir';
 
   @override

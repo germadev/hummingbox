@@ -129,6 +129,23 @@ class AppLocalizationsDe extends AppLocalizations {
   String get folders => 'Ordner';
 
   @override
+  String get search => 'Suchen';
+
+  @override
+  String get searchHint => 'Name oder Transkript';
+
+  @override
+  String get clearSearch => 'Suche löschen';
+
+  @override
+  String get noSearchResultsTitle => 'Keine Ergebnisse';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'Keine Aufnahme enthält „$query“ im Namen oder im Transkript.';
+  }
+
+  @override
   String get play => 'Abspielen';
 
   @override

@@ -123,6 +123,23 @@ class AppLocalizationsEs extends AppLocalizations {
   String get folders => 'Carpetas';
 
   @override
+  String get search => 'Buscar';
+
+  @override
+  String get searchHint => 'Nombre o transcripción';
+
+  @override
+  String get clearSearch => 'Borrar la búsqueda';
+
+  @override
+  String get noSearchResultsTitle => 'Sin resultados';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'Ninguna grabación tiene «$query» en el nombre ni en la transcripción.';
+  }
+
+  @override
   String get play => 'Reproducir';
 
   @override

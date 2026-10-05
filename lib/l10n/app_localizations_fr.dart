@@ -127,6 +127,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get folders => 'Dossiers';
 
   @override
+  String get search => 'Rechercher';
+
+  @override
+  String get searchHint => 'Nom ou transcription';
+
+  @override
+  String get clearSearch => 'Effacer la recherche';
+
+  @override
+  String get noSearchResultsTitle => 'Aucun résultat';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'Aucun enregistrement ne contient « $query » dans son nom ou sa transcription.';
+  }
+
+  @override
   String get play => 'Lire';
 
   @override

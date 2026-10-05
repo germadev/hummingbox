@@ -44,12 +44,22 @@ francés, alemán, chino y japonés.
   fecha («Hoy», «Ayer»…), duración, **formato y calidad** («AAC · 128 kbps ·
   44,1 kHz») y la **onda completa de cada una**. **Tocar el nombre** permite
   cambiarlo.
-- **Carpetas**: deslizando hacia la derecha en cualquier punto de la lista
-  (o con ☰) se abre un menú con la carpeta principal y sus **subcarpetas**,
-  con cuántas grabaciones tiene cada una, y *Nueva carpeta*. Arrastrar sobre
-  la onda de una grabación sigue sirviendo para saltar. La carpeta abierta aparece arriba a la
-  izquierda, la lista muestra sus grabaciones y **se graba en ella**. «Atrás»
-  vuelve a la principal.
+- **Carpetas**: con el botón de carpetas (arriba a la izquierda) o
+  deslizando hacia la derecha en cualquier punto de la lista se abre un menú
+  con la carpeta principal y sus **subcarpetas**, con cuántas grabaciones
+  tiene cada una, y *Nueva carpeta*. Arrastrar sobre la onda de una
+  grabación sigue sirviendo para saltar. En una subcarpeta, su nombre
+  aparece en la barra superior (en la principal no hay título), la lista
+  muestra sus grabaciones y **se graba en ella**. «Atrás» vuelve a la
+  principal.
+- **Buscar** con la lupa (a la izquierda de ⚙) o **tirando de la lista
+  hacia abajo** cuando ya está arriba: el campo ocupa la barra, desde el
+  botón de carpetas hasta ⚙. Busca en los **nombres y las transcripciones**
+  de todas las carpetas, sin distinguir mayúsculas ni tildes («reunion»
+  encuentra «Reunión») y con cada palabra en cualquiera de los dos. Los
+  resultados resaltan lo encontrado, muestran el trozo de la transcripción
+  donde aparece y la subcarpeta de cada grabación. La X o «atrás» cierran la
+  búsqueda.
 - **Reproductor integrado**: la onda hace de barra de progreso; se puede tocar
   o arrastrar para saltar a cualquier punto (también en grabaciones que no se
   están reproduciendo).
@@ -300,7 +310,7 @@ lib/
 │   └── share_service.dart           Compartir (paquete `share_plus`)
 ├── screens/                      Pantalla principal, menú inicial, editor, transcripción y opciones
 ├── widgets/                      Panel de grabación, ondas, lista, menú de carpetas y diálogos
-└── utils/                        Formatos de duraciones y fechas, archivos
+└── utils/                        Formatos de duraciones y fechas, archivos, idiomas y búsqueda
 
 packages/voicerecorder_native/    Plugin propio con el código nativo
 ├── android/…/AudioCodecHandler.kt   MediaExtractor + MediaCodec + MediaMuxer
@@ -380,8 +390,9 @@ de los controladores
 formatos y de las traducciones, y tests de widgets de los flujos principales
 (menú inicial, grabar, desplegar el panel sin grabar, cuenta atrás, voz,
 saltar en la onda, editar y escuchar con el volumen, menú de carpetas y
-abrirlo deslizando, pantalla encendida, transcribir y ver la transcripción,
-opciones, descargar Whisper, tema, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
+abrirlo deslizando o con su botón, buscar (también tirando de la lista),
+pantalla encendida, transcribir y ver la transcripción, opciones, descargar
+Whisper, tema, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
 
 ## Integración continua (GitHub Actions)
 

@@ -90,6 +90,24 @@
   "@folders": {
     "description": "Título del menú lateral"
   },
+  "search": "Search",
+  "@search": {
+    "description": "Botón de la lupa, para buscar grabaciones"
+  },
+  "searchHint": "Name or transcript",
+  "@searchHint": {
+    "description": "Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)"
+  },
+  "clearSearch": "Clear search",
+  "noSearchResultsTitle": "No results",
+  "noSearchResultsHint": "No recording has “{query}” in its name or transcript.",
+  "@noSearchResultsHint": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
   "play": "Play",
   "pause": "Pause",
   "rename": "Rename",

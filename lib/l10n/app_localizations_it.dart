@@ -124,6 +124,23 @@ class AppLocalizationsIt extends AppLocalizations {
   String get folders => 'Cartelle';
 
   @override
+  String get search => 'Cerca';
+
+  @override
+  String get searchHint => 'Nome o trascrizione';
+
+  @override
+  String get clearSearch => 'Cancella la ricerca';
+
+  @override
+  String get noSearchResultsTitle => 'Nessun risultato';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return 'Nessuna registrazione contiene «$query» nel nome o nella trascrizione.';
+  }
+
+  @override
   String get play => 'Riproduci';
 
   @override

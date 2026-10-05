@@ -121,6 +121,23 @@ class AppLocalizationsJa extends AppLocalizations {
   String get folders => 'フォルダ';
 
   @override
+  String get search => '検索';
+
+  @override
+  String get searchHint => '名前または文字起こし';
+
+  @override
+  String get clearSearch => '検索をクリア';
+
+  @override
+  String get noSearchResultsTitle => '結果なし';
+
+  @override
+  String noSearchResultsHint(String query) {
+    return '名前や文字起こしに「$query」を含む録音はありません。';
+  }
+
+  @override
   String get play => '再生';
 
   @override
