@@ -1,3 +1,4 @@
-/* Nombre de la app y aviso del permiso del micrófono. */
+/* Nombre de la app y avisos de los permisos del micrófono y del reconocimiento de voz. */
 "CFBundleDisplayName" = "ボイスレコーダー";
 "NSMicrophoneUsageDescription" = "音声を録音するためにマイクへのアクセスが必要です。";
+"NSSpeechRecognitionUsageDescription" = "録音を文字起こしするために音声認識を使用します。";

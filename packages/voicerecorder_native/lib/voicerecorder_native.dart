@@ -41,6 +41,88 @@ class NativeAudioCodec {
   }
 }
 
+/// Pantalla del dispositivo.
+class NativeScreen {
+  const NativeScreen();
+
+  static const _channel = MethodChannel('es.germade.voicerecorder/screen');
+
+  /// Mantiene la pantalla encendida mientras la app está abierta si [on] es
+  /// `true`; si no, deja que se apague como siempre.
+  Future<void> keepOn(bool on) =>
+      _channel.invokeMethod<void>('keepOn', {'on': on});
+}
+
+/// Si el reconocimiento de voz del sistema puede transcribir un idioma.
+class NativeSpeechSupport {
+  const NativeSpeechSupport({required this.status, this.language});
+
+  /// `available` (en el dispositivo), `online` (en los servidores de Apple,
+  /// solo iOS), `download` (hay que descargar el idioma, solo Android),
+  /// `downloading`, `language` (no lo admite), `denied` (sin permiso, solo
+  /// iOS), `unknown` (el reconocedor no lo dice) o `unavailable` (no hay
+  /// reconocedor o la versión del sistema no lo permite).
+  final String status;
+
+  /// Variante del idioma que se usará (p. ej. «es-ES»), si se admite.
+  final String? language;
+}
+
+/// Reconocimiento de voz del sistema, para transcribir archivos: en Android
+/// 13 o superior, con el reconocedor del dispositivo; en iOS, con
+/// SFSpeechRecognizer.
+class NativeSpeech {
+  const NativeSpeech();
+
+  static const _channel = MethodChannel('es.germade.voicerecorder/speech');
+
+  /// Indica si se puede transcribir en [language] (p. ej. «es» o «es-ES»).
+  Future<NativeSpeechSupport> check(String language) async {
+    final result = await _channel.invokeMapMethod<String, Object?>('check', {
+      'language': language,
+    });
+    return NativeSpeechSupport(
+      status: result?['status'] as String? ?? 'unavailable',
+      language: result?['language'] as String?,
+    );
+  }
+
+  /// Pide al sistema que descargue [language] (solo Android; el sistema
+  /// muestra su propio aviso).
+  Future<void> download(String language) =>
+      _channel.invokeMethod<void>('download', {'language': language});
+
+  /// Transcribe el WAV PCM de 16 bits y un canal de [path], cuyas muestras
+  /// empiezan en el byte [dataOffset] y duran [duration], en [language].
+  ///
+  /// Falla con un código: `canceled`, `language`, `denied`, `permission`,
+  /// `busy`, `unavailable` o `failed`.
+  Future<String> transcribe({
+    required String path,
+    required String language,
+    required int dataOffset,
+    required int sampleRate,
+    required Duration duration,
+  }) async {
+    final text = await _channel.invokeMethod<String>('transcribe', {
+      'path': path,
+      'language': language,
+      'dataOffset': dataOffset,
+      'sampleRate': sampleRate,
+      'durationMs': duration.inMilliseconds,
+    });
+    return text ?? '';
+  }
+
+  /// Parte del audio de la transcripción en curso que ya se ha procesado
+  /// (0–1).
+  Future<double> progress() async =>
+      (await _channel.invokeMethod<num>('progress'))?.toDouble() ?? 0;
+
+  /// Cancela la transcripción en curso.
+  Future<void> cancel() => _channel.invokeMethod<void>('cancel');
+}
+
 /// Carpeta elegida por el usuario con el selector del sistema.
 class NativeFolder {
   const NativeFolder({required this.id, required this.name});

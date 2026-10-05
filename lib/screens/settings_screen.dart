@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/whisper_controller.dart';
 import '../l10n/l10n.dart';
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 import '../services/settings_store.dart';
 import '../services/storage_sync.dart';
 import '../utils/formatters.dart';
+import '../utils/languages.dart';
 import '../widgets/dialogs.dart';
+import 'transcript_screen.dart';
 
-/// Opciones de la app: formato y calidad de las grabaciones y dónde se
-/// guardan.
+/// Opciones de la app: formato y calidad de las grabaciones, dónde se
+/// guardan y cómo se transcriben.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.sync});
+  const SettingsScreen({super.key, required this.sync, required this.whisper});
 
   final StorageSync sync;
+
+  /// Instalación de Whisper, para transcribir con él.
+  final WhisperController whisper;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -152,6 +159,154 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _sync.setCountdown(seconds);
   }
 
+  // --- Transcripción ---
+
+  WhisperController get _whisper => widget.whisper;
+
+  Future<void> _chooseEngine() async {
+    final l10n = context.l10n;
+    final transcription = _sync.settings.transcription;
+    final engine = await showChoiceDialog(
+      context,
+      title: l10n.transcriptionEngine,
+      selected: transcription.engine,
+      choices: [
+        Choice(
+          TranscriptionEngine.system,
+          l10n.systemSpeechRecognition,
+          subtitle: l10n.systemSpeechDescription,
+        ),
+        Choice(
+          TranscriptionEngine.whisper,
+          'Whisper',
+          subtitle: l10n.whisperDescription,
+        ),
+      ],
+    );
+    if (engine == null) return;
+    await _sync.setTranscription(transcription.copyWith(engine: engine));
+    // Para usar Whisper hay que descargar un modelo.
+    if (engine == TranscriptionEngine.whisper &&
+        _whisper.installed == null &&
+        _whisper.downloading == null &&
+        mounted) {
+      await _chooseWhisperModel();
+    }
+  }
+
+  Future<void> _chooseWhisperModel() async {
+    final l10n = context.l10n;
+    final model = await showChoiceDialog<WhisperModel?>(
+      context,
+      title: l10n.chooseWhisperModel,
+      selected: _whisper.installed,
+      choices: [
+        for (final model in WhisperModel.values)
+          Choice(
+            model,
+            whisperModelName(model),
+            subtitle: switch (model) {
+              WhisperModel.tiny => l10n.whisperTinyDescription(
+                formatMegabytes(model.bytes),
+              ),
+              WhisperModel.base => l10n.whisperBaseDescription(
+                formatMegabytes(model.bytes),
+              ),
+            },
+          ),
+      ],
+    );
+    if (model == null || model == _whisper.installed) return;
+    try {
+      await _whisper.install(model);
+    } catch (_) {
+      _showMessage((l10n) => l10n.whisperDownloadFailed);
+    }
+  }
+
+  Future<void> _deleteWhisperModel() async {
+    final installed = _whisper.installed;
+    if (installed == null) return;
+    final l10n = context.l10n;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: l10n.deleteWhisperModelTitle,
+      message: l10n.deleteWhisperModelMessage(formatMegabytes(installed.bytes)),
+      confirmLabel: l10n.delete,
+    );
+    if (confirmed) await _whisper.uninstall();
+  }
+
+  Future<void> _chooseLanguage() async {
+    final l10n = context.l10n;
+    final transcription = _sync.settings.transcription;
+    final appLanguage = Localizations.localeOf(context).languageCode;
+    final language = await showChoiceDialog(
+      context,
+      title: l10n.transcriptionLanguage,
+      selected: transcription.language,
+      choices: [
+        Choice(
+          TranscriptionSettings.appLanguage,
+          l10n.appLanguageOption(languageName(appLanguage)),
+        ),
+        Choice(TranscriptionSettings.detectLanguage, l10n.detectLanguageOption),
+        for (final code in transcriptionLanguages)
+          Choice(code, languageName(code)),
+      ],
+    );
+    if (language == null) return;
+    await _sync.setTranscription(transcription.copyWith(language: language));
+  }
+
+  Future<void> _chooseTheme() async {
+    final l10n = context.l10n;
+    final theme = await showChoiceDialog(
+      context,
+      title: l10n.theme,
+      selected: _sync.settings.theme,
+      choices: [
+        for (final theme in AppTheme.values)
+          Choice(theme, _themeTitle(theme, l10n)),
+      ],
+    );
+    if (theme == null) return;
+    await _sync.setTheme(theme);
+  }
+
+  static String _themeTitle(AppTheme theme, AppLocalizations l10n) =>
+      switch (theme) {
+        AppTheme.system => l10n.themeSystem,
+        AppTheme.light => l10n.themeLight,
+        AppTheme.dark => l10n.themeDark,
+      };
+
+  String _languageTitle(String language, AppLocalizations l10n) =>
+      switch (language) {
+        TranscriptionSettings.appLanguage => l10n.appLanguageOption(
+          languageName(Localizations.localeOf(context).languageCode),
+        ),
+        TranscriptionSettings.detectLanguage => l10n.detectLanguageOption,
+        final code => languageName(code),
+      };
+
+  String _whisperSubtitle(AppLocalizations l10n) {
+    if (_whisper.downloading case final model?) {
+      return l10n.whisperDownloading(
+        whisperModelName(model),
+        formatPercent(_whisper.progress ?? 0),
+        formatMegabytes(model.bytes),
+      );
+    }
+    if (_whisper.installed case final model?) {
+      return l10n.whisperInstalled(
+        whisperModelName(model),
+        formatMegabytes(model.bytes),
+      );
+    }
+    return l10n.whisperNotInstalled;
+  }
+
   static String _formatTitle(RecordingFormat format) =>
       '${formatName(format)} (${format.extension})';
 
@@ -194,7 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings)),
       body: ListenableBuilder(
-        listenable: _sync,
+        listenable: Listenable.merge([_sync, _whisper]),
         builder: (context, _) {
           final settings = _sync.settings;
           final recording = settings.recording;
@@ -240,6 +395,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   l10n.countdownSubtitle(settings.countdownSeconds),
                 ),
                 onTap: _chooseCountdown,
+              ),
+              SwitchListTile(
+                key: const Key('keep-screen-on-option'),
+                secondary: const Icon(Icons.light_mode_outlined),
+                title: Text(l10n.keepScreenOn),
+                subtitle: Text(l10n.keepScreenOnSubtitle),
+                value: settings.keepScreenOn,
+                onChanged: _sync.setKeepScreenOn,
               ),
               const Divider(),
               _SectionTitle(l10n.storageSection),
@@ -324,6 +487,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: _sync.sync,
                 ),
               ],
+              const Divider(),
+              _SectionTitle(l10n.transcriptionSection),
+              ListTile(
+                key: const Key('transcription-engine-option'),
+                leading: const Icon(Icons.notes),
+                title: Text(l10n.transcriptionEngine),
+                subtitle: Text(switch (settings.transcription.engine) {
+                  TranscriptionEngine.system => l10n.systemSpeechRecognition,
+                  TranscriptionEngine.whisper => 'Whisper',
+                }),
+                onTap: _chooseEngine,
+              ),
+              ListTile(
+                key: const Key('whisper-model-option'),
+                leading: const Icon(Icons.download_for_offline_outlined),
+                title: Text(l10n.whisperModel),
+                subtitle: Text(_whisperSubtitle(l10n)),
+                trailing: _whisper.downloading != null
+                    ? IconButton(
+                        tooltip: l10n.cancelDownload,
+                        icon: const Icon(Icons.close),
+                        onPressed: _whisper.cancelInstall,
+                      )
+                    : _whisper.installed != null
+                    ? IconButton(
+                        tooltip: l10n.deleteWhisperModel,
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: _deleteWhisperModel,
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: _whisper.downloading == null
+                    ? _chooseWhisperModel
+                    : null,
+              ),
+              if (_whisper.downloading != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+                  child: LinearProgressIndicator(value: _whisper.progress),
+                ),
+              ListTile(
+                key: const Key('transcription-language-option'),
+                leading: const Icon(Icons.translate),
+                title: Text(l10n.transcriptionLanguage),
+                subtitle: Text(
+                  _languageTitle(settings.transcription.language, l10n),
+                ),
+                onTap: _chooseLanguage,
+              ),
+              const Divider(),
+              _SectionTitle(l10n.appearanceSection),
+              ListTile(
+                key: const Key('theme-option'),
+                leading: const Icon(Icons.brightness_6_outlined),
+                title: Text(l10n.theme),
+                subtitle: Text(_themeTitle(settings.theme, l10n)),
+                onTap: _chooseTheme,
+              ),
             ],
           );
         },

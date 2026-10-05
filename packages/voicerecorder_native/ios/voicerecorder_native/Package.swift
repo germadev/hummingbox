@@ -19,6 +19,10 @@ let package = Package(
             name: "voicerecorder_native",
             dependencies: [
                 .product(name: "FlutterFramework", package: "FlutterFramework")
+            ],
+            linkerSettings: [
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("Speech"),
             ]
         )
     ]

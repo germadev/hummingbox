@@ -10,6 +10,7 @@ class FolderEntry {
     this.isDirectory = false,
     this.size,
     this.modified,
+    this.checksum,
   });
 
   /// Referencia persistente del archivo (ver [FolderAccess.writeFile]).
@@ -22,6 +23,10 @@ class FolderEntry {
 
   /// Fecha de la última modificación, si se conoce.
   final DateTime? modified;
+
+  /// Suma MD5 del contenido (en hexadecimal), si el destino la da al listar
+  /// (Google Drive sí; la carpeta del dispositivo, no).
+  final String? checksum;
 }
 
 /// Acceso a una carpeta del dispositivo elegida por el usuario y a sus

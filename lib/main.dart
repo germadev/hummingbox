@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'app.dart';
+import 'controllers/whisper_controller.dart';
 import 'services/audio_codec.dart';
 import 'services/audio_player_service.dart';
 import 'services/audio_recorder_service.dart';
@@ -10,7 +11,10 @@ import 'services/google_drive.dart';
 import 'services/recording_editor.dart';
 import 'services/recordings_repository.dart';
 import 'services/settings_store.dart';
+import 'services/speech_recognition.dart';
 import 'services/storage_sync.dart';
+import 'services/transcriber.dart';
+import 'services/whisper_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +35,11 @@ Future<void> main() async {
     ),
   );
 
+  // Con las opciones ya leídas, la app se abre con el tema elegido.
+  await sync.load();
+
+  final whisper = PluginWhisperService();
+
   runApp(
     VoiceRecorderApp(
       repository: repository,
@@ -43,6 +52,13 @@ Future<void> main() async {
         audioPath: sync.audioPath,
       ),
       sync: sync,
+      transcriber: Transcriber(
+        codec: const PlatformAudioCodec(),
+        system: const PlatformSystemSpeech(),
+        whisper: whisper,
+        audioPath: sync.audioPath,
+      ),
+      whisper: WhisperController(whisper),
     ),
   );
 }

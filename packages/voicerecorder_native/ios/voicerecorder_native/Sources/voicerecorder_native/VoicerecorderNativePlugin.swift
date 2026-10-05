@@ -1,10 +1,12 @@
 import Flutter
 import UIKit
 
-/// Registra los canales de conversión de audio y de acceso a carpetas.
+/// Registra los canales de conversión de audio, de acceso a carpetas, de la
+/// pantalla y del reconocimiento de voz.
 public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
   private let codec = AudioCodecHandler()
   private let folders = FolderAccessHandler()
+  private let speech = SpeechHandler()
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = VoicerecorderNativePlugin()
@@ -21,6 +23,29 @@ public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
       binaryMessenger: registrar.messenger())
     foldersChannel.setMethodCallHandler { call, result in
       instance.folders.handle(call, result: result)
+    }
+
+    // Mantiene la pantalla encendida mientras la app lo pide (p. ej. mientras
+    // se graba). Las llamadas llegan en el hilo principal.
+    let screenChannel = FlutterMethodChannel(
+      name: "es.germade.voicerecorder/screen",
+      binaryMessenger: registrar.messenger())
+    screenChannel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "keepOn":
+        let on = (call.arguments as? [String: Any])?["on"] as? Bool ?? false
+        UIApplication.shared.isIdleTimerDisabled = on
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
+    let speechChannel = FlutterMethodChannel(
+      name: "es.germade.voicerecorder/speech",
+      binaryMessenger: registrar.messenger())
+    speechChannel.setMethodCallHandler { call, result in
+      instance.speech.handle(call, result: result)
     }
   }
 }

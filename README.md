@@ -62,10 +62,18 @@ francés, alemán, chino y japonés.
     fundidos**.
   - **Guardar** (sustituye la original) o **Guardar copia** (crea una
     grabación nueva, «… (editada)», y deja la original como estaba).
+- **Transcribir** (menú de cada grabación → *Transcribir*) con el
+  reconocimiento de voz del sistema o con **Whisper** en el dispositivo (ver
+  [Transcripción](#transcripción)). La tarjeta muestra el principio del
+  texto; al tocarlo se abre entero para leerlo, copiarlo, compartirlo,
+  volver a transcribir o eliminarlo.
+- **Pantalla encendida mientras se graba** (o se espera para empezar), para
+  que el sistema no detenga la app al apagarse. Se puede desactivar.
 - **Renombrar**, **compartir** (con el nombre que le hayas dado) y
   **eliminar** grabaciones.
 - **Opciones** (botón ⚙ arriba a la derecha):
-  - **Grabación**: formato, calidad y duración de la cuenta atrás.
+  - **Grabación**: formato, calidad, duración de la cuenta atrás y mantener
+    la pantalla encendida.
   - **Carpeta del dispositivo**: dónde se guardan las grabaciones
     (almacenamiento interno, tarjeta SD, iCloud Drive…). La app muestra
     todos los audios que hay en ella y en sus subcarpetas.
@@ -73,15 +81,19 @@ francés, alemán, chino y japonés.
     en la carpeta «Grabadora» de tu Drive; sin carpeta, las grabaciones se
     guardan en Drive. Necesita configuración previa (ver
     [Google Drive](#google-drive)).
-- Tema claro y oscuro según el sistema, con los colores del icono (morado
+  - **Transcripción**: con qué se transcribe, el modelo de Whisper
+    (descargarlo o borrarlo) y el idioma.
+  - **Apariencia**: el tema.
+- **Tema** automático (el del sistema, por defecto), claro u oscuro
+  (*Opciones → Apariencia → Tema*), con los colores del icono (morado
   `#5B3FD9` y, para grabar, el rojo `#FF4D4D`).
 - **Ocho idiomas**: español, inglés, italiano, portugués, francés, alemán,
   chino y japonés. Se usa el del sistema y, si no es ninguno de ellos, el
   inglés (ver [Idiomas](#idiomas)).
 
 La app guarda en su carpeta privada un índice `recordings.json` con el
-nombre, la fecha, la duración, la onda, el formato, la subcarpeta y el
-archivo de cada grabación en la carpeta del dispositivo o en Drive. El audio
+nombre, la fecha, la duración, la onda, el formato, la subcarpeta, la
+transcripción y el archivo de cada grabación en la carpeta del dispositivo o en Drive. El audio
 está allí, no en la app (ver
 [Dónde se guardan](#dónde-se-guardan-las-grabaciones)).
 
@@ -112,6 +124,47 @@ la voz: un `.m4a` se recorta sin volver a codificarlo (`MediaMuxer` en
 Android, `AVAssetExportSession` en iOS) y un WAV, en Dart. Si el recorte
 fallara, la grabación se guarda entera.
 
+### Transcripción
+
+*Opciones → Transcripción → Transcribir con*:
+
+- **Reconocimiento de voz del sistema** (por defecto): no hay que descargar
+  nada.
+  - **Android 13 o superior**, con el reconocedor del dispositivo
+    (`SpeechRecognizer.createOnDeviceSpeechRecognizer`): el audio se le pasa
+    por una tubería en vez del micrófono (`EXTRA_AUDIO_SOURCE`), en una
+    sesión segmentada para que admita grabaciones largas, con mayúsculas y
+    puntuación. Si el idioma no está descargado, la app ofrece descargarlo
+    (el sistema muestra su propio aviso). En Android 12 o anterior, o sin
+    reconocedor en el dispositivo, la app propone instalar Whisper.
+  - **iOS**: `SFSpeechRecognizer` con el archivo, en el dispositivo si el
+    idioma lo admite. Si no, Apple lo reconoce en sus servidores (hace
+    falta conexión y el audio sale del móvil), con un límite de un minuto
+    por petición, así que la app lo divide en tramos de 55 s.
+- **Whisper**, con [whisper.cpp](https://github.com/ggml-org/whisper.cpp)
+  (paquete `whisper_cpp_flutter_plus`): en el dispositivo y sin conexión.
+  Hay que descargar un modelo una vez desde las opciones: **Tiny** (78 MB,
+  más rápido) o **Base** (148 MB, más preciso). Se descargan de Hugging Face
+  en una versión fija y se comprueba su suma SHA-256; con el modelo se
+  descarga el detector de voz Silero (menos de 1 MB) para que Whisper no
+  invente texto en los silencios. La descarga se puede cancelar (se reanuda
+  donde se quedó) y el modelo, borrar.
+
+*Idioma*: el de la app (por defecto), uno de los ocho de la app o, solo con
+Whisper, detectarlo automáticamente.
+
+Antes de transcribir, el audio se convierte a 16 kHz y un canal (lo que usan
+los reconocedores), por bloques y en un isolate aparte. Los audios largos se
+dividen cortando en el silencio más cercano al límite: con Whisper, en
+tramos de 10 minutos como mucho, para no cargar en memoria más de unos 40 MB
+de muestras. Se transcribe una grabación a la vez; la tarjeta muestra el
+progreso y se puede cancelar. Con Google Drive como destino, transcribir
+descarga el audio (como al escucharlo).
+
+El texto se guarda en el índice de la app con el motor, el idioma y la
+revisión del audio: si la grabación se edita o cambia después, la
+transcripción avisa de que puede no corresponder.
+
 ### Dónde se guardan las grabaciones
 
 Las grabaciones **viven en el destino elegido**: en la carpeta del
@@ -125,8 +178,14 @@ archivo el que les hayas dado y en su subcarpeta (`Clases/Tema 1.m4a`).
 - **En los dos sentidos**: renombrar, editar o eliminar una grabación en la
   app lo hace en su archivo (en Drive, eliminar la manda a la papelera). Lo
   que se borra en el destino fuera de la app desaparece de la app, lo que se
-  cambia se vuelve a leer (se detecta por el tamaño) y lo que se renombra
-  conserva su onda (se reconoce por la subcarpeta y el tamaño).
+  cambia se vuelve a leer y lo que se renombra conserva su onda (se reconoce
+  por la subcarpeta, el tamaño y, si se conoce, la suma MD5).
+- **Cambios hechos fuera de la app**: se detectan por el **tamaño y la suma
+  MD5** de cada archivo. Google Drive da la suma al listar, así que no hace
+  falta descargar nada. La carpeta del dispositivo no la da: la app guarda
+  también la fecha de modificación y, solo si cambia, lee el archivo para
+  calcular la suma (si solo cambió la fecha, no lo da por cambiado y lo
+  leído queda en la caché).
 - **Lo pendiente**: el grabador necesita un archivo local, así que se graba
   dentro de la app y, al parar, la grabación se guarda en el destino. Lo
   mismo al editar. Mientras no se puede guardar (sin conexión, sin permiso,
@@ -150,7 +209,10 @@ archivo el que les hayas dado y en su subcarpeta (`Clases/Tema 1.m4a`).
   borran al eliminar una grabación.
 - **Google Drive como destino**: con el permiso `drive.file` la app solo ve
   los archivos que ha creado ella (también desde otro dispositivo), no los
-  que se suban a mano a su carpeta. Para escuchar una grabación hay que
+  que se suban a mano a su carpeta. **Para mostrar la lista no se descarga
+  nada**: la onda, la duración y el formato de lo que viene de Drive se
+  calculan la primera vez que se escucha o se comparte (que es cuando se
+  descarga y se queda en la caché). Para escuchar una grabación hay que
   poder descargarla (salvo que esté en la caché).
 
 En Android la carpeta se elige con el selector del sistema y el permiso se
@@ -186,10 +248,16 @@ flutter build ipa             # iOS (requiere macOS y Xcode)
   `android/app/src/main/AndroidManifest.xml`. La carpeta de las grabaciones
   no necesita permisos de almacenamiento: el usuario la elige con el
   selector del sistema.
-- **iOS**: `NSMicrophoneUsageDescription`, en `ios/Runner/Info.plist`.
+  El plugin declara además una consulta (`<queries>`) del servicio
+  `android.speech.RecognitionService`, para encontrar el reconocedor de voz.
+- **iOS**: `NSMicrophoneUsageDescription` y
+  `NSSpeechRecognitionUsageDescription` (para transcribir con el
+  reconocimiento del sistema), en `ios/Runner/Info.plist`.
 
-El permiso se pide la primera vez que se pulsa el botón de grabar. Si se
-deniega, la app avisa de que hay que activarlo en los ajustes.
+El permiso del micrófono se pide la primera vez que se pulsa el botón de
+grabar, y el del reconocimiento de voz en iOS, la primera vez que se
+transcribe con él. Si se deniegan, la app avisa de que hay que activarlos en
+los ajustes.
 
 ## Estructura del código
 
@@ -200,16 +268,20 @@ lib/
 ├── l10n/                         Traducciones (app_xx.arb) y código generado
 ├── models/
 │   ├── recording.dart            Grabación (nombre, duración, onda, archivos fuera de la app…)
-│   └── recording_options.dart    Formato y calidad de grabación
+│   ├── recording_options.dart    Formato y calidad de grabación
+│   └── transcription.dart        Transcripción, motor, modelos de Whisper y opciones
 ├── audio/
 │   ├── levels.dart               Niveles de la onda (dBFS → 0–1) y remuestreo
 │   ├── wav.dart                  Lectura y escritura de WAV por bloques
 │   ├── audio_edit.dart           Recorte, volumen, fundidos y picos
 │   ├── audio_info.dart           Formato y duración de un .m4a o .wav
+│   ├── speech_audio.dart         Audio a 16 kHz y un canal y división por los silencios
 │   └── voice_detector.dart       Detección de voz por el nivel del micrófono
 ├── controllers/
 │   ├── recorder_controller.dart  Estado de la grabación (cronómetro, onda…)
-│   └── player_controller.dart    Estado de la reproducción
+│   ├── player_controller.dart    Estado de la reproducción
+│   ├── transcription_controller.dart  Cola de transcripciones, progreso y cancelación
+│   └── whisper_controller.dart   Descarga del modelo de Whisper
 ├── services/
 │   ├── audio_recorder_service.dart  Micrófono (paquete `record`)
 │   ├── audio_player_service.dart    Reproducción (paquete `audioplayers`)
@@ -221,16 +293,23 @@ lib/
 │   ├── google_drive.dart            Google Sign-In y API REST de Drive
 │   ├── storage_sync.dart            Guardar y leer en el destino (carpeta o Drive) y copia en Drive
 │   ├── audio_cache.dart             Caché del audio leído del destino
+│   ├── transcriber.dart             Transcribir: preparar el audio, dividirlo y reconocerlo
+│   ├── speech_recognition.dart      Reconocimiento de voz del sistema
+│   ├── whisper_service.dart         Modelos de Whisper y whisper.cpp
+│   ├── screen_awake.dart            Mantener la pantalla encendida
 │   └── share_service.dart           Compartir (paquete `share_plus`)
-├── screens/                      Pantalla principal, menú inicial, editor y opciones
+├── screens/                      Pantalla principal, menú inicial, editor, transcripción y opciones
 ├── widgets/                      Panel de grabación, ondas, lista, menú de carpetas y diálogos
 └── utils/                        Formatos de duraciones y fechas, archivos
 
 packages/voicerecorder_native/    Plugin propio con el código nativo
 ├── android/…/AudioCodecHandler.kt   MediaExtractor + MediaCodec + MediaMuxer
 ├── android/…/FolderAccess.kt        Storage Access Framework (leer, escribir, renombrar y borrar)
+├── android/…/SpeechTranscriber.kt   SpeechRecognizer con un archivo (Android 13+)
+├── android/…/ScreenAwake.kt         FLAG_KEEP_SCREEN_ON
 ├── ios/…/AudioCodecHandler.swift    AVAudioFile + AVAssetExportSession
-└── ios/…/FolderAccessHandler.swift  UIDocumentPicker + marcadores de seguridad
+├── ios/…/FolderAccessHandler.swift  UIDocumentPicker + marcadores de seguridad
+└── ios/…/SpeechHandler.swift        SFSpeechRecognizer con un archivo
 ```
 
 La edición funciona así: el `.m4a` se decodifica a WAV con el códec del
@@ -291,15 +370,18 @@ flutter test
 ```
 
 Hay tests unitarios del procesado de audio (WAV, recorte, volumen, fundidos,
-picos), de la lectura de cabeceras WAV y MP4, del detector de voz, del
-editor, del almacenamiento y la caché, de la sincronización con la carpeta y
-con Drive (como destino y como copia; la API de Drive se prueba con un
-cliente HTTP falso), de los controladores
+picos, conversión a 16 kHz y división en tramos), de la lectura de cabeceras
+WAV y MP4, del detector de voz, del editor, del almacenamiento y la caché, de
+la sincronización con la carpeta y con Drive (como destino y como copia,
+también la detección de cambios por la suma MD5; la API de Drive se prueba
+con un cliente HTTP falso), de la transcripción (con reconocedores falsos),
+de los controladores
 (también la cuenta atrás y el inicio por voz con su recorte), de los
 formatos y de las traducciones, y tests de widgets de los flujos principales
 (menú inicial, grabar, desplegar el panel sin grabar, cuenta atrás, voz,
 saltar en la onda, editar y escuchar con el volumen, menú de carpetas y
-abrirlo deslizando, opciones, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
+abrirlo deslizando, pantalla encendida, transcribir y ver la transcripción,
+opciones, descargar Whisper, tema, renombrar, eliminar e idioma). Los tests de widgets se ejecutan en español.
 
 ## Integración continua (GitHub Actions)
 
@@ -422,21 +504,49 @@ GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.1234-abc
 ### IPA de iOS
 
 El IPA se genera **sin firmar**, porque firmarlo requiere una cuenta de
-desarrollador de Apple. Para instalarlo en un iPhone hay que firmarlo, por
-ejemplo con AltStore o Sideloadly.
+desarrollador de Apple. Para instalarlo en un iPhone hay que firmarlo al
+instalarlo, por ejemplo con [Sideloadly](https://sideloadly.io/) (Mac o
+Windows) y una cuenta de Apple:
+
+1. Descarga `voicerecorder-x.y.z.ipa` de la release.
+2. Instala Sideloadly. En Windows necesita además iTunes e iCloud
+   descargados de la web de Apple (no los de Microsoft Store).
+3. Conecta el iPhone por cable y acepta «Confiar en este ordenador».
+4. Arrastra el IPA a Sideloadly, escribe tu Apple ID y pulsa *Start*. Si
+   tienes Google Drive configurado, no cambies el identificador del paquete
+   (`es.germade.voicerecorder`): el inicio de sesión de Google depende de él.
+5. En el iPhone: *Ajustes → General → VPN y gestión de dispositivos*, toca
+   tu Apple ID y confía en él. En iOS 16 o superior activa también *Ajustes →
+   Privacidad y seguridad → Modo de desarrollador* (aparece tras instalar la
+   app) y reinicia.
+
+Con una cuenta gratuita la firma caduca a los **7 días** (hay que volver a
+firmarla; Sideloadly puede renovarla por wifi si el ordenador está
+encendido) y se pueden tener 3 apps así a la vez. Con la cuenta de
+desarrollador de Apple (99 € al año) dura un año, y CI podría firmar el IPA
+y subirlo a TestFlight. AltStore también sirve, pero cambia el
+identificador del paquete y Google Drive no funcionaría.
 
 ## Limitaciones conocidas
 
-- La grabación está pensada para hacerse con la app en primer plano. Para
-  grabar con la pantalla apagada haría falta un servicio en primer plano en
-  Android y el modo de audio en segundo plano en iOS.
+- La grabación está pensada para hacerse con la app en primer plano (por
+  eso la pantalla se mantiene encendida). Para grabar con la pantalla
+  apagada haría falta un servicio en primer plano en Android y el modo de
+  audio en segundo plano en iOS.
 - La detección de voz se basa solo en el nivel del micrófono: un ruido
   fuerte (un golpe, una puerta) también puede empezar la grabación.
 - Solo se muestran los `.m4a` (AAC) y `.wav` del destino, y solo de la
-  carpeta y del primer nivel de subcarpetas. Un cambio hecho fuera de la app
-  que no cambie el tamaño del archivo no se detecta.
-- La onda de lo que se añade desde el destino se calcula leyendo el audio
-  entero: con Google Drive como destino, la primera vez se descarga todo.
+  carpeta y del primer nivel de subcarpetas. En la carpeta del dispositivo,
+  un cambio con el mismo tamaño solo se detecta si cambia la fecha de
+  modificación (casi todos los sistemas la cambian al escribir).
+- Con Google Drive como destino, la onda y la duración de lo que se añade
+  desde Drive no se ven hasta escucharlo por primera vez.
+- Transcripción: el reconocimiento del sistema necesita Android 13 o
+  superior; en iOS, los idiomas que no admite en el dispositivo se
+  reconocen en los servidores de Apple. Whisper tarda más con audios largos
+  y en móviles antiguos (Base, más que Tiny) y no funciona en emuladores
+  x86. La transcripción se guarda en el índice de la app, no en el destino:
+  si se reinstala la app, se pierde.
 - No hay forma de mover una grabación a otra subcarpeta desde la app.
 - Guardar en el destino y leerlo se hace con la app abierta; no hay subida
   en segundo plano.

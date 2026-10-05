@@ -331,6 +331,12 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get keepScreenOn => '画面をオンのままにする';
+
+  @override
+  String get keepScreenOnSubtitle => '録音中や開始を待つ間、システムがアプリを停止しないように';
+
+  @override
   String get recordingSection => '録音';
 
   @override
@@ -491,4 +497,184 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get syncNowSubtitle => '保留中のものを保存し、録音の保存先の変更を確認します';
+
+  @override
+  String get transcribe => '文字起こし';
+
+  @override
+  String get viewTranscript => '文字起こしを見る';
+
+  @override
+  String transcribingProgress(String percent) {
+    return '文字起こし中… $percent';
+  }
+
+  @override
+  String get preparingTranscription => '文字起こしを準備中…';
+
+  @override
+  String get waitingToTranscribe => '文字起こしの待機中…';
+
+  @override
+  String get cancelTranscription => '文字起こしをキャンセル';
+
+  @override
+  String get transcriptReady => '文字起こしが完了しました';
+
+  @override
+  String get view => '表示';
+
+  @override
+  String get transcriptionFailed => '録音を文字起こしできませんでした';
+
+  @override
+  String get noSpeechRecognized => '言葉を認識できませんでした';
+
+  @override
+  String get stopToTranscribe => '文字起こしするには録音を停止してください';
+
+  @override
+  String get systemSpeechUnavailableTitle => '音声認識を利用できません';
+
+  @override
+  String get systemSpeechUnavailableMessage =>
+      'このデバイスではシステムの音声認識で文字起こしできません（Android では 13 以降が必要です）。設定で Whisper をインストールできます。';
+
+  @override
+  String unsupportedLanguageMessage(String language) {
+    return 'このデバイスのシステム音声認識は「$language」に対応していません。Whisper をインストールするか、設定で別の言語を選んでください。';
+  }
+
+  @override
+  String get openSettings => '設定を開く';
+
+  @override
+  String downloadLanguageTitle(String language) {
+    return '「$language」をダウンロードしますか？';
+  }
+
+  @override
+  String get downloadLanguageMessage =>
+      'デバイス上で文字起こしするには、システムの音声認識でこの言語をダウンロードする必要があります。ダウンロードが終わったらもう一度お試しください。';
+
+  @override
+  String get download => 'ダウンロード';
+
+  @override
+  String get languageDownloading => '言語をダウンロード中です。終わったらもう一度お試しください。';
+
+  @override
+  String get speechPermission => '文字起こしするには設定で音声認識を許可してください';
+
+  @override
+  String get whisperNotInstalledTitle => 'Whisper がインストールされていません';
+
+  @override
+  String get whisperNotInstalledMessage =>
+      'Whisper で文字起こしするには、設定でモデルをダウンロードしてください。';
+
+  @override
+  String get copy => 'コピー';
+
+  @override
+  String get copied => 'クリップボードにコピーしました';
+
+  @override
+  String get transcribeAgain => 'もう一度文字起こし';
+
+  @override
+  String get deleteTranscript => '文字起こしを削除';
+
+  @override
+  String get transcriptDeleted => '文字起こしを削除しました';
+
+  @override
+  String get transcriptOutdated => '文字起こしの後に録音が変更されました。';
+
+  @override
+  String get transcriptionSection => '文字起こし';
+
+  @override
+  String get transcriptionEngine => '文字起こしの方法';
+
+  @override
+  String get systemSpeechRecognition => 'システムの音声認識';
+
+  @override
+  String get systemSpeechDescription => 'ダウンロード不要。Android では 13 以降が必要';
+
+  @override
+  String get whisperDescription => 'デバイス上でオフライン動作。モデルのダウンロードが必要';
+
+  @override
+  String get whisperModel => 'Whisper モデル';
+
+  @override
+  String get whisperNotInstalled => '未インストール。タップしてダウンロード';
+
+  @override
+  String whisperInstalled(String model, String size) {
+    return 'インストール済み: $model（$size）';
+  }
+
+  @override
+  String whisperDownloading(String model, String percent, String size) {
+    return '$model をダウンロード中… $size 中 $percent';
+  }
+
+  @override
+  String get whisperDownloadFailed => 'モデルをダウンロードできませんでした';
+
+  @override
+  String get chooseWhisperModel => 'モデルをダウンロード';
+
+  @override
+  String whisperTinyDescription(String size) {
+    return '$size · 高速、精度は低め';
+  }
+
+  @override
+  String whisperBaseDescription(String size) {
+    return '$size · 高精度、やや低速';
+  }
+
+  @override
+  String get deleteWhisperModel => 'モデルを削除';
+
+  @override
+  String get deleteWhisperModelTitle => 'Whisper モデルを削除しますか？';
+
+  @override
+  String deleteWhisperModelMessage(String size) {
+    return '$size が解放されます。後でもう一度ダウンロードできます。';
+  }
+
+  @override
+  String get cancelDownload => 'ダウンロードをキャンセル';
+
+  @override
+  String get transcriptionLanguage => '言語';
+
+  @override
+  String appLanguageOption(String language) {
+    return 'アプリの言語（$language）';
+  }
+
+  @override
+  String get detectLanguageOption => '自動検出（Whisper のみ）';
+
+  @override
+  String get appearanceSection => '外観';
+
+  @override
+  String get theme => 'テーマ';
+
+  @override
+  String get themeSystem => '自動（システムに合わせる）';
+
+  @override
+  String get themeLight => 'ライト';
+
+  @override
+  String get themeDark => 'ダーク';
 }

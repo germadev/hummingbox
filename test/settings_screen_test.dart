@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:voicerecorder/controllers/whisper_controller.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/transcription.dart';
 import 'package:voicerecorder/screens/settings_screen.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/services/storage_sync.dart';
@@ -12,6 +14,8 @@ void main() {
   late InMemorySettingsStore store;
   late FakeFolderAccess folders;
   late FakeDriveService drive;
+  late FakeWhisperService whisperService;
+  late WhisperController whisper;
   late StorageSync sync;
 
   const driveAccount = DriveSettings(
@@ -23,6 +27,8 @@ void main() {
     store = InMemorySettingsStore(const AppSettings(folder: testFolder));
     folders = FakeFolderAccess();
     drive = FakeDriveService();
+    whisperService = FakeWhisperService();
+    whisper = WhisperController(whisperService);
     sync = fakeStorageSync(
       InMemoryRecordingsRepository(),
       store: store,
@@ -44,7 +50,8 @@ void main() {
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute<void>(
-                builder: (context) => SettingsScreen(sync: sync),
+                builder: (context) =>
+                    SettingsScreen(sync: sync, whisper: whisper),
               ),
             ),
             child: const Text('Abrir'),
@@ -103,6 +110,121 @@ void main() {
 
     expect(store.settings.countdownSeconds, 10);
     expect(find.textContaining('10 segundos antes'), findsOneWidget);
+  });
+
+  testWidgets('desactiva mantener la pantalla encendida', (tester) async {
+    await pumpSettings(tester);
+    final option = find.byKey(const Key('keep-screen-on-option'));
+    expect(tester.widget<SwitchListTile>(option).value, isTrue);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+
+    expect(store.settings.keepScreenOn, isFalse);
+    expect(tester.widget<SwitchListTile>(option).value, isFalse);
+  });
+
+  group('transcripción', () {
+    Future<void> tapOption(WidgetTester tester, String key) async {
+      final option = find.byKey(Key(key));
+      await tester.scrollUntilVisible(option, 200);
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('elige Whisper y descarga un modelo', (tester) async {
+      await pumpSettings(tester);
+      await tapOption(tester, 'transcription-engine-option');
+      await tester.tap(find.text('Whisper'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.transcription.engine, TranscriptionEngine.whisper);
+      // Sin modelo, pide elegir uno.
+      expect(find.text('Descargar un modelo'), findsOneWidget);
+      expect(find.text('77,7 MB · Más rápido, menos preciso'), findsOneWidget);
+      await tester.tap(find.text('Base'));
+      await tester.pumpAndSettle();
+
+      expect(whisperService.installs, [WhisperModel.base]);
+      whisperService.installing!.add(0.5);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Descargando Base… 50\u00a0% de 148 MB'),
+        findsOneWidget,
+      );
+
+      await whisperService.finishInstall();
+      await tester.pumpAndSettle();
+      expect(find.text('Instalado: Base (148 MB)'), findsOneWidget);
+    });
+
+    testWidgets('cancela la descarga', (tester) async {
+      await pumpSettings(tester);
+      await tapOption(tester, 'whisper-model-option');
+      await tester.tap(find.text('Tiny'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Cancelar descarga'));
+      await tester.pumpAndSettle();
+
+      expect(whisperService.cancelledInstalls, 1);
+      expect(
+        find.text('Sin instalar. Toca para descargar uno'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('elimina el modelo', (tester) async {
+      whisperService.installed = WhisperModel.tiny;
+      await whisper.load();
+      await pumpSettings(tester);
+      await tester.scrollUntilVisible(
+        find.text('Instalado: Tiny (77,7 MB)'),
+        200,
+      );
+
+      await tester.tap(find.byTooltip('Eliminar el modelo'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Se liberarán 77,7 MB. Podrás volver a descargarlo.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Eliminar'));
+      await tester.pumpAndSettle();
+
+      expect(whisperService.uninstalls, 1);
+      expect(
+        find.text('Sin instalar. Toca para descargar uno'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('elige el idioma', (tester) async {
+      await pumpSettings(tester);
+      await tester.scrollUntilVisible(find.text('El de la app (Español)'), 200);
+
+      await tapOption(tester, 'transcription-language-option');
+      await tester.tap(find.text('Deutsch'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.transcription.language, 'de');
+      expect(find.text('Deutsch'), findsOneWidget);
+    });
+  });
+
+  testWidgets('elige el tema', (tester) async {
+    await pumpSettings(tester);
+    final option = find.byKey(const Key('theme-option'));
+    await tester.scrollUntilVisible(option, 200);
+    expect(find.text('Automático (el del sistema)'), findsOneWidget);
+
+    await tester.tap(option);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Oscuro'));
+    await tester.pumpAndSettle();
+
+    expect(store.settings.theme, AppTheme.dark);
+    expect(find.text('Oscuro'), findsOneWidget);
   });
 
   testWidgets('cancelar el diálogo no cambia la calidad', (tester) async {

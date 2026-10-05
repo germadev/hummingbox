@@ -1,28 +1,34 @@
 import 'package:flutter/material.dart';
 
 import '../controllers/player_controller.dart';
+import '../controllers/transcription_controller.dart';
 import '../l10n/l10n.dart';
 import '../models/recording.dart';
 import '../utils/formatters.dart';
 import 'waveform_seek_bar.dart';
 
-enum RecordingAction { edit, rename, share, delete }
+enum RecordingAction { edit, rename, transcribe, viewTranscript, share, delete }
 
 /// Elemento de la lista de grabaciones, con su formato y calidad y la onda de
 /// toda la grabación. La onda hace de barra de progreso: muestra lo
-/// reproducido y permite saltar. Tocar el nombre permite cambiarlo.
+/// reproducido y permite saltar. Tocar el nombre permite cambiarlo. Debajo,
+/// el principio de su transcripción o lo que lleva transcrito.
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
     required this.recording,
     required this.player,
+    required this.transcriptions,
     required this.onTogglePlay,
     required this.onSeek,
     required this.onAction,
+    this.onCancelTranscription,
   });
 
   final Recording recording;
   final PlayerController player;
+  final TranscriptionController transcriptions;
+  final VoidCallback? onCancelTranscription;
   final VoidCallback onTogglePlay;
 
   /// Salta a una posición, empezando a reproducir si hace falta.
@@ -36,7 +42,7 @@ class RecordingTile extends StatelessWidget {
     final l10n = context.l10n;
 
     return ListenableBuilder(
-      listenable: player,
+      listenable: Listenable.merge([player, transcriptions]),
       builder: (context, _) {
         final isCurrent = player.isCurrent(recording);
         final isPlaying = player.isPlaying(recording);
@@ -136,6 +142,23 @@ class RecordingTile extends StatelessWidget {
                           title: Text(l10n.rename),
                         ),
                       ),
+                      if (recording.transcript == null)
+                        PopupMenuItem(
+                          value: RecordingAction.transcribe,
+                          enabled: !transcriptions.isTranscribing(recording),
+                          child: ListTile(
+                            leading: const Icon(Icons.notes),
+                            title: Text(l10n.transcribe),
+                          ),
+                        )
+                      else
+                        PopupMenuItem(
+                          value: RecordingAction.viewTranscript,
+                          child: ListTile(
+                            leading: const Icon(Icons.subject),
+                            title: Text(l10n.viewTranscript),
+                          ),
+                        ),
                       PopupMenuItem(
                         value: RecordingAction.share,
                         child: ListTile(
@@ -166,10 +189,105 @@ class RecordingTile extends StatelessWidget {
                   onSeek: onSeek,
                 ),
               ),
+              if (transcriptions.isTranscribing(recording))
+                _TranscriptionProgress(
+                  progress: transcriptions.progressOf(recording),
+                  running: transcriptions.isRunning(recording),
+                  onCancel: onCancelTranscription,
+                )
+              else if (recording.transcript case final transcript?)
+                InkWell(
+                  key: Key('transcript-${recording.id}'),
+                  onTap: () =>
+                      onAction(RecordingAction.viewTranscript, context),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsetsDirectional.only(
+                            end: 8,
+                            top: 2,
+                          ),
+                          child: Icon(
+                            Icons.subject,
+                            size: 16,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            transcript.text,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: mutedStyle,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+/// Lo que lleva transcrito una grabación, con un botón para cancelarlo.
+class _TranscriptionProgress extends StatelessWidget {
+  const _TranscriptionProgress({
+    required this.progress,
+    required this.running,
+    this.onCancel,
+  });
+
+  /// Parte transcrita (0–1), o `null` si aún no se sabe.
+  final double? progress;
+
+  /// Si se está transcribiendo (si no, espera su turno).
+  final bool running;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final progress = this.progress;
+    final label = !running
+        ? l10n.waitingToTranscribe
+        : progress == null
+        ? l10n.preparingTranscription
+        : l10n.transcribingProgress(formatPercent(progress));
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(16, 0, 4, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  key: const Key('transcription-progress'),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                LinearProgressIndicator(value: running ? progress : 0),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: l10n.cancelTranscription,
+            icon: const Icon(Icons.close),
+            onPressed: onCancel,
+          ),
+        ],
+      ),
     );
   }
 }

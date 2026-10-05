@@ -1,6 +1,7 @@
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
 import 'recording_options.dart';
+import 'transcription.dart';
 
 /// Una grabación de audio: dentro de la app o, si se eligió una, en la
 /// carpeta del dispositivo.
@@ -16,6 +17,7 @@ class Recording {
     this.copies = const {},
     this.audio,
     this.folder = '',
+    this.transcript,
   });
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
@@ -43,6 +45,7 @@ class Recording {
       revision: json['revision'] as int? ?? 0,
       audio: AudioInfo.fromJson(json['audio']),
       folder: json['folder'] as String? ?? '',
+      transcript: Transcript.fromJson(json['transcript']),
       copies: {
         if (copies is Map<String, dynamic>)
           for (final entry in copies.entries)
@@ -88,6 +91,14 @@ class Recording {
   /// vacío si está en la principal.
   final String folder;
 
+  /// Texto de la grabación, si se ha transcrito.
+  final Transcript? transcript;
+
+  /// Indica si la transcripción es de otra versión del audio (si se editó o
+  /// se cambió fuera de la app después de transcribirla).
+  bool get isTranscriptOutdated =>
+      transcript != null && transcript!.revision != revision;
+
   /// Formato del archivo según su extensión.
   RecordingFormat get format =>
       RecordingFormat.fromPath(path) ?? RecordingFormat.aac;
@@ -113,6 +124,7 @@ class Recording {
     if (revision != 0) 'revision': revision,
     if (audio != null) 'audio': audio!.toJson(),
     if (folder.isNotEmpty) 'folder': folder,
+    if (transcript != null) 'transcript': transcript!.toJson(),
     if (copies.isNotEmpty)
       'copies': {
         for (final entry in copies.entries) entry.key: entry.value.toJson(),
@@ -126,6 +138,7 @@ class Recording {
     int? revision,
     Map<String, CopyState>? copies,
     AudioInfo? audio,
+    Transcript? Function()? transcript,
   }) {
     return Recording(
       id: id,
@@ -138,6 +151,7 @@ class Recording {
       copies: copies ?? this.copies,
       audio: audio ?? this.audio,
       folder: folder,
+      transcript: transcript == null ? this.transcript : transcript(),
     );
   }
 }
@@ -151,6 +165,8 @@ class CopyState {
     required this.revision,
     required this.name,
     this.size,
+    this.checksum,
+    this.modified,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
@@ -169,12 +185,30 @@ class CopyState {
   /// se conoce. Si cambia, es que se ha modificado fuera de la app.
   final int? size;
 
-  CopyState withSize(int? size) => CopyState(
+  /// Suma MD5 (en hexadecimal) del contenido del archivo, si se conoce. Si
+  /// cambia, es que se ha modificado fuera de la app aunque tenga el mismo
+  /// tamaño.
+  final String? checksum;
+
+  /// Fecha de modificación del archivo la última vez que se leyó el destino,
+  /// si se conoce. En la carpeta del dispositivo, que no da la suma MD5 al
+  /// listarla, si cambia se lee el archivo para comprobar si cambió [checksum].
+  final DateTime? modified;
+
+  /// El mismo archivo con los datos indicados cambiados.
+  CopyState copyWith({
+    String? ref,
+    int? size,
+    String? checksum,
+    DateTime? modified,
+  }) => CopyState(
     destination: destination,
-    ref: ref,
+    ref: ref ?? this.ref,
     revision: revision,
     name: name,
-    size: size,
+    size: size ?? this.size,
+    checksum: checksum ?? this.checksum,
+    modified: modified ?? this.modified,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -184,6 +218,8 @@ class CopyState {
     final revision = json['revision'];
     final name = json['name'];
     final size = json['size'];
+    final checksum = json['md5'];
+    final modified = json['modified'];
     if (destination is! String ||
         ref is! String ||
         revision is! int ||
@@ -196,6 +232,10 @@ class CopyState {
       revision: revision,
       name: name,
       size: size is int ? size : null,
+      checksum: checksum is String ? checksum : null,
+      modified: modified is int
+          ? DateTime.fromMillisecondsSinceEpoch(modified)
+          : null,
     );
   }
 
@@ -205,6 +245,8 @@ class CopyState {
     'revision': revision,
     'name': name,
     if (size != null) 'size': size,
+    if (checksum != null) 'md5': checksum,
+    if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
   };
 
   @override
@@ -214,8 +256,19 @@ class CopyState {
       other.ref == ref &&
       other.revision == revision &&
       other.name == name &&
-      other.size == size;
+      other.size == size &&
+      other.checksum == checksum &&
+      other.modified?.millisecondsSinceEpoch ==
+          modified?.millisecondsSinceEpoch;
 
   @override
-  int get hashCode => Object.hash(destination, ref, revision, name, size);
+  int get hashCode => Object.hash(
+    destination,
+    ref,
+    revision,
+    name,
+    size,
+    checksum,
+    modified?.millisecondsSinceEpoch,
+  );
 }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -107,6 +108,13 @@ void main() {
 
       await sync.sync();
       expect(writes(), hasLength(2));
+    });
+
+    test('lee el audio de la carpeta sin considerarlo una descarga', () async {
+      folders.addFile(folder.id, 'Idea.m4a');
+      await sync.sync();
+
+      expect(await sync.hasLocalAudio(await single()), isTrue);
     });
 
     test('lee el audio de la carpeta cuando no está en la caché', () async {
@@ -226,6 +234,66 @@ void main() {
       expect(idea.copies['folder']!.size, 10);
       expect(idea.isSavedIn('folder'), isTrue);
       expect(writes(), isEmpty);
+    });
+
+    test('guarda la suma MD5 y la fecha de lo que escribe', () async {
+      await addRecording(bytes: [1, 2, 3]);
+
+      await sync.sync();
+      var saved = (await single()).copies['folder']!;
+      expect(saved.checksum, md5.convert([1, 2, 3]).toString());
+      // La fecha se lee al listar la carpeta.
+      expect(saved.modified, isNull);
+
+      await sync.sync();
+      saved = (await single()).copies['folder']!;
+      expect(saved.modified, folders.modified['doc0']);
+      expect(folders.calls.where((c) => c.startsWith('read')), isEmpty);
+    });
+
+    test('si cambia en la carpeta con el mismo tamaño, lo detecta por la '
+        'suma MD5', () async {
+      await addRecording(bytes: [1, 2, 3]);
+      await sync.sync();
+      await sync.sync();
+      await repository.setDetails(await single(), waveform: const [0.5]);
+
+      folders.changeFile('doc0', [9, 9, 9]);
+      await sync.sync();
+
+      final idea = await single();
+      expect(idea.revision, 1);
+      expect(idea.waveform, isNull);
+      expect(
+        idea.copies['folder']!.checksum,
+        md5.convert([9, 9, 9]).toString(),
+      );
+      expect(idea.isSavedIn('folder'), isTrue);
+      expect(changes, [0]);
+      // Lo leído para comprobarlo queda en la caché.
+      expect(File(await cache.pathFor(idea)).readAsBytesSync(), [9, 9, 9]);
+      expect(writes(), hasLength(1));
+    });
+
+    test('si solo cambia la fecha, no la da por cambiada', () async {
+      await addRecording(bytes: [1, 2, 3]);
+      await sync.sync();
+      await sync.sync();
+      final before = await single();
+      await cache.forget(before);
+
+      folders.changeFile('doc0', [1, 2, 3]);
+      await sync.sync();
+
+      final idea = await single();
+      expect(idea.revision, 0);
+      expect(idea.copies['folder']!.modified, folders.modified['doc0']);
+      expect(changes, isEmpty);
+      expect(File(await cache.pathFor(idea)).readAsBytesSync(), [1, 2, 3]);
+
+      // Con la fecha al día, ya no se vuelve a leer.
+      await sync.sync();
+      expect(folders.calls.where((c) => c.startsWith('read')), hasLength(1));
     });
 
     test('si se renombra en la carpeta, conserva sus datos', () async {
@@ -464,6 +532,55 @@ void main() {
       expect(idea.copies['drive']!.ref, 'file0');
       expect(drive.calls, isEmpty);
       expect(sync.storageFolders, ['Clases']);
+    });
+
+    test('si cambia en Drive con el mismo tamaño, lo detecta por la suma '
+        'MD5 sin descargarlo', () async {
+      final id = drive.addFile('Idea.m4a', bytes: [1, 2, 3]);
+      await sync.sync();
+      expect(
+        (await single()).copies['drive']!.checksum,
+        md5.convert([1, 2, 3]).toString(),
+      );
+
+      drive.contents[id] = [4, 5, 6];
+      await sync.sync();
+
+      final idea = await single();
+      expect(idea.revision, 1);
+      expect(idea.copies['drive']!.checksum, md5.convert([4, 5, 6]).toString());
+      expect(drive.calls, isEmpty);
+    });
+
+    test('al renombrar fuera, distingue por la suma MD5 los archivos del '
+        'mismo tamaño', () async {
+      final a = drive.addFile('A.m4a', bytes: [1, 1, 1]);
+      final b = drive.addFile('B.m4a', bytes: [2, 2, 2]);
+      await sync.sync();
+      final before = {for (final r in await all()) r.name: r.id};
+
+      drive.files.remove(a);
+      drive.files.remove(b);
+      drive.files['file9'] = 'B2.m4a';
+      drive.contents['file9'] = [2, 2, 2];
+      drive.sizes['file9'] = 3;
+      await sync.sync();
+
+      final renamed = await single();
+      expect(renamed.name, 'B2');
+      expect(renamed.id, before['B']);
+    });
+
+    test('solo tiene el audio sin descargar si está en la app o en la '
+        'caché', () async {
+      drive.addFile('Idea.m4a', bytes: [1, 2]);
+      await sync.sync();
+      final idea = await single();
+      expect(await sync.hasLocalAudio(idea), isFalse);
+      expect(drive.calls, isEmpty);
+
+      await sync.audioPath(idea);
+      expect(await sync.hasLocalAudio(idea), isTrue);
     });
 
     test('eliminarla la manda a la papelera de Drive', () async {

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../models/recording_options.dart';
+import '../models/transcription.dart';
 
 /// Carpeta del dispositivo elegida para guardar las grabaciones.
 class FolderSettings {
@@ -84,6 +85,14 @@ class DriveSettings {
 /// Dónde se guardan las grabaciones.
 enum StorageKind { folder, drive }
 
+/// Tema de la app.
+enum AppTheme {
+  /// Claro u oscuro según el sistema.
+  system,
+  light,
+  dark,
+}
+
 /// Opciones de la app.
 class AppSettings {
   const AppSettings({
@@ -93,6 +102,9 @@ class AppSettings {
     this.folders = const [],
     this.openFolder = '',
     this.countdownSeconds = defaultCountdown,
+    this.keepScreenOn = true,
+    this.transcription = const TranscriptionSettings(),
+    this.theme = AppTheme.system,
   });
 
   /// Duraciones de la cuenta atrás que se pueden elegir, en segundos.
@@ -131,6 +143,16 @@ class AppSettings {
   /// Segundos de la cuenta atrás antes de empezar a grabar.
   final int countdownSeconds;
 
+  /// Si la pantalla se mantiene encendida mientras se graba (o se espera para
+  /// empezar), para que el sistema no pare la app al apagarse.
+  final bool keepScreenOn;
+
+  /// Con qué y en qué idioma se transcriben las grabaciones.
+  final TranscriptionSettings transcription;
+
+  /// Tema de la app: el del sistema, claro u oscuro.
+  final AppTheme theme;
+
   AppSettings withFolder(FolderSettings? folder) => _copy(folder: () => folder);
 
   AppSettings withDrive(DriveSettings? drive) => _copy(drive: () => drive);
@@ -145,6 +167,14 @@ class AppSettings {
 
   AppSettings withCountdown(int seconds) => _copy(countdownSeconds: seconds);
 
+  AppSettings withKeepScreenOn(bool keepScreenOn) =>
+      _copy(keepScreenOn: keepScreenOn);
+
+  AppSettings withTranscription(TranscriptionSettings transcription) =>
+      _copy(transcription: transcription);
+
+  AppSettings withTheme(AppTheme theme) => _copy(theme: theme);
+
   AppSettings _copy({
     FolderSettings? Function()? folder,
     DriveSettings? Function()? drive,
@@ -152,6 +182,9 @@ class AppSettings {
     List<String>? folders,
     String? openFolder,
     int? countdownSeconds,
+    bool? keepScreenOn,
+    TranscriptionSettings? transcription,
+    AppTheme? theme,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
     drive: drive == null ? this.drive : drive(),
@@ -159,6 +192,9 @@ class AppSettings {
     folders: folders ?? this.folders,
     openFolder: openFolder ?? this.openFolder,
     countdownSeconds: countdownSeconds ?? this.countdownSeconds,
+    keepScreenOn: keepScreenOn ?? this.keepScreenOn,
+    transcription: transcription ?? this.transcription,
+    theme: theme ?? this.theme,
   );
 
   Map<String, dynamic> toJson() => {
@@ -168,6 +204,10 @@ class AppSettings {
     if (folders.isNotEmpty) 'folders': folders,
     if (openFolder.isNotEmpty) 'openFolder': openFolder,
     if (countdownSeconds != defaultCountdown) 'countdown': countdownSeconds,
+    if (!keepScreenOn) 'keepScreenOn': false,
+    if (transcription != const TranscriptionSettings())
+      'transcription': transcription.toJson(),
+    if (theme != AppTheme.system) 'theme': theme.name,
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> json) {
@@ -187,6 +227,9 @@ class AppSettings {
       countdownSeconds: countdownChoices.contains(countdown)
           ? countdown as int
           : defaultCountdown,
+      keepScreenOn: json['keepScreenOn'] != false,
+      transcription: TranscriptionSettings.fromJson(json['transcription']),
+      theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
     );
   }
 
@@ -198,7 +241,10 @@ class AppSettings {
       other.recording == recording &&
       listEquals(other.folders, folders) &&
       other.openFolder == openFolder &&
-      other.countdownSeconds == countdownSeconds;
+      other.countdownSeconds == countdownSeconds &&
+      other.keepScreenOn == keepScreenOn &&
+      other.transcription == transcription &&
+      other.theme == theme;
 
   @override
   int get hashCode => Object.hash(
@@ -208,6 +254,9 @@ class AppSettings {
     Object.hashAll(folders),
     openFolder,
     countdownSeconds,
+    keepScreenOn,
+    transcription,
+    theme,
   );
 }
 

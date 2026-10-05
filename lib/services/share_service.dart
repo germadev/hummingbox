@@ -35,6 +35,12 @@ Future<void> shareRecording(
   );
 }
 
+/// Comparte el texto de la transcripción de una grabación.
+Future<void> shareText(String text, {String? subject, Rect? origin}) =>
+    SharePlus.instance.share(
+      ShareParams(text: text, subject: subject, sharePositionOrigin: origin),
+    );
+
 /// Sustituye los caracteres no válidos en nombres de archivo.
 String safeFileName(String name, {required String fallback}) {
   final cleaned = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').trim();
