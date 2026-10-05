@@ -142,13 +142,17 @@ instrument. The piano, guitar and marimba fade out on their own; the organ
 and the synthesizer sound while the key is held and fade out when it is
 released. The choice is remembered.
 
-With the **synthesizer**, its controls are shown above the keys (on the
-right of the screen with the phone in portrait, since the piano is drawn
-sideways): the **wave** (sawtooth, square, triangle or sine), the envelope
-(**attack**, **decay**, **sustain** and **release**), the filter
-(**brightness** and **resonance**) and the **detune** between its two
-oscillators. While a slider is dragged only its value changes; the keys
-sound with it when it's released. *Default sound* goes back to the start.
+With the **synthesizer**, a panel in the style of a hardware groovebox is
+shown above the keys (on the right of the screen with the phone in
+portrait, drawn sideways like the piano): a screen, four keys with a LED
+and two knobs, **X** (orange) and **Y** (black). Each key picks the pair
+of parameters the knobs change, shown on the screen: **wave** (sawtooth,
+square, triangle or sine) and **detune** between its two oscillators;
+**attack** and **decay**; **sustain** and **release**; the filter's
+**brightness** and **resonance**. Turn a knob by dragging up or right (more)
+and down or left (less). While it's turned only the screen changes; the
+keys sound with it when it's released. The dark key goes back to the
+default sound.
 The sound is remembered, and each recorded note keeps the sound it had when
 it was played.
 

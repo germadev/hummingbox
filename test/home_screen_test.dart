@@ -2687,23 +2687,31 @@ void main() {
         lessThanOrEqualTo(tester.getRect(keyboard()).top),
       );
 
-      await tester.tap(find.byTooltip('Cuadrada'));
+      // La rueda X, con «Onda y desafinar»: un tercio, de sierra a
+      // cuadrada.
+      expect(find.text('Sierra'), findsOneWidget);
+      await tester.drag(
+        find.byKey(const Key('synth-knob-x')),
+        const Offset(60, 0),
+      );
       await tester.pumpAndSettle();
       expect(store.settings.synth.wave, SynthWave.square);
       expect(piano.preparedSynth?.wave, SynthWave.square);
+      expect(find.text('Cuadrada'), findsOneWidget);
 
-      // Mientras se arrastra no cambia el sonido; al soltar, sí.
-      final release = find.byKey(const Key('synth-release'));
-      await tester.ensureVisible(release);
-      await tester.pumpAndSettle();
-      final slider = find.descendant(
-        of: release,
-        matching: find.byType(Slider),
+      // Con «Sostenido y relajación», la rueda Y hacia arriba alarga la
+      // relajación; mientras se gira no cambia el sonido; al soltar, sí.
+      await tester.tap(find.byKey(const Key('synth-pair-2')));
+      await tester.pump();
+      expect(find.text('Y · RELAJACIÓN'), findsOneWidget);
+      final drag = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('synth-knob-y'))),
       );
-      final drag = await tester.startGesture(tester.getCenter(slider));
-      await drag.moveBy(const Offset(30, 0));
+      await drag.moveBy(const Offset(0, -30));
       await tester.pump();
       expect(store.settings.synth.release, const SynthPatch().release);
+      // La pantalla ya muestra el valor nuevo.
+      expect(find.text('300 ms'), findsNothing);
       await drag.up();
       await tester.pumpAndSettle();
       final changed = store.settings.synth;
@@ -2721,8 +2729,6 @@ void main() {
       expect(note.synth, changed);
 
       // Vuelve al sonido por defecto.
-      await tester.ensureVisible(find.byKey(const Key('synth-reset')));
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('synth-reset')));
       await tester.pumpAndSettle();
       expect(store.settings.synth, const SynthPatch());

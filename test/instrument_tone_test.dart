@@ -8,6 +8,7 @@ import 'package:voicerecorder/audio/wav.dart';
 import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/synth_patch.dart';
+import 'package:voicerecorder/widgets/synth_controls.dart';
 
 /// Periodo (en muestras) en el que más se parece [tone] a sí mismo, entre
 /// [from] y [to], en la décima de segundo que empieza en [start].
@@ -231,5 +232,26 @@ void main() {
       expect(SynthPatch.fromJson('x'), const SynthPatch());
       expect(patch.id, isNot(const SynthPatch().id));
     });
+  });
+
+  test('las ruedas: cada parámetro va y vuelve de su posición', () {
+    const patch = SynthPatch(
+      wave: SynthWave.triangle,
+      attack: Duration(milliseconds: 500),
+      sustain: 0.4,
+      detune: 20,
+    );
+    for (final parameter in SynthParameter.values) {
+      final position = parameter.positionIn(patch);
+      expect(position, inInclusiveRange(0, 1), reason: parameter.name);
+      expect(parameter.apply(patch, position), patch, reason: parameter.name);
+      // En los extremos, los límites.
+      expect(parameter.positionIn(parameter.apply(patch, 1)), 1);
+      expect(parameter.positionIn(parameter.apply(patch, 0)), 0);
+    }
+    // Cada parámetro, en una sola pareja.
+    expect({
+      for (final (x, y) in SynthParameter.pairs) ...[x, y],
+    }, SynthParameter.values.toSet());
   });
 }
