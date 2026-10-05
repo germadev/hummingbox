@@ -90,6 +90,17 @@ void main() {
     expect(const AppSettings().toJson().containsKey('keepScreenOn'), isFalse);
   });
 
+  test('busca palabras parecidas salvo que se desactive', () async {
+    expect((await store.load()).searchSimilarWords, isTrue);
+
+    await store.save(const AppSettings(searchSimilarWords: false));
+    expect((await store.load()).searchSimilarWords, isFalse);
+    expect(
+      const AppSettings().toJson().containsKey('searchSimilarWords'),
+      isFalse,
+    );
+  });
+
   test('las grabaciones van a la carpeta y, si no hay, a Drive', () {
     const folder = FolderSettings(id: 'tree://music', name: 'Music');
     const drive = DriveSettings(email: 'ana@example.com', folderId: 'f1');

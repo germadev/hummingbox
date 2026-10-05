@@ -737,6 +737,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Détecter automatiquement (Whisper uniquement)';
 
   @override
+  String get searchSection => 'Recherche';
+
+  @override
+  String get similarWords => 'Inclure les mots similaires';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Aussi avec des fautes ou des variantes, comme « reunon » ou « réunions » pour « réunion »';
+
+  @override
   String get appearanceSection => 'Apparence';
 
   @override

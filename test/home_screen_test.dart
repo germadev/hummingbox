@@ -1472,6 +1472,124 @@ void main() {
       expect(transcript(), findsOneWidget);
     });
 
+    testWidgets('encuentra palabras parecidas, después de las exactas', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Clase', 'Hoy repasamos el presupuesto.'),
+        withTranscript('b', 'Notas', 'El presupusto no cuadra.'),
+        sample('c', 'Idea para el viaje'),
+      ]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(searchField(), 'presupusto');
+      await tester.pumpAndSettle();
+      // Primero la que lo tiene tal cual, después la parecida.
+      final exact = tester.getTopLeft(find.byKey(const ValueKey('b'))).dy;
+      final similar = tester.getTopLeft(find.byKey(const ValueKey('a'))).dy;
+      expect(exact, lessThan(similar));
+      expect(find.byKey(const ValueKey('c')), findsNothing);
+      // La parecida, resaltada.
+      final snippet = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const Key('transcript-a')),
+          matching: find.byType(Text),
+        ),
+      );
+      final highlighted = [
+        for (final span in (snippet.textSpan! as TextSpan).children!)
+          if (span.style?.fontWeight == FontWeight.bold)
+            (span as TextSpan).text,
+      ];
+      expect(highlighted, ['presupuesto']);
+    });
+
+    testWidgets('sin palabras parecidas, solo las exactas', (tester) async {
+      store.settings = store.settings.withSearchSimilarWords(false);
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Clase', 'Hoy repasamos el presupuesto.'),
+        withTranscript('b', 'Notas', 'El presupusto no cuadra.'),
+      ]);
+      await pumpApp(tester);
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'presupusto');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('b')), findsOneWidget);
+      expect(find.byKey(const ValueKey('a')), findsNothing);
+    });
+
+    testWidgets('tocar el fondo de la lista quita el foco del campo', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      Future<void> tapBackground() async {
+        await tester.tapAt(
+          tester.getBottomLeft(find.byType(ListView)) + const Offset(400, -10),
+        );
+        await tester.pumpAndSettle();
+      }
+
+      // Sin nada escrito, se cierra.
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tapBackground();
+      expect(searchField(), findsNothing);
+
+      // Con algo escrito, se queda, sin foco ni teclado.
+      await tester.tap(find.byTooltip('Buscar'));
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'entre');
+      await tester.pumpAndSettle();
+      await tapBackground();
+      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+    });
+
+    testWidgets('tocar el fondo deselecciona la grabación, salvo si suena', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        withTranscript('a', 'Entrevista', 'Buenos días a todos.'),
+      ]);
+      await pumpApp(tester);
+      final background =
+          tester.getBottomLeft(find.byType(ListView)) + const Offset(400, -10);
+      Finder transcript() => find.byKey(const Key('transcript-a'));
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+
+      // Sonando, sigue sonando.
+      await tester.tapAt(background);
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+      expect(player.calls.last, isNot('stop'));
+
+      // Un toque en un hueco de la tarjeta no la deselecciona.
+      await tester.tap(find.byTooltip('Pausar'));
+      await tester.pumpAndSettle();
+      await tester.tapAt(
+        Offset(
+          tester.getTopLeft(find.byKey(const ValueKey('a'))).dx + 24,
+          tester.getCenter(find.byKey(const Key('waveform-a'))).dy,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(transcript(), findsOneWidget);
+
+      // En pausa, se deselecciona.
+      await tester.tapAt(background);
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'stop');
+      expect(transcript(), findsNothing);
+    });
+
     testWidgets('el extracto de la transcripción muestra la coincidencia', (
       tester,
     ) async {

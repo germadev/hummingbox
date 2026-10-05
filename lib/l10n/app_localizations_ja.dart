@@ -705,6 +705,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get detectLanguageOption => '自動検出（Whisper のみ）';
 
   @override
+  String get searchSection => '検索';
+
+  @override
+  String get similarWords => '似た単語も含める';
+
+  @override
+  String get similarWordsSubtitle => '入力ミスや語形の違いがあっても見つけます（ラテン文字の言語のみ）';
+
+  @override
   String get appearanceSection => '外観';
 
   @override

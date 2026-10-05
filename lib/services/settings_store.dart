@@ -104,6 +104,7 @@ class AppSettings {
     this.countdownSeconds = defaultCountdown,
     this.keepScreenOn = true,
     this.transcription = const TranscriptionSettings(),
+    this.searchSimilarWords = true,
     this.theme = AppTheme.system,
   });
 
@@ -150,6 +151,10 @@ class AppSettings {
   /// Con qué y en qué idioma se transcriben las grabaciones.
   final TranscriptionSettings transcription;
 
+  /// Si la búsqueda encuentra también palabras parecidas (con erratas o
+  /// variantes).
+  final bool searchSimilarWords;
+
   /// Tema de la app: el del sistema, claro u oscuro.
   final AppTheme theme;
 
@@ -173,6 +178,9 @@ class AppSettings {
   AppSettings withTranscription(TranscriptionSettings transcription) =>
       _copy(transcription: transcription);
 
+  AppSettings withSearchSimilarWords(bool similar) =>
+      _copy(searchSimilarWords: similar);
+
   AppSettings withTheme(AppTheme theme) => _copy(theme: theme);
 
   AppSettings _copy({
@@ -184,6 +192,7 @@ class AppSettings {
     int? countdownSeconds,
     bool? keepScreenOn,
     TranscriptionSettings? transcription,
+    bool? searchSimilarWords,
     AppTheme? theme,
   }) => AppSettings(
     folder: folder == null ? this.folder : folder(),
@@ -194,6 +203,7 @@ class AppSettings {
     countdownSeconds: countdownSeconds ?? this.countdownSeconds,
     keepScreenOn: keepScreenOn ?? this.keepScreenOn,
     transcription: transcription ?? this.transcription,
+    searchSimilarWords: searchSimilarWords ?? this.searchSimilarWords,
     theme: theme ?? this.theme,
   );
 
@@ -207,6 +217,7 @@ class AppSettings {
     if (!keepScreenOn) 'keepScreenOn': false,
     if (transcription != const TranscriptionSettings())
       'transcription': transcription.toJson(),
+    if (!searchSimilarWords) 'searchSimilarWords': false,
     if (theme != AppTheme.system) 'theme': theme.name,
   };
 
@@ -229,6 +240,7 @@ class AppSettings {
           : defaultCountdown,
       keepScreenOn: json['keepScreenOn'] != false,
       transcription: TranscriptionSettings.fromJson(json['transcription']),
+      searchSimilarWords: json['searchSimilarWords'] != false,
       theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
     );
   }
@@ -244,6 +256,7 @@ class AppSettings {
       other.countdownSeconds == countdownSeconds &&
       other.keepScreenOn == keepScreenOn &&
       other.transcription == transcription &&
+      other.searchSimilarWords == searchSimilarWords &&
       other.theme == theme;
 
   @override
@@ -256,6 +269,7 @@ class AppSettings {
     countdownSeconds,
     keepScreenOn,
     transcription,
+    searchSimilarWords,
     theme,
   );
 }

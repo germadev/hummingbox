@@ -741,6 +741,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get detectLanguageOption => 'Automatisch erkennen (nur Whisper)';
 
   @override
+  String get searchSection => 'Suche';
+
+  @override
+  String get similarWords => 'Ähnliche Wörter einbeziehen';
+
+  @override
+  String get similarWordsSubtitle =>
+      'Auch mit Tippfehlern oder Varianten, wie „Besprechng“ oder „Besprechungen“ für „Besprechung“';
+
+  @override
   String get appearanceSection => 'Darstellung';
 
   @override

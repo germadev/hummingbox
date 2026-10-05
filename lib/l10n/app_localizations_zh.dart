@@ -700,6 +700,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get detectLanguageOption => '自动检测（仅限 Whisper）';
 
   @override
+  String get searchSection => '搜索';
+
+  @override
+  String get similarWords => '包括相似的词';
+
+  @override
+  String get similarWordsSubtitle => '也查找有拼写错误或词形变化的词（仅限拉丁字母语言）';
+
+  @override
   String get appearanceSection => '外观';
 
   @override

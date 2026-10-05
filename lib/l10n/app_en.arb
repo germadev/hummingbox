@@ -575,6 +575,18 @@
     }
   },
   "detectLanguageOption": "Detect automatically (Whisper only)",
+  "searchSection": "Search",
+  "@searchSection": {
+    "description": "Título de la sección de las opciones de la búsqueda"
+  },
+  "similarWords": "Include similar words",
+  "@similarWords": {
+    "description": "Opción para que la búsqueda encuentre también palabras con erratas o variantes"
+  },
+  "similarWordsSubtitle": "Also with typos or variants, like “meetng” or “meetings” for “meeting”",
+  "@similarWordsSubtitle": {
+    "description": "Los ejemplos se han comprobado con la búsqueda (test/search_test.dart)"
+  },
   "appearanceSection": "Appearance",
   "@appearanceSection": {
     "description": "Título de la sección de las opciones del aspecto de la app"

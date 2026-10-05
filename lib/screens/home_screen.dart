@@ -356,6 +356,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onSearchChanged() => setState(() {});
 
+  SearchQuery? _lastQuery;
+
+  /// Lo que se busca. Se reutiliza mientras no cambie, para no repetir las
+  /// comparaciones con las palabras parecidas.
+  SearchQuery get _query {
+    final text = _search.text;
+    final similar = widget.sync.settings.searchSimilarWords;
+    if (_lastQuery case final query?
+        when query.text == text && query.similar == similar) {
+      return query;
+    }
+    return _lastQuery = SearchQuery(text, similar: similar);
+  }
+
+  /// Al tocar el fondo de la lista (fuera de las grabaciones): se quita el
+  /// foco del campo de búsqueda (y el teclado; sin nada escrito, se cierra) y
+  /// se deselecciona la grabación, salvo que esté sonando (para no cortarla
+  /// por un toque sin querer).
+  void _onBackgroundTapped() {
+    _searchFocus.unfocus();
+    if (_player.status != PlaybackStatus.playing) unawaited(_player.stop());
+  }
+
   /// Sin nada escrito, el campo se cierra al perder el foco.
   void _onSearchFocusChanged() {
     if (!_searchFocus.hasFocus && _search.text.trim().isEmpty && _searchOpen) {
@@ -1170,7 +1193,14 @@ class _HomeScreenState extends State<HomeScreen> {
       body: _SwipeToOpenDrawer(
         enabled: !_recorder.isBusy,
         onOpen: () => _scaffoldKey.currentState?.openDrawer(),
-        child: _buildBody(folder),
+        // Los toques en las grabaciones no llegan aquí.
+        child: GestureDetector(
+          key: const Key('list-background'),
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onTap: _onBackgroundTapped,
+          child: _buildBody(folder),
+        ),
       ),
       bottomNavigationBar: RecordPanel(
         controller: _recorder,
@@ -1210,16 +1240,27 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    // Al buscar, en todas las carpetas.
-    final terms = searchTerms(_search.text);
-    final searching = terms.isNotEmpty;
-    final recordings = [
-      for (final recording in _recordings)
-        if (searching
-            ? matchesSearch(recording, terms)
-            : recording.folder == folder)
-          recording,
-    ];
+    // Al buscar, en todas las carpetas: primero las que tienen las palabras
+    // tal cual y después las que tienen alguna parecida.
+    final query = _query;
+    final searching = !query.isEmpty;
+    final List<Recording> recordings;
+    if (searching) {
+      final matches = {
+        for (final recording in _recordings)
+          recording: query.matchOf(recording),
+      };
+      recordings = [
+        for (final kind in [SearchMatch.exact, SearchMatch.similar])
+          for (final MapEntry(key: recording, value: match) in matches.entries)
+            if (match == kind) recording,
+      ];
+    } else {
+      recordings = [
+        for (final recording in _recordings)
+          if (recording.folder == folder) recording,
+      ];
+    }
     final l10n = context.l10n;
     // Tirando hacia abajo desde arriba de la lista se busca.
     return _PullToSearch(
@@ -1243,11 +1284,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 hint: l10n.emptyFolderHint,
               ),
             }
-          : _buildList(recordings, terms),
+          : _buildList(recordings, searching ? query : null),
     );
   }
 
-  Widget _buildList(List<Recording> recordings, List<String> terms) {
+  Widget _buildList(List<Recording> recordings, SearchQuery? query) {
     return ListView.builder(
       // También con pocas grabaciones, para poder tirar hacia abajo.
       physics: _PullToSearch.physics,
@@ -1260,9 +1301,9 @@ class _HomeScreenState extends State<HomeScreen> {
           recording: recording,
           player: _player,
           transcriptions: _transcriptions,
-          highlight: terms,
+          search: query,
           // En los resultados de una búsqueda, su subcarpeta.
-          showFolder: terms.isNotEmpty,
+          showFolder: query != null,
           onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
           onSeek: (position) => _seek(recording, position),

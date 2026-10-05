@@ -544,6 +544,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _chooseLanguage,
               ),
               const Divider(),
+              _SectionTitle(l10n.searchSection),
+              SwitchListTile(
+                key: const Key('similar-words-option'),
+                secondary: const Icon(Icons.manage_search),
+                title: Text(l10n.similarWords),
+                subtitle: Text(l10n.similarWordsSubtitle),
+                value: settings.searchSimilarWords,
+                onChanged: _sync.setSearchSimilarWords,
+              ),
+              const Divider(),
               _SectionTitle(l10n.appearanceSection),
               ListTile(
                 key: const Key('theme-option'),

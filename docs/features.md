@@ -83,14 +83,24 @@ right. While pulling, the list moves down, a light grey circle appears behind
 the bar's magnifier and "Pull to search" shows in the gap above the list;
 past a certain point the circle turns purple, the text changes to "Release
 to search" and the phone gives a short vibration, and **releasing** there
-opens the search (going back up before releasing cancels it). If the search field already has
-the focus, pulling shows the keyboard again (for example after hiding it with
-Back on Android).
+opens the search (going back up before releasing cancels it). If the search
+field already has the focus, pulling shows the keyboard again (for example
+after hiding it with Back on Android). Tapping the list's background (outside
+the recordings) takes the focus away from the field and hides the keyboard
+(with nothing typed, the search closes), and deselects the recording unless
+it is playing.
 
 It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.
-Results highlight what was found, show the part of the transcript where it
-appears and each recording's subfolder. The X or Back closes the search.
+It also finds **similar words** (it can be turned off in Settings → Search):
+with a typo or a different ending, "reunon" or "reuniones" find "reunión" —
+one change for words of 4 to 6 letters, two for longer ones (a letter more,
+less or different, or two letters swapped), and up to 3 extra letters at the
+end. Words of 3 letters or less, words with digits and Chinese or Japanese
+text are only searched as typed. Recordings that have the words as typed come
+first. Results highlight what was found (similar words too), show the part
+of the transcript where it appears and each recording's subfolder. The X or
+Back closes the search.
 
 ## Editing
 
@@ -132,6 +142,7 @@ The ⚙ button (top right):
   [Google Drive setup](google-drive.md)).
 - **Transcription**: automatic transcription, engine, Whisper model
   (download or delete it) and language.
+- **Search**: include similar words (on by default).
 - **Appearance**: theme — system (default), light or dark — with the icon's
   colours (purple `#5C2BD6` and, for recording, red `#FF4D4D`).
 

@@ -1328,6 +1328,24 @@ abstract class AppLocalizations {
   /// **'Detect automatically (Whisper only)'**
   String get detectLanguageOption;
 
+  /// Título de la sección de las opciones de la búsqueda
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get searchSection;
+
+  /// Opción para que la búsqueda encuentre también palabras con erratas o variantes
+  ///
+  /// In en, this message translates to:
+  /// **'Include similar words'**
+  String get similarWords;
+
+  /// Los ejemplos se han comprobado con la búsqueda (test/search_test.dart)
+  ///
+  /// In en, this message translates to:
+  /// **'Also with typos or variants, like “meetng” or “meetings” for “meeting”'**
+  String get similarWordsSubtitle;
+
   /// Título de la sección de las opciones del aspecto de la app
   ///
   /// In en, this message translates to:
