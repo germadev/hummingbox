@@ -49,7 +49,8 @@ opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search
 (always in the bar, including pulling the list down, the placeholder dimmer
 without the focus, and losing focus when tapping elsewhere, also on a
-recording, but not with the Back gesture from the edge), scrolling to show the
+recording, but not with the Back gesture from the edge, and when the keyboard
+hides), Back in a subfolder, scrolling to show the
 selected recording whole, keeping the screen on, transcribing (also
 automatically, in the background) and reading the transcript, settings,
 downloading Whisper, theme, renaming (also after transcribing again), the
