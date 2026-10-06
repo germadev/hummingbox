@@ -2319,6 +2319,48 @@ void main() {
       expect(find.text('Entrevista'), findsOneWidget);
     });
 
+    testWidgets('al ocultarse el teclado (p. ej. con «atrás» en Android) se '
+        'quita el foco de la búsqueda', (tester) async {
+      addTearDown(tester.view.reset);
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(searchField());
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'entre');
+      await tester.pumpAndSettle();
+
+      // Otros cambios de la pantalla antes de que se vea el teclado (o con
+      // uno físico, que no se ve) no quitan el foco.
+      tester.view.padding = const FakeViewPadding(top: 60);
+      await tester.pumpAndSettle();
+      expect(searchFocused(tester), isTrue);
+
+      // Se ve el teclado y después ocupa menos (p. ej. sin sugerencias).
+      tester.view.viewInsets = const FakeViewPadding(bottom: 600);
+      await tester.pumpAndSettle();
+      tester.view.viewInsets = const FakeViewPadding(bottom: 450);
+      await tester.pumpAndSettle();
+      expect(searchFocused(tester), isTrue);
+
+      // Con «atrás», el sistema lo oculta (poco a poco) sin que llegue a la
+      // app.
+      tester.view.viewInsets = const FakeViewPadding(bottom: 150);
+      await tester.pump();
+      expect(searchFocused(tester), isTrue);
+      tester.view.viewInsets = FakeViewPadding.zero;
+      await tester.pumpAndSettle();
+      expect(searchFocused(tester), isFalse);
+      // Con algo escrito, sigue buscando.
+      expect(tester.widget<TextField>(searchField()).controller!.text, 'entre');
+      expect(find.byKey(const Key('view-mode-button')), findsNothing);
+
+      // El siguiente «atrás» borra lo buscado, sin abrir las carpetas.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expectNotSearching(tester);
+      expect(find.byKey(const Key('new-folder')), findsNothing);
+    });
+
     testWidgets('«Buscar» se ve más apagado sin el foco', (tester) async {
       await pumpApp(tester);
       final colors = Theme.of(tester.element(searchField())).colorScheme;
@@ -2556,8 +2598,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.testTextInput.isVisible, isTrue);
 
-      // Se oculta el teclado (p. ej. con «atrás» en Android) sin perder el
-      // foco.
+      // Se oculta el teclado sin perder el foco (p. ej. uno flotante, que
+      // no ocupa el fondo de la pantalla).
       tester.testTextInput.hide();
       await tester.drag(find.byType(ListView), const Offset(0, 300));
       await tester.pumpAndSettle();
@@ -2835,20 +2877,40 @@ void main() {
       expect(find.text('Esta carpeta está vacía'), findsOneWidget);
     });
 
-    testWidgets('«atrás» en una subcarpeta vuelve a la principal', (
-      tester,
-    ) async {
+    testWidgets('«atrás» en una subcarpeta abre el menú de las carpetas y '
+        'con él abierto sale de la app', (tester) async {
+      final calls = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          calls.add(call.method);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
       store.settings = const AppSettings(
         folder: testFolder,
         openFolder: 'Clases',
       );
       await pumpApp(tester);
 
+      // Sin cambiar a la principal.
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
+      expect(title(tester), 'Clases');
+      expect(store.settings.openFolder, 'Clases');
+      expect(calls, isNot(contains('SystemNavigator.pop')));
 
-      expect(title(tester), '');
-      expect(store.settings.openFolder, '');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(calls, contains('SystemNavigator.pop'));
+      expect(store.settings.openFolder, 'Clases');
     });
 
     testWidgets('«atrás» quita la selección de la grabación, después abre el '

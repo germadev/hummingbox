@@ -78,7 +78,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final RecorderController _recorder = RecorderController(
     recorder: widget.recorderFactory(),
     repository: widget.repository,
@@ -187,6 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.sync.addListener(_onSettingsChanged);
     _search.addListener(_onSearchChanged);
     _searchFocus.addListener(_onSearchFocusChanged);
+    WidgetsBinding.instance.addObserver(this);
     widget.sync.load();
     widget.whisper.load();
     _loadRecordings();
@@ -194,6 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _lifecycle.dispose();
     _changes.cancel();
     _search.dispose();
@@ -444,7 +446,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // --- Búsqueda ---
 
   /// Da el foco al campo de búsqueda. Si ya lo tiene, vuelve a mostrar el
-  /// teclado, que se puede haber ocultado (p. ej. con «atrás» en Android).
+  /// teclado, que se puede haber ocultado sin quitárselo (p. ej. uno
+  /// flotante, que no ocupa el fondo de la pantalla: ver
+  /// [didChangeMetrics]).
   void _startSearch() {
     if (_searchFocus.hasFocus) {
       unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
@@ -470,6 +474,19 @@ class _HomeScreenState extends State<HomeScreen> {
   /// ese «atrás» tiene que quitar el foco, no abrir el menú de las carpetas.
   void _onTapUpOutsideSearch(PointerUpEvent event) {
     if (event.pointer != _pullPointer) _searchFocus.unfocus();
+  }
+
+  /// Alto del teclado la última vez que cambió (0 si no se ve).
+  double _keyboardHeight = 0;
+
+  /// Al ocultarse el teclado con el campo de búsqueda enfocado, se le quita
+  /// el foco: con el teclado a la vista, «atrás» en Android solo lo oculta
+  /// (no llega a la app) y haría falta otro «atrás» para quitar el foco.
+  @override
+  void didChangeMetrics() {
+    final keyboardHeight = View.of(context).viewInsets.bottom;
+    if (keyboardHeight == 0 && _keyboardHeight > 0) _searchFocus.unfocus();
+    _keyboardHeight = keyboardHeight;
   }
 
   /// Borra lo buscado y quita el foco del campo.
@@ -1628,20 +1645,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// «Atrás» del sistema, de lo más concreto a lo más general: cierra el
   /// piano; quita el foco del campo de búsqueda y después la selección de la
-  /// grabación; borra lo buscado; en una subcarpeta vuelve a la principal
-  /// y en la principal abre el menú de las carpetas. Con ese menú abierto en
-  /// la principal, se sale de la app. En mitad de una grabación no se sale.
+  /// grabación; borra lo buscado; y abre el menú de las carpetas (también en
+  /// una subcarpeta). Con ese menú abierto, se sale de la app. En mitad de
+  /// una grabación no se sale.
   Future<void> _onBack() async {
     final scaffold = _scaffoldKey.currentState;
     if (scaffold == null) return;
     if (scaffold.isEndDrawerOpen) {
       scaffold.closeEndDrawer();
     } else if (scaffold.isDrawerOpen) {
-      if (_folder.isEmpty) {
-        await SystemNavigator.pop();
-      } else {
-        scaffold.closeDrawer();
-      }
+      await SystemNavigator.pop();
     } else if (_searchFocus.hasFocus) {
       _searchFocus.unfocus();
     } else if (_player.currentId != null) {
@@ -1652,8 +1665,6 @@ class _HomeScreenState extends State<HomeScreen> {
       await _recorder.cancel();
     } else if (_recorder.isActive) {
       _showMessage((l10n) => l10n.stopToLeave);
-    } else if (_folder.isNotEmpty) {
-      await _openFolder('');
     } else {
       scaffold.openDrawer();
     }

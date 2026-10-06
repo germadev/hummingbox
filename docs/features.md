@@ -145,11 +145,11 @@ interrupted (no connection, the app closes), it finishes on the next sync.
 ## Back button
 
 Back goes from the most specific to the most general: it closes the piano;
-it removes the focus from the search field and then the selection of a
-recording; it clears the search; in a subfolder it returns to the main
-folder, and in the main folder it opens the folders menu. With that menu
-open in the main folder, Back leaves the app. While recording it doesn't
-leave.
+it removes the focus from the search field (with the keyboard showing, a
+single Back hides it and removes the focus) and then the selection of a
+recording; it clears the search; and it opens the folders menu (in a
+subfolder too, without going to the main folder). With that menu open,
+Back leaves the app. While recording it doesn't leave.
 
 ## Piano
 
@@ -274,8 +274,9 @@ to search" and the phone gives a short vibration, and **releasing** there
 focuses the search: the circle disappears at once, without following the list
 back up (going back up before releasing cancels it). If the search
 field already has the focus, pulling shows the keyboard again (for example
-after hiding it with Back on Android). Tapping the list's background (outside
-the recordings) takes the focus away from the field and hides the keyboard
+a floating one hidden with Back on Android). Hiding the keyboard (with Back
+on Android) also takes the focus away from the field. Tapping the list's
+background (outside the recordings) takes the focus away from the field and hides the keyboard
 (with nothing typed, the buttons come back), and deselects the recording unless
 it is playing. Tapping the bottom panel outside its buttons works like the
 list's background. Tapping anywhere else, such as on a recording to select it
