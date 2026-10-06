@@ -2,12 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:audioplayers/audioplayers.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:voicerecorder_native/voicerecorder_native.dart';
 
 import '../audio/instrument_tone.dart';
-import '../audio/piano_headroom.dart';
 import '../models/instrument.dart';
 import '../models/synth_patch.dart';
 
@@ -41,179 +40,205 @@ abstract interface class PianoSound {
   Future<void> dispose();
 }
 
-/// Toca las notas con `audioplayers`: el sonido de cada tecla se sintetiza
-/// la primera vez ([instrumentToneWav]) y se guarda en un archivo temporal.
+/// Toca las notas con el mezclador nativo ([NativePiano]): todas salen por
+/// un solo flujo de audio, que las suma sin pasarse del máximo, apaga la
+/// nota anterior de una tecla al volver a tocarla y baja el volumen al
+/// soltarla muestra a muestra.
 ///
-/// Cada tecla tiene su reproductor, con su sonido ya cargado desde que se
-/// prepara: al tocarla solo hay que empezar a sonar. (Con unos pocos
-/// reproductores para todas, al tocar una tecla nueva había que cargar su
-/// archivo, y en Android eso retrasaba la nota.)
+/// (Con un reproductor de `audioplayers` por tecla, el sistema sumaba los
+/// reproductores, cortaba en seco la nota al volver a tocar la tecla y los
+/// cambios de volumen iban a saltos: sonaban chasquidos.)
 ///
-/// El sistema suma los reproductores y recorta lo que se pasa del máximo,
-/// que suena a ruido: el volumen de cada uno lo decide un limitador
-/// ([PianoHeadroom]) con lo que suenan todas a la vez.
-class AudioplayersPianoSound implements PianoSound {
-  AudioplayersPianoSound({Future<Directory> Function()? directory})
-    : _directoryProvider = directory ?? getTemporaryDirectory;
+/// El sonido de cada tecla se sintetiza la primera vez
+/// ([instrumentToneWav]), a la frecuencia de la salida, y se guarda en un
+/// archivo temporal que el mezclador lee una vez.
+class NativePianoSound implements PianoSound {
+  NativePianoSound({
+    this._engine = const NativePiano(),
+    Future<Directory> Function()? directory,
+  }) : _directoryProvider = directory ?? getTemporaryDirectory;
 
-  /// Teclas con reproductor como mucho: más que las que caben a la vista.
-  /// Al pasarse, se libera el de la que lleva más tiempo sin usarse.
-  static const maxPlayers = 64;
-
-  /// Se puede tocar mientras se graba la voz (en iOS, la sesión de audio
-  /// es de grabar y reproducir) y junto a otra reproducción (sin quitarle el
-  /// foco de audio en Android).
-  static final _context = AudioContext(
-    android: const AudioContextAndroid(
-      contentType: AndroidContentType.music,
-      usageType: AndroidUsageType.media,
-      audioFocus: AndroidAudioFocus.none,
-    ),
-    iOS: AudioContextIOS(
-      category: AVAudioSessionCategory.playAndRecord,
-      options: const {
-        AVAudioSessionOptions.defaultToSpeaker,
-        AVAudioSessionOptions.mixWithOthers,
-        AVAudioSessionOptions.allowBluetoothA2DP,
-      },
-    ),
-  );
+  /// Sonidos cargados en el mezclador como mucho: más que las teclas que
+  /// caben a la vista. Al pasarse, se olvida el usado hace más tiempo.
+  static const maxLoaded = 96;
 
   /// Lo que puede sonar como mucho una nota sostenida mientras se mantiene
   /// la tecla.
   static const sustainedLength = Duration(seconds: 5);
 
   /// Cuánto tarda en apagarse el órgano al soltar la tecla.
-  static const _organFadeOut = Duration(milliseconds: 60);
+  static const organFadeOut = Duration(milliseconds: 60);
 
-  /// Cada cuánto se baja el volumen al apagarse una nota.
-  static const _fadeStep = Duration(milliseconds: 30);
+  /// Versión del sonido en el nombre de los archivos (por si cambia).
+  static const _version = 'v3';
 
-  /// Cada cuánto se recalcula el volumen mientras suena alguna nota: menos
-  /// que lo que mira por delante el limitador ([PianoHeadroom.lookahead]).
-  static const _limitStep = Duration(milliseconds: 40);
-
+  final NativePiano _engine;
   final Future<Directory> Function() _directoryProvider;
 
-  /// El archivo de cada sonido, por su nombre (ver [_nameOf]).
-  final _files = <String, Future<_Tone>>{};
+  /// La frecuencia de la salida, cuando se ha puesto en marcha.
+  int? _sampleRate;
 
-  /// El volumen de las notas que suenan, para que juntas no saturen.
-  final _headroom = PianoHeadroom();
+  /// La ruta del archivo de cada sonido, por su nombre (ver [_nameOf]).
+  final _files = <String, Future<String>>{};
 
-  /// El reloj del limitador.
-  final _clock = Stopwatch()..start();
-
-  /// Recalcula el volumen mientras suena alguna nota.
-  Timer? _limiter;
-
-  /// El reproductor de cada tecla, de la usada hace más tiempo a la última.
-  final _players = <int, _KeyPlayer>{};
+  /// Los sonidos cargados en el mezclador, por su ruta, del usado hace más
+  /// tiempo al último.
+  final _loaded = <String, Future<void>>{};
 
   /// El sonido del sintetizador de los archivos que hay: al cambiarlo, se
   /// borran.
   SynthPatch? _synth;
 
-  /// Las notas sostenidas que suenan: la pulsación de la tecla (si se
-  /// vuelve a tocar, ya no es la misma) y lo que tarda en apagarse.
-  final _sounding = <int, (int, Duration)>{};
+  /// Veces que se ha tocado (o parado) cada tecla: si se vuelve a tocar o
+  /// se para mientras se prepara su sonido, la nota anterior ya no suena.
+  final _presses = <int, int>{};
 
-  /// Nombre del archivo de [key] con [instrument], con la versión del
-  /// sonido (por si cambia) y, con el sintetizador, su sonido.
-  static String _nameOf(Instrument instrument, int key, SynthPatch synth) =>
-      instrument == Instrument.synth
-      ? 'v2_synth_${synth.id}_$key.wav'
-      : 'v2_${instrument.name}_$key.wav';
+  /// La última pulsación de cada tecla que ha empezado a sonar.
+  final _started = <int, int>{};
 
-  Future<_Tone> _fileFor(Instrument instrument, int key, SynthPatch synth) {
+  /// Las teclas sostenidas que se mantienen pulsadas: su pulsación y lo que
+  /// tardan en apagarse.
+  final _held = <int, (int, Duration)>{};
+
+  /// Si ya se han borrado los archivos de versiones anteriores.
+  var _cleaned = false;
+
+  /// Pone en marcha la salida (si se había parado) y devuelve su
+  /// frecuencia.
+  Future<int> _open() async {
+    final sampleRate = _sampleRate = await _engine.open();
+    if (!_cleaned) {
+      _cleaned = true;
+      unawaited(_deleteOldFiles());
+    }
+    return sampleRate;
+  }
+
+  /// Nombre del archivo de [key] con [instrument] a [sampleRate], con la
+  /// versión del sonido y, con el sintetizador, su sonido.
+  static String _nameOf(
+    Instrument instrument,
+    int key,
+    SynthPatch synth,
+    int sampleRate,
+  ) => instrument == Instrument.synth
+      ? '${_version}_${sampleRate}_synth_${synth.id}_$key.wav'
+      : '${_version}_${sampleRate}_${instrument.name}_$key.wav';
+
+  Future<String> _fileFor(
+    Instrument instrument,
+    int key,
+    SynthPatch synth,
+    int sampleRate,
+  ) {
     if (instrument == Instrument.synth && synth != _synth) {
       _forgetSynth();
       _synth = synth;
     }
-    return _files[_nameOf(instrument, key, synth)] ??= _write(
+    final name = _nameOf(instrument, key, synth, sampleRate);
+    final file = _files[name] ??= _write(
+      name,
       instrument,
       key,
       synth,
+      sampleRate,
     );
+    // Si falla, se vuelve a intentar la próxima vez.
+    unawaited(
+      file.then(
+        (_) {},
+        onError: (_) {
+          if (identical(_files[name], file)) _files.remove(name);
+        },
+      ),
+    );
+    return file;
   }
 
-  /// Borra los archivos de un sonido anterior del sintetizador.
+  /// Borra los archivos de un sonido anterior del sintetizador y los
+  /// olvida en el mezclador.
   void _forgetSynth() {
     final old = [
       for (final name in _files.keys)
-        if (name.startsWith('v2_synth_')) name,
+        if (name.contains('_synth_')) name,
     ];
     for (final name in old) {
       final file = _files.remove(name)!;
       unawaited(
         file
-            .then((tone) => File(tone.path).delete())
+            .then((path) async {
+              _loaded.remove(path);
+              await _engine.unload([path]);
+              await File(path).delete();
+            })
             .then((_) {}, onError: (_) {}),
       );
     }
   }
 
-  Future<_Tone> _write(Instrument instrument, int key, SynthPatch synth) async {
+  Future<String> _write(
+    String name,
+    Instrument instrument,
+    int key,
+    SynthPatch synth,
+    int sampleRate,
+  ) async {
     final directory = await _directoryProvider();
-    final file = File(
-      p.join(directory.path, 'piano', _nameOf(instrument, key, synth)),
-    );
-    final path = file.path;
-    // En otro hilo, para no parar la pantalla al preparar muchas teclas.
-    if (await file.exists()) {
-      final envelope = await Isolate.run(
-        () async => ToneEnvelope.ofWav(await File(path).readAsBytes()),
-      );
-      return _Tone(path, envelope);
-    }
+    final file = File(p.join(directory.path, 'piano', name));
+    if (await file.exists()) return file.path;
     await file.parent.create(recursive: true);
-    final (wav, envelope) = await Isolate.run(() {
-      final wav = instrumentToneWav(
+    // En otro hilo, para no parar la pantalla al preparar muchas teclas.
+    final wav = await Isolate.run(
+      () => instrumentToneWav(
         instrument,
         key,
         held: sustainedLength,
         synth: synth,
+        sampleRate: sampleRate,
+      ),
+    );
+    // Aparte y luego con su nombre: si la app se cierra a medias, no queda
+    // un sonido cortado.
+    final partial = File('${file.path}.part');
+    await partial.writeAsBytes(wav, flush: true);
+    await partial.rename(file.path);
+    return file.path;
+  }
+
+  /// Borra los sonidos de versiones anteriores.
+  Future<void> _deleteOldFiles() async {
+    try {
+      final directory = Directory(
+        p.join((await _directoryProvider()).path, 'piano'),
       );
-      return (wav, ToneEnvelope.ofWav(wav));
-    });
-    await file.writeAsBytes(wav, flush: true);
-    return _Tone(path, envelope);
-  }
-
-  /// Pone a cada reproductor de las teclas que suenan su volumen.
-  void _applyVolumes() {
-    for (final key in _headroom.keys) {
-      final sound = _players[key];
-      if (sound != null && !sound.disposed) {
-        sound.setVolume(_headroom.volumeOf(key));
+      if (!await directory.exists()) return;
+      await for (final entry in directory.list()) {
+        if (entry is File && !p.basename(entry.path).startsWith(_version)) {
+          await entry.delete();
+        }
       }
-    }
+    } catch (_) {}
   }
 
-  /// Mientras suena alguna nota, recalcula el volumen cada [_limitStep]:
-  /// vuelve poco a poco a medida que se apagan.
-  void _startLimiter() {
-    _limiter ??= Timer.periodic(_limitStep, (_) {
-      _headroom.update(_clock.elapsed);
-      _applyVolumes();
-      if (_headroom.isEmpty) {
-        _limiter?.cancel();
-        _limiter = null;
-      }
-    });
-  }
-
-  /// El reproductor de [key], que pasa a ser el último usado.
-  _KeyPlayer _playerFor(int key) {
-    final existing = _players.remove(key);
-    if (existing != null) return _players[key] = existing;
-    if (_players.length >= maxPlayers) {
-      final oldest = _players.keys.first;
-      _sounding.remove(oldest);
-      _headroom.end(oldest);
-      unawaited(_players.remove(oldest)!.dispose());
+  /// Carga en el mezclador el sonido de [path], si no lo está ya, y lo
+  /// marca como el último usado.
+  Future<void> _load(String path) {
+    final loading = _loaded.remove(path) ?? _engine.load(path);
+    _loaded[path] = loading;
+    unawaited(
+      loading.then(
+        (_) {},
+        onError: (_) {
+          if (identical(_loaded[path], loading)) _loaded.remove(path);
+        },
+      ),
+    );
+    if (_loaded.length > maxLoaded) {
+      final oldest = _loaded.keys.first;
+      _loaded.remove(oldest);
+      unawaited(_engine.unload([oldest]).then((_) {}, onError: (_) {}));
     }
-    return _players[key] = _KeyPlayer(_context);
+    return loading;
   }
 
   @override
@@ -222,13 +247,18 @@ class AudioplayersPianoSound implements PianoSound {
     Instrument instrument, {
     SynthPatch synth = const SynthPatch(),
   }) async {
+    final int sampleRate;
+    try {
+      sampleRate = await _open();
+    } catch (_) {
+      // Se volverá a intentar al tocar.
+      return;
+    }
     for (final key in keys) {
       try {
-        final tone = await _fileFor(instrument, key, synth);
-        await _playerFor(key).load(tone.path);
+        await _load(await _fileFor(instrument, key, synth, sampleRate));
       } catch (_) {
         // Se volverá a intentar al tocarla.
-        _files.remove(_nameOf(instrument, key, synth));
       }
     }
   }
@@ -239,179 +269,68 @@ class AudioplayersPianoSound implements PianoSound {
     Instrument instrument, {
     SynthPatch synth = const SynthPatch(),
   }) async {
-    final sound = _playerFor(key);
-    final press = ++sound.presses;
+    final press = _presses[key] = (_presses[key] ?? 0) + 1;
+    final fadeOut = instrument == Instrument.synth
+        ? synth.release
+        : organFadeOut;
     if (instrument.sustained) {
-      _sounding[key] = (
-        press,
-        instrument == Instrument.synth ? synth.release : _organFadeOut,
-      );
+      _held[key] = (press, fadeOut);
     } else {
-      _sounding.remove(key);
+      _held.remove(key);
     }
     try {
-      final tone = await _fileFor(instrument, key, synth);
-      await sound.load(tone.path);
-      if (sound.presses != press || sound.disposed) return;
-      // Con la nueva, el volumen de todas (antes de que empiece a sonar).
-      _headroom.start(key, tone.envelope, _clock.elapsed);
-      _applyVolumes();
-      _startLimiter();
-      await sound.start(press);
+      final sampleRate = _sampleRate ?? await _open();
+      final path = await _fileFor(instrument, key, synth, sampleRate);
+      await _load(path);
+      if (_presses[key] != press) return;
+      _started[key] = press;
+      try {
+        await _engine.play(key, path);
+      } catch (_) {
+        // Si el mezclador lo ha olvidado (p. ej. al cerrarlo), se vuelve a
+        // cargar la próxima vez.
+        _loaded.remove(path);
+        rethrow;
+      }
+      // Si se ha soltado mientras se preparaba, se apaga ya.
+      if (instrument.sustained && _held[key]?.$1 != press) {
+        await _engine.release(key, fadeOut);
+      }
     } catch (_) {
       // Sin sonido no pasa nada grave: la tecla se sigue viendo pulsada.
-      _files.remove(_nameOf(instrument, key, synth));
     }
   }
 
   @override
   Future<void> release(int key) async {
-    final sounding = _sounding.remove(key);
-    final sound = _players[key];
-    if (sounding == null || sound == null) return;
-    final (press, fadeOut) = sounding;
-    // Se baja el volumen poco a poco (lo que tarda en apagarse) antes de
-    // parar, para que no chasquee. Si se vuelve a tocar, se deja.
-    final steps = (fadeOut.inMilliseconds / _fadeStep.inMilliseconds)
-        .ceil()
-        .clamp(2, 100);
-    for (var step = steps - 1; step >= 0; step--) {
-      if (sound.presses != press || sound.disposed) return;
-      try {
-        if (step == 0) {
-          _headroom.end(key);
-          await sound.player.stop();
-        } else {
-          // Como la relajación del sonido, que baja más deprisa al
-          // principio.
-          final left = step / steps;
-          _headroom.fade(key, left * left);
-          sound.setVolume(_headroom.volumeOf(key));
-        }
-      } catch (_) {}
-      if (step > 0) {
-        await Future<void>.delayed(fadeOut ~/ steps);
-      }
-    }
+    final held = _held.remove(key);
+    if (held == null) return;
+    final (press, fadeOut) = held;
+    // Si aún se está preparando, se apaga al empezar (ver [play]).
+    if (_started[key] != press) return;
+    try {
+      await _engine.release(key, fadeOut);
+    } catch (_) {}
   }
 
   @override
   Future<void> stop(int key) async {
-    _sounding.remove(key);
-    _headroom.end(key);
-    final sound = _players[key];
-    if (sound == null || sound.disposed) return;
     // Si aún se estaba preparando para sonar, ya no suena.
-    sound.presses++;
+    _presses[key] = (_presses[key] ?? 0) + 1;
+    _held.remove(key);
     try {
-      await sound.player.stop();
+      await _engine.stop(key);
     } catch (_) {}
   }
 
   @override
   Future<void> dispose() async {
-    final players = [..._players.values];
-    _players.clear();
-    _sounding.clear();
-    _limiter?.cancel();
-    _limiter = null;
-    for (final sound in players) {
-      await sound.dispose();
-    }
-  }
-}
-
-/// El archivo con el sonido de una tecla y cómo suena a lo largo del tiempo.
-class _Tone {
-  _Tone(this.path, this.envelope);
-
-  final String path;
-  final ToneEnvelope envelope;
-}
-
-/// El reproductor de una tecla, con el archivo de su sonido cargado.
-class _KeyPlayer {
-  _KeyPlayer(AudioContext context) {
-    _queue = _setUp(context);
-  }
-
-  final player = AudioPlayer();
-
-  /// Archivo que tiene (o va a tener) cargado.
-  String? _path;
-
-  /// Lo último que se le ha pedido (configurarlo o cargar un archivo): lo
-  /// siguiente espera a que termine.
-  late Future<void> _queue;
-
-  /// Veces que se ha tocado (o parado: ver [AudioplayersPianoSound.stop]).
-  var presses = 0;
-
-  /// El último volumen que se le ha puesto.
-  var _volume = 1.0;
-
-  var disposed = false;
-
-  Future<void> _setUp(AudioContext context) async {
+    _files.clear();
+    _loaded.clear();
+    _held.clear();
+    _sampleRate = null;
     try {
-      // Suena antes al tocar (en Android); si no se puede, en el normal.
-      await player.setPlayerMode(PlayerMode.lowLatency);
-    } catch (_) {}
-    try {
-      await player.setAudioContext(context);
-    } catch (_) {}
-    await player.setReleaseMode(ReleaseMode.stop);
-  }
-
-  /// Si ya se le ha cargado algún archivo.
-  var _hasSource = false;
-
-  /// Carga [path], si no lo tiene ya.
-  ///
-  /// Al cambiarlo (p. ej. al cambiar de instrumento), antes se libera: si
-  /// no, al terminar de cargar el nuevo empezaría a sonar solo si el
-  /// reproductor aún se tiene por sonando (en Android no se entera de que
-  /// una nota ha terminado; en iOS, mientras no termina), y en Android, al
-  /// volver a un sonido de antes, se quedaría con el último.
-  Future<void> load(String path) {
-    if (path != _path) {
-      _path = path;
-      _queue = _queue.catchError((_) {}).then((_) async {
-        if (_hasSource) await player.release();
-        _hasSource = true;
-        await player.setSource(DeviceFileSource(path));
-      });
-      // Si falla, se vuelve a intentar la próxima vez.
-      _queue.catchError((_) {
-        if (_path == path) _path = null;
-      });
-    }
-    return _queue;
-  }
-
-  /// Suena desde el principio, con el volumen que tenga, si sigue siendo la
-  /// pulsación [press] (si se ha parado mientras se preparaba, no).
-  Future<void> start(int press) async {
-    if (presses != press) return;
-    // Si aún suena, `resume` no haría nada.
-    if (player.state == PlayerState.playing) await player.stop();
-    if (presses != press) return;
-    await player.resume();
-  }
-
-  /// Le pone el volumen [volume], si no lo tiene ya (se queda para las
-  /// siguientes notas). Llega antes que lo que se le pida después: van en
-  /// orden.
-  void setVolume(double volume) {
-    if ((volume - _volume).abs() < 0.005) return;
-    _volume = volume;
-    unawaited(player.setVolume(volume).then((_) {}, onError: (_) {}));
-  }
-
-  Future<void> dispose() async {
-    disposed = true;
-    try {
-      await player.dispose();
+      await _engine.close();
     } catch (_) {}
   }
 }

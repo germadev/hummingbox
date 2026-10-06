@@ -297,6 +297,56 @@ void main() {
     expect(playhead()?.progress, closeTo(0.25, 0.01));
   });
 
+  testWidgets('la línea avanza con el reloj y no retrocede', (tester) async {
+    repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+    await pumpApp(tester);
+    double progress() =>
+        (tester
+                    .widget<CustomPaint>(
+                      find.descendant(
+                        of: find.byKey(const Key('waveform-a')),
+                        matching: find.byKey(const Key('playhead')),
+                      ),
+                    )
+                    .foregroundPainter!
+                as PlayheadPainter)
+            .progress;
+    Duration at(double progress) =>
+        tester
+            .widget<WaveformSeekBar>(find.byKey(const Key('waveform-a')))
+            .duration *
+        progress;
+
+    await tester.tap(find.byTooltip('Reproducir'));
+    await tester.pumpAndSettle();
+    // La posición llega en un fotograma y se dibuja en el siguiente.
+    Future<void> report(Duration position) async {
+      player.positionController.add(position);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await report(const Duration(seconds: 10));
+    expect(at(progress()), const Duration(seconds: 10));
+
+    // Sin que el reproductor diga nada, avanza lo que pasa.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(at(progress()).inMilliseconds, closeTo(10100, 2));
+
+    // Una posición un poco anterior no la hace retroceder.
+    await report(const Duration(milliseconds: 10050));
+    expect(at(progress()).inMilliseconds, greaterThanOrEqualTo(10099));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(at(progress()).inMilliseconds, greaterThan(10100));
+
+    // Al pausar, se queda donde estaba.
+    await tester.tap(tileButton('a', 'Pausar'));
+    await tester.pumpAndSettle();
+    final paused = at(progress());
+    await tester.pump(const Duration(seconds: 1));
+    expect(at(progress()), paused);
+  });
+
   testWidgets('en la vista compacta, las grabaciones con notas del piano '
       'llevan un piano a la izquierda del botón de reproducir', (tester) async {
     store.settings = const AppSettings(
@@ -918,8 +968,8 @@ void main() {
         'edit',
         'addPiano',
         'rename',
+        'move',
         'transcribe',
-        'transcribeInLanguage',
         'share',
         'delete',
       ]) {
@@ -1277,7 +1327,15 @@ void main() {
       await tester.tap(find.byKey(const Key('transcript-a')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('transcript-text')), findsOneWidget);
-      expect(find.textContaining('Whisper (Base) · Español'), findsOneWidget);
+      expect(find.textContaining('Whisper (Base) · '), findsOneWidget);
+      // El idioma, en su botón.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('transcript-language')),
+          matching: find.text('Español'),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.text('La grabación ha cambiado desde que se transcribió.'),
         findsNothing,
@@ -1533,9 +1591,33 @@ void main() {
 
     Future<void> chooseLanguage(WidgetTester tester, String language) async {
       expect(find.text('Idioma de la grabación'), findsOneWidget);
-      await tester.tap(find.text(language));
+      await tester.tap(find.text(language).last);
       await tester.pumpAndSettle();
     }
+
+    /// Abre la transcripción y toca su idioma.
+    Future<void> openLanguage(WidgetTester tester) async {
+      await chooseInMenu(tester, 'Ver transcripción');
+      await tester.tap(find.byKey(const Key('transcript-language')));
+      await tester.pumpAndSettle();
+    }
+
+    Recording transcribed(String name, {String? transcriptionLanguage}) =>
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: name,
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: transcriptionLanguage,
+          transcript: Transcript(
+            text: 'Hello everyone.',
+            engine: TranscriptionEngine.system,
+            language: 'en-US',
+            revision: 0,
+            createdAt: DateTime(2026, 9, 28, 9),
+          ),
+        );
 
     /// Al volver a transcribirla, pregunta si se renombra: se deja como está.
     Future<void> keepName(WidgetTester tester) async {
@@ -1544,12 +1626,24 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('se transcribe en el idioma elegido para la grabación, también '
-        'al volver a transcribir', (tester) async {
+    testWidgets('el idioma se cambia en la transcripción, no en el menú', (
+      tester,
+    ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Interview')]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('Transcribir'), findsOneWidget);
+      expect(find.text('Transcribir en otro idioma'), findsNothing);
+    });
+
+    testWidgets('se transcribe en el idioma elegido para la grabación, también '
+        'al volver a transcribir', (tester) async {
+      repository = InMemoryRecordingsRepository([transcribed('Interview')]);
+      await pumpApp(tester);
+
+      await openLanguage(tester);
       // Por defecto, el de las opciones.
       expect(find.text('Como en las opciones'), findsOneWidget);
       expect(find.text('El de la app (Español)'), findsOneWidget);
@@ -1610,13 +1704,26 @@ void main() {
       );
     });
 
+    testWidgets('al cancelar, se sigue en la transcripción', (tester) async {
+      repository = InMemoryRecordingsRepository([transcribed('Interview')]);
+      await pumpApp(tester);
+
+      await openLanguage(tester);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('transcript-text')), findsOneWidget);
+      expect(transcriber.calls, isEmpty);
+      expect(repository.byId('a').transcriptionLanguage, isNull);
+    });
+
     testWidgets('si ya se llama así, no pregunta', (tester) async {
       repository = InMemoryRecordingsRepository([
-        sample('a', '2026-09-28.Hola, esto es una prueba'),
+        transcribed('2026-09-28.Hola, esto es una prueba'),
       ]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'English');
 
       expect(transcriber.calls, hasLength(1));
@@ -1626,32 +1733,17 @@ void main() {
     testWidgets('desde la transcripción, y «Como en las opciones» vuelve al '
         'de las opciones', (tester) async {
       repository = InMemoryRecordingsRepository([
-        Recording(
-          id: 'a',
-          path: '/fake/a.m4a',
-          name: 'Interview',
-          createdAt: DateTime(2026, 9, 28, 8, 30),
-          duration: const Duration(seconds: 83),
-          transcriptionLanguage: 'en',
-          transcript: Transcript(
-            text: 'Hello everyone.',
-            engine: TranscriptionEngine.system,
-            language: 'en-US',
-            revision: 0,
-            createdAt: DateTime(2026, 9, 28, 9),
-          ),
-        ),
+        transcribed('Interview', transcriptionLanguage: 'en'),
       ]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Ver transcripción');
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'Français');
       await keepName(tester);
       expect(transcriber.calls, [('a', TranscriptionEngine.system, 'fr')]);
       expect(repository.byId('a').transcriptionLanguage, 'fr');
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'Como en las opciones');
       await keepName(tester);
       expect(repository.byId('a').transcriptionLanguage, isNull);
@@ -2552,6 +2644,129 @@ void main() {
       await tester.dragFrom(const Offset(60, 300), const Offset(300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
+    });
+
+    group('mover una grabación', () {
+      Future<void> openMoveDialog(WidgetTester tester) async {
+        await tester.tap(find.byTooltip('Más opciones'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Mover a carpeta'));
+        await tester.pumpAndSettle();
+        expect(find.text('Mover a'), findsOneWidget);
+      }
+
+      testWidgets('desde su menú, a una subcarpeta: deja de verse aquí y se '
+          've en ella', (tester) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista'),
+          sample('b', 'Tema 1', folder: 'Clases'),
+        ]);
+        store.settings = const AppSettings(
+          folder: testFolder,
+          folders: ['Ideas'],
+        );
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        // Las carpetas, como en el menú; en la que está no se puede tocar.
+        expect(find.byKey(const Key('move-to-Clases')), findsOneWidget);
+        expect(find.byKey(const Key('move-to-Ideas')), findsOneWidget);
+        expect(
+          tester.widget<ListTile>(find.byKey(const Key('move-to-'))).enabled,
+          isFalse,
+        );
+        await tester.tap(find.byKey(const Key('move-to-Clases')));
+        await tester.pumpAndSettle();
+
+        expect(repository.byId('a').folder, 'Clases');
+        expect(repository.byId('a').name, 'Entrevista');
+        expect(find.text('Movida a «Clases»'), findsOneWidget);
+        expect(find.text('Entrevista'), findsNothing);
+        // Se guarda en su nueva subcarpeta.
+        expect(folders.calls, contains('write Clases/Entrevista.m4a'));
+
+        await openDrawer(tester);
+        await tester.tap(find.text('Clases'));
+        await tester.pumpAndSettle();
+        expect(find.text('Entrevista'), findsOneWidget);
+        expect(find.text('Tema 1'), findsOneWidget);
+      });
+
+      testWidgets('si allí hay otra con su nombre, se le añade un número', (
+        tester,
+      ) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista'),
+          sample('b', 'Entrevista', folder: 'Clases'),
+        ]);
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-Clases')));
+        await tester.pumpAndSettle();
+
+        expect(repository.byId('a').name, 'Entrevista (2)');
+        expect(repository.byId('a').folder, 'Clases');
+      });
+
+      testWidgets('a una carpeta nueva', (tester) async {
+        repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-new-folder')));
+        await tester.pumpAndSettle();
+        await tester.enterText(dialogField(), 'Viajes');
+        await tester.pump();
+        await tester.tap(find.text('Crear'));
+        await tester.pumpAndSettle();
+
+        expect(store.settings.folders, ['Viajes']);
+        expect(repository.byId('a').folder, 'Viajes');
+        expect(find.text('Movida a «Viajes»'), findsOneWidget);
+        // Se sigue en la que estaba.
+        expect(title(tester), '');
+      });
+
+      testWidgets('de una subcarpeta a la principal, y al cancelar no se '
+          'mueve', (tester) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista', folder: 'Clases'),
+        ]);
+        store.settings = const AppSettings(
+          folder: testFolder,
+          openFolder: 'Clases',
+        );
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.text('Cancelar'));
+        await tester.pumpAndSettle();
+        expect(repository.byId('a').folder, 'Clases');
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-')));
+        await tester.pumpAndSettle();
+        expect(repository.byId('a').folder, '');
+        expect(find.text('Movida a «Grabaciones»'), findsOneWidget);
+      });
+
+      testWidgets('si es la que suena, se para', (tester) async {
+        repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+        await pumpApp(tester);
+        await tester.tap(find.byTooltip('Reproducir'));
+        await tester.pumpAndSettle();
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-new-folder')));
+        await tester.pumpAndSettle();
+        await tester.enterText(dialogField(), 'Viajes');
+        await tester.pump();
+        await tester.tap(find.text('Crear'));
+        await tester.pumpAndSettle();
+
+        expect(player.calls.last, 'stop');
+      });
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {

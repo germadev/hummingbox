@@ -2,11 +2,12 @@ import Flutter
 import UIKit
 
 /// Registra los canales de conversión de audio, de acceso a carpetas, de la
-/// pantalla y del reconocimiento de voz.
+/// pantalla, del reconocimiento de voz y del sonido del piano.
 public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
   private let codec = AudioCodecHandler()
   private let folders = FolderAccessHandler()
   private let speech = SpeechHandler()
+  private let piano = PianoOutput()
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = VoicerecorderNativePlugin()
@@ -46,6 +47,13 @@ public class VoicerecorderNativePlugin: NSObject, FlutterPlugin {
       binaryMessenger: registrar.messenger())
     speechChannel.setMethodCallHandler { call, result in
       instance.speech.handle(call, result: result)
+    }
+
+    let pianoChannel = FlutterMethodChannel(
+      name: "es.germade.voicerecorder/piano",
+      binaryMessenger: registrar.messenger())
+    pianoChannel.setMethodCallHandler { call, result in
+      instance.piano.handle(call, result: result)
     }
   }
 }

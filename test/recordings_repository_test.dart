@@ -218,6 +218,49 @@ void main() {
     expect((await newRepository().loadAll()).single.copies, isEmpty);
   });
 
+  test('al moverla a otra subcarpeta, recuerda dónde están sus archivos '
+      'hasta moverlos', () async {
+    final recording = await repository.add(
+      path: await createAudioFile(),
+      duration: const Duration(seconds: 3),
+      name: 'Entrevista',
+      folder: 'Clases',
+    );
+    // Como en el índice de versiones anteriores: sin saber dónde está.
+    const copy = CopyState(
+      destination: 'tree://music',
+      ref: 'doc1',
+      revision: 0,
+      name: 'Entrevista',
+    );
+    const moved = CopyState(
+      destination: 'drive',
+      ref: 'file1',
+      revision: 0,
+      name: 'Entrevista',
+      folder: 'Otra',
+    );
+    await repository.setCopy(recording!, 'folder', copy);
+    await repository.setCopy(
+      (await repository.loadAll()).single,
+      'drive',
+      moved,
+    );
+
+    await repository.move(
+      (await repository.loadAll()).single,
+      '',
+      name: 'Entrevista (2)',
+    );
+
+    final reloaded = (await newRepository().loadAll()).single;
+    expect(reloaded.folder, '');
+    expect(reloaded.name, 'Entrevista (2)');
+    expect(reloaded.copies['folder']!.folder, 'Clases');
+    // Si ya se sabía, no cambia.
+    expect(reloaded.copies['drive']!.folder, 'Otra');
+  });
+
   test('sustituye el audio y aumenta la revisión', () async {
     final recording = await repository.add(
       path: await createAudioFile(),

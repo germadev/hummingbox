@@ -605,20 +605,74 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _createFolder() async {
+    final name = await _newFolder();
+    if (name == null || !mounted) return;
+    await _openFolder(name);
+  }
+
+  /// Pide el nombre de una subcarpeta nueva y la crea. Devuelve su nombre,
+  /// o `null` si se cancela o no vale.
+  Future<String?> _newFolder() async {
     final input = await showNameDialog(
       context,
       title: context.l10n.newFolder,
       confirmLabel: context.l10n.create,
     );
-    if (input == null || !mounted) return;
+    if (input == null || !mounted) return null;
     final name = safeFileName(input, fallback: '');
     if (name.isEmpty || name.startsWith('.')) {
       _showMessage((l10n) => l10n.invalidFolderName);
-      return;
+      return null;
     }
     await widget.sync.createFolder(name);
-    if (!mounted) return;
-    await _openFolder(name);
+    return name;
+  }
+
+  /// Nombre de la carpeta principal: el de la carpeta del dispositivo o el
+  /// de la de Drive.
+  String _rootName(AppLocalizations l10n) =>
+      widget.sync.settings.folder?.name ??
+      widget.sync.settings.drive?.folderName ??
+      l10n.rootFolder;
+
+  /// Pregunta a qué carpeta se mueve [recording] (o crea una nueva) y la
+  /// mueve. Si allí hay otra con su nombre, se le añade un número. Sus
+  /// archivos se mueven al guardarla.
+  Future<void> _move(Recording recording) async {
+    final l10n = context.l10n;
+    final current = _latest(recording);
+    final choice = await showFolderDialog(
+      context,
+      title: l10n.moveToTitle,
+      rootName: _rootName(l10n),
+      folders: _folderNames,
+      current: current.folder,
+    );
+    if (choice == null || !mounted) return;
+    final folder = choice.folder ?? await _newFolder();
+    if (folder == null || folder == current.folder || !mounted) return;
+    final name = RecordingNames.unique(current.name, [
+      for (final r in _recordings)
+        if (r.folder == folder && r.id != current.id) r.name,
+    ]);
+    // Deja de verse aquí: si es la seleccionada, se para.
+    if (_player.isCurrent(current)) await _player.stop();
+    final Recording moved;
+    try {
+      moved = await widget.repository.move(
+        current,
+        folder,
+        name: name == current.name ? null : name,
+      );
+    } catch (_) {
+      _showMessage((l10n) => l10n.moveFailed);
+      return;
+    }
+    _replaceRecording(moved);
+    _syncStorage();
+    _showMessage(
+      (l10n) => l10n.movedTo(folder.isEmpty ? _rootName(l10n) : folder),
+    );
   }
 
   // --- Grabación ---
@@ -756,12 +810,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _openPianoOver(recording);
       case RecordingAction.rename:
         await _rename(recording);
+      case RecordingAction.move:
+        await _move(recording);
       case RecordingAction.transcribe:
         await _transcribe(recording);
       case RecordingAction.viewTranscript:
         await _viewTranscript(recording);
-      case RecordingAction.transcribeInLanguage:
-        await _transcribeInLanguage(recording);
       case RecordingAction.share:
         await _share(recording, tileContext);
       case RecordingAction.delete:
@@ -929,15 +983,19 @@ class _HomeScreenState extends State<HomeScreen> {
   /// opciones (en la grabación, `null`).
   static const _sameAsSettings = '';
 
-  /// Pregunta en qué idioma se transcribe [recording], lo guarda con ella y
-  /// la vuelve a transcribir en él.
-  Future<void> _transcribeInLanguage(Recording recording) async {
+  /// Pregunta (sobre [context], la pantalla de la transcripción) en qué
+  /// idioma se transcribe [recording]. Devuelve el elegido (`null` para el
+  /// de las opciones) o, si no se elige ninguno, nada.
+  Future<({String? language})?> _askLanguage(
+    BuildContext context,
+    Recording recording,
+  ) async {
     if (_recorder.isBusy) {
       _showMessage((l10n) => l10n.stopToTranscribe);
-      return;
+      return null;
     }
     await widget.sync.load();
-    if (!mounted) return;
+    if (!context.mounted) return null;
     final l10n = context.l10n;
     final settings = widget.sync.settings.transcription;
     final current = _latest(recording);
@@ -960,12 +1018,22 @@ class _HomeScreenState extends State<HomeScreen> {
           Choice(code, languageName(code)),
       ],
     );
-    if (language == null || !mounted) return;
+    if (language == null) return null;
+    return (language: language == _sameAsSettings ? null : language);
+  }
+
+  /// Guarda [language] (`null`, el de las opciones) como el idioma de
+  /// [recording] y la vuelve a transcribir en él.
+  Future<void> _transcribeInLanguage(
+    Recording recording,
+    String? language,
+  ) async {
+    if (!mounted) return;
     final Recording updated;
     try {
       updated = await widget.repository.setTranscriptionLanguage(
-        current,
-        language == _sameAsSettings ? null : language,
+        _latest(recording),
+        language,
       );
     } catch (_) {
       _showMessage((l10n) => l10n.transcriptionFailed);
@@ -1249,10 +1317,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final current =
         _recordings.where((r) => r.id == recording.id).firstOrNull ?? recording;
     if (current.transcript == null) return;
+    ({String? language})? chosen;
     final action = await Navigator.push<TranscriptAction>(
       context,
       MaterialPageRoute(
-        builder: (context) => TranscriptScreen(recording: current),
+        builder: (context) => TranscriptScreen(
+          recording: current,
+          chooseLanguage: (context) async {
+            chosen = await _askLanguage(context, current);
+            return chosen != null;
+          },
+        ),
       ),
     );
     if (!mounted || action == null) return;
@@ -1260,7 +1335,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case TranscriptAction.transcribeAgain:
         await _transcribe(current);
       case TranscriptAction.transcribeInLanguage:
-        await _transcribeInLanguage(current);
+        if (chosen case (:final language)) {
+          await _transcribeInLanguage(current, language);
+        }
       case TranscriptAction.delete:
         try {
           _replaceRecording(
@@ -1423,10 +1500,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // [_SwipeToOpenDrawers]) o con su botón. Al abrirlo se buscan
       // subcarpetas nuevas.
       drawer: FolderDrawer(
-        rootName:
-            sync.settings.folder?.name ??
-            sync.settings.drive?.folderName ??
-            context.l10n.rootFolder,
+        rootName: _rootName(context.l10n),
         folders: folderNames,
         counts: {
           for (final name in ['', ...folderNames]) name: _countIn(name),

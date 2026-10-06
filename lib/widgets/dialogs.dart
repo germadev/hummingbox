@@ -81,6 +81,68 @@ Future<T?> showChoiceDialog<T>(
   );
 }
 
+/// Pregunta a qué carpeta se mueve una grabación: la principal (`''`, que
+/// se llama [rootName]) o una de [folders], como en el menú de carpetas. En
+/// la que está, [current], no se puede tocar. Devuelve la elegida, `(folder:
+/// null)` para crear una nueva o `null` si se cancela.
+Future<({String? folder})?> showFolderDialog(
+  BuildContext context, {
+  required String title,
+  required String rootName,
+  required List<String> folders,
+  required String current,
+}) {
+  Widget item(
+    BuildContext context,
+    String folder,
+    String label,
+    IconData icon,
+  ) {
+    final isCurrent = folder == current;
+    return ListTile(
+      key: Key('move-to-$folder'),
+      leading: Icon(isCurrent ? Icons.folder_open : icon),
+      title: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: isCurrent ? const Icon(Icons.check) : null,
+      enabled: !isCurrent,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+      onTap: () => Navigator.pop(context, (folder: folder)),
+    );
+  }
+
+  return showDialog<({String? folder})>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            item(context, '', rootName, Icons.folder_special_outlined),
+            for (final folder in folders)
+              item(context, folder, folder, Icons.folder_outlined),
+            const Divider(),
+            ListTile(
+              key: const Key('move-to-new-folder'),
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: Text(context.l10n.newFolder),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+              onTap: () => Navigator.pop(context, (folder: null)),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(context.l10n.cancel),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Pide un nuevo nombre para una grabación. Devuelve `null` si se cancela.
 Future<String?> showRenameDialog(BuildContext context, String currentName) {
   return showNameDialog(

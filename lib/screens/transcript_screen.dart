@@ -14,12 +14,24 @@ enum TranscriptAction { transcribeAgain, transcribeInLanguage, delete }
 /// Muestra la transcripción de una grabación, para leerla, copiarla o
 /// compartirla. Devuelve una [TranscriptAction] si se pide volver a
 /// transcribirla (en el mismo idioma o en otro) o eliminarla.
+///
+/// Su idioma se ve en un botón: al tocarlo, [chooseLanguage] pregunta en
+/// cuál se transcribe (sin salir de aquí) y, si se elige alguno, se cierra
+/// con [TranscriptAction.transcribeInLanguage].
 class TranscriptScreen extends StatelessWidget {
-  const TranscriptScreen({super.key, required this.recording});
+  const TranscriptScreen({
+    super.key,
+    required this.recording,
+    required this.chooseLanguage,
+  });
 
   final Recording recording;
 
-  /// Con qué se transcribió: `Whisper (Base) · Español · Hoy, 10:30`.
+  /// Pregunta el idioma de la grabación; `true` si se ha elegido alguno.
+  final Future<bool> Function(BuildContext context) chooseLanguage;
+
+  /// Con qué se transcribió: `Whisper (Base) · Hoy, 10:30` (el idioma va en
+  /// su botón).
   static String details(Transcript transcript, AppLocalizations l10n) => [
     ?switch (transcript.engine) {
       TranscriptionEngine.system => l10n.systemSpeechRecognition,
@@ -29,7 +41,6 @@ class TranscriptScreen extends StatelessWidget {
       },
       null => null,
     },
-    if (transcript.language case final language?) languageName(language),
     formatRecordingDate(transcript.createdAt, l10n),
   ].join(' · ');
 
@@ -83,13 +94,6 @@ class TranscriptScreen extends StatelessWidget {
                 ),
               ),
               PopupMenuItem(
-                value: TranscriptAction.transcribeInLanguage,
-                child: ListTile(
-                  leading: const Icon(Icons.translate),
-                  title: Text(l10n.transcribeInLanguage),
-                ),
-              ),
-              PopupMenuItem(
                 value: TranscriptAction.delete,
                 child: ListTile(
                   leading: const Icon(Icons.delete_outline),
@@ -103,11 +107,36 @@ class TranscriptScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          Text(
-            details(transcript, l10n),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // El idioma, para transcribirla en otro.
+              ActionChip(
+                key: const Key('transcript-language'),
+                avatar: const Icon(Icons.translate),
+                label: Text(switch (transcript.language) {
+                  final language? => languageName(language),
+                  null => l10n.recordingLanguage,
+                }),
+                tooltip: l10n.transcribeInLanguage,
+                onPressed: () async {
+                  if (await chooseLanguage(context) && context.mounted) {
+                    Navigator.pop(
+                      context,
+                      TranscriptAction.transcribeInLanguage,
+                    );
+                  }
+                },
+              ),
+              Text(
+                details(transcript, l10n),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
           ),
           if (recording.isTranscriptOutdated) ...[
             const SizedBox(height: 12),

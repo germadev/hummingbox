@@ -11,15 +11,17 @@ import java.util.concurrent.Executors
 
 /**
  * Registra los canales de conversión de audio, de acceso a carpetas, de la
- * pantalla y del reconocimiento de voz.
+ * pantalla, del reconocimiento de voz y del sonido del piano.
  */
 class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
     private var codecChannel: MethodChannel? = null
     private var foldersChannel: MethodChannel? = null
     private var screenChannel: MethodChannel? = null
     private var speechChannel: MethodChannel? = null
+    private var pianoChannel: MethodChannel? = null
     private var folders: FolderAccess? = null
     private var speech: SpeechTranscriber? = null
+    private var piano: PianoOutput? = null
     private val screen = ScreenAwake()
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -39,6 +41,11 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         speechChannel = MethodChannel(binding.binaryMessenger, SPEECH_CHANNEL).apply {
             setMethodCallHandler(transcriber)
         }
+        val pianoOutput = PianoOutput(binding.applicationContext)
+        piano = pianoOutput
+        pianoChannel = MethodChannel(binding.binaryMessenger, PIANO_CHANNEL).apply {
+            setMethodCallHandler(pianoOutput)
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -53,6 +60,10 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         speechChannel = null
         speech?.dispose()
         speech = null
+        pianoChannel?.setMethodCallHandler(null)
+        pianoChannel = null
+        piano?.close()
+        piano = null
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
@@ -80,6 +91,7 @@ class VoicerecorderNativePlugin : FlutterPlugin, ActivityAware {
         const val FOLDERS_CHANNEL = "es.germade.voicerecorder/folders"
         const val SCREEN_CHANNEL = "es.germade.voicerecorder/screen"
         const val SPEECH_CHANNEL = "es.germade.voicerecorder/speech"
+        const val PIANO_CHANNEL = "es.germade.voicerecorder/piano"
     }
 }
 

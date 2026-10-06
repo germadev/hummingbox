@@ -194,6 +194,7 @@ class Recording {
     Transcript? Function()? transcript,
     bool? provisionalName,
     List<PianoNote>? notes,
+    String? folder,
   }) {
     return Recording(
       id: id,
@@ -205,7 +206,7 @@ class Recording {
       revision: revision ?? this.revision,
       copies: copies ?? this.copies,
       audio: audio ?? this.audio,
-      folder: folder,
+      folder: folder ?? this.folder,
       transcript: transcript == null ? this.transcript : transcript(),
       noAutoTranscript: noAutoTranscript,
       transcriptionLanguage: transcriptionLanguage,
@@ -229,10 +230,16 @@ class CopyState {
     this.modified,
     this.transcript,
     this.midi,
+    this.folder,
   });
 
   /// Carpeta en la que está el archivo (la del dispositivo o la de Drive).
   final String destination;
+
+  /// Subcarpeta en la que está el archivo (`''`, la carpeta principal), o
+  /// `null` si no se sabe (de versiones anteriores): la de la grabación. Si
+  /// no es la de la grabación, se ha movido a otra y falta mover el archivo.
+  final String? folder;
 
   /// Referencia del archivo en el destino (URI, id de Drive…).
   final String ref;
@@ -271,6 +278,7 @@ class CopyState {
     int? size,
     String? checksum,
     DateTime? modified,
+    String? folder,
   }) => CopyState(
     destination: destination,
     ref: ref ?? this.ref,
@@ -281,6 +289,7 @@ class CopyState {
     modified: modified ?? this.modified,
     transcript: transcript,
     midi: midi,
+    folder: folder ?? this.folder,
   );
 
   /// El mismo archivo con [file] como archivo de la transcripción (o sin él,
@@ -295,6 +304,8 @@ class CopyState {
     modified: modified,
     transcript: file,
     midi: midi,
+
+    folder: folder,
   );
 
   /// El mismo archivo con [file] como archivo `.mid` de las notas (o sin él,
@@ -309,6 +320,8 @@ class CopyState {
     modified: modified,
     transcript: transcript,
     midi: file,
+
+    folder: folder,
   );
 
   static CopyState? fromJson(Object? json) {
@@ -338,11 +351,13 @@ class CopyState {
           : null,
       transcript: TranscriptFile.fromJson(json['transcript']),
       midi: TranscriptFile.fromJson(json['midi']),
+      folder: json['subfolder'] as String?,
     );
   }
 
   Map<String, dynamic> toJson() => {
     'destination': destination,
+    if (folder != null) 'subfolder': folder,
     'ref': ref,
     'revision': revision,
     'name': name,
@@ -365,7 +380,8 @@ class CopyState {
       other.modified?.millisecondsSinceEpoch ==
           modified?.millisecondsSinceEpoch &&
       other.transcript == transcript &&
-      other.midi == midi;
+      other.midi == midi &&
+      other.folder == folder;
 
   @override
   int get hashCode => Object.hash(
@@ -378,6 +394,7 @@ class CopyState {
     modified?.millisecondsSinceEpoch,
     transcript,
     midi,
+    folder,
   );
 }
 
@@ -391,6 +408,7 @@ class TranscriptFile {
     this.size,
     this.checksum,
     this.modified,
+    this.folder,
   });
 
   /// Referencia del archivo en el destino.
@@ -405,18 +423,24 @@ class TranscriptFile {
   final String? checksum;
   final DateTime? modified;
 
+  /// Subcarpeta en la que está, si no es la del audio (al mover la
+  /// grabación a otra, el audio se mueve antes); `null`, la del audio.
+  final String? folder;
+
   TranscriptFile copyWith({
     String? ref,
     String? name,
     int? size,
     String? checksum,
     DateTime? modified,
+    String? Function()? folder,
   }) => TranscriptFile(
     ref: ref ?? this.ref,
     name: name ?? this.name,
     size: size ?? this.size,
     checksum: checksum ?? this.checksum,
     modified: modified ?? this.modified,
+    folder: folder == null ? this.folder : folder(),
   );
 
   static TranscriptFile? fromJson(Object? json) {
@@ -435,6 +459,7 @@ class TranscriptFile {
       modified: modified is int
           ? DateTime.fromMillisecondsSinceEpoch(modified)
           : null,
+      folder: json['subfolder'] as String?,
     );
   }
 
@@ -444,6 +469,7 @@ class TranscriptFile {
     if (size != null) 'size': size,
     if (checksum != null) 'md5': checksum,
     if (modified != null) 'modified': modified!.millisecondsSinceEpoch,
+    if (folder != null) 'subfolder': folder,
   };
 
   @override
@@ -454,9 +480,16 @@ class TranscriptFile {
       other.size == size &&
       other.checksum == checksum &&
       other.modified?.millisecondsSinceEpoch ==
-          modified?.millisecondsSinceEpoch;
+          modified?.millisecondsSinceEpoch &&
+      other.folder == folder;
 
   @override
-  int get hashCode =>
-      Object.hash(ref, name, size, checksum, modified?.millisecondsSinceEpoch);
+  int get hashCode => Object.hash(
+    ref,
+    name,
+    size,
+    checksum,
+    modified?.millisecondsSinceEpoch,
+    folder,
+  );
 }

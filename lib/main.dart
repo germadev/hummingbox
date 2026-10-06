@@ -60,7 +60,7 @@ Future<void> main() async {
         audioPath: sync.audioPath,
       ),
       whisper: WhisperController(whisper),
-      piano: AudioplayersPianoSound(),
+      piano: NativePianoSound(),
     ),
   );
 }

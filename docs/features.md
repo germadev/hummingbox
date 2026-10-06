@@ -29,8 +29,8 @@ later stop using that destination.
   While waiting, the X cancels and the red button starts right away.
 
   With a recording selected, sliding the panel up shows that recording's
-  menu as icon buttons (edit, add piano, rename, transcribe or view the
-  transcript, transcribe in another language, share and delete; press and
+  menu as icon buttons (edit, add piano, rename, move to folder, transcribe
+  or view the transcript, share and delete; press and
   hold one to see its name) instead of the timer, and without the countdown
   and start-on-voice buttons.
 
@@ -106,7 +106,11 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek. On a recording that isn't selected, it selects it at that point
-  without playing it.
+  without playing it. While it plays, the line that marks where it is moves
+  at a steady pace every frame: the player's positions arrive late and in
+  steps (on Android, sometimes slightly backwards), so the line follows the
+  clock and is nudged towards them, and it never goes back except when you
+  seek.
 - **Loop and playlist**: while a recording is selected, the bottom panel
   shows, in place of the record button, a button to stop it while it plays
   or to play it (or resume it) otherwise, *Play one after another* on
@@ -116,7 +120,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   Stopping it keeps it selected, ready to play again from the beginning;
   tapping outside the recordings deselects it and brings back the record
   button.
-- **Rename**, **share** (with the name you gave it) and **delete**.
+- **Rename**, **move to folder**, **share** (with the name you gave it) and
+  **delete**.
 
 ## Folders
 
@@ -126,6 +131,16 @@ menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, at the right of the search
 field (the main folder has no title), the list shows its recordings and **new recordings go there**.
+
+*Move to folder* in a recording's menu asks where it goes: the main folder,
+one of the subfolders (the one it is in can't be picked) or a *New folder*.
+It leaves the open folder (if it was playing, it stops) and its audio,
+transcript (`.txt`) and piano notes (`.mid`) are moved to the new subfolder
+in the destination, and in the Drive copy. If a recording there already has
+its name, a number is added (`Interview (2)`). In Drive the files keep
+their id (only their folder changes); in a device folder they are copied to
+the new subfolder and then removed from the previous one. If moving is
+interrupted (no connection, the app closes), it finishes on the next sync.
 
 ## Back button
 
@@ -149,12 +164,15 @@ out in **landscape**, and the screen rotates as usual while it is open:
   it slides in. The button next to the close button turns it around if it
   shows upside down (it is remembered).
 - With the phone in **landscape**, it is drawn normally.
-- Each key has its own player with its sound already loaded, so it sounds as
-  soon as it is touched. When several notes sound together (chords, fast
-  notes), the volume of all of them is lowered just enough for their sum not
-  to clip, and comes back smoothly as they fade, so it sounds clean; a single
-  note keeps its full volume. Changing the instrument doesn't make any key
-  sound by itself.
+- The keys' sounds are loaded when the piano opens, so a key sounds as soon
+  as it is touched. All the notes are mixed by the app's own native code and
+  come out as a single audio stream, so there are no clicks: playing a key
+  again fades its previous note out in 10 ms instead of cutting it, the
+  organ and the synthesizer fade out sample by sample when the key is
+  released, and when several notes sound together (chords, fast notes) the
+  volume of all of them is lowered smoothly, just enough for their sum not
+  to clip, and comes back as they fade. A single note keeps its full volume.
+  Changing the instrument doesn't make any key sound by itself.
 
 The keyboard:
 
@@ -294,12 +312,13 @@ From a recording's menu → *Edit*:
 Recordings are **transcribed automatically in the background** (it can be
 turned off in Settings), with the system speech recognizer or with
 **Whisper** on the device; a recording can also be transcribed from its menu
-→ *Transcribe*, and in **another language** (*Transcribe in another
-language*: each recording keeps the language chosen for it). A recording's
+→ *Transcribe*. A recording's
 card shows its transcript **while it is playing** (or paused) or when it
 **matches the search**; tapping it, or *View transcript* in the menu, opens
-the whole text to read, copy, share, transcribe again (also in another
-language) or delete it. The text is also saved as a `.txt` file next
+the whole text to read, copy, share, transcribe again or delete it. Its
+language is shown on a button at the top: tapping it transcribes the
+recording in **another language** (each recording keeps the language chosen
+for it). The text is also saved as a `.txt` file next
 to the audio. See [Transcription](transcription.md).
 
 ## Settings
@@ -346,6 +365,5 @@ language, see [Development](development.md#localization).
   file is matched to the audio by name: if the system adds a suffix when
   creating the audio file ("Idea (1).m4a" because there was already one),
   the `.txt` file is named after the recording, not the file.
-- Recordings cannot be moved to another subfolder from the app.
 - Saving to and reading from the destination happens while the app is open;
   there is no background upload.

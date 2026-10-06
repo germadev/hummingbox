@@ -242,6 +242,30 @@ abstract class AppLocalizations {
   /// **'Couldn\'t rename the recording'**
   String get renameFailed;
 
+  /// No description provided for @moveToFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to folder'**
+  String get moveToFolder;
+
+  /// No description provided for @moveToTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to'**
+  String get moveToTitle;
+
+  /// No description provided for @movedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to “{folder}”'**
+  String movedTo(String folder);
+
+  /// No description provided for @moveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t move the recording'**
+  String get moveFailed;
+
   /// No description provided for @shareFailed.
   ///
   /// In en, this message translates to:

@@ -36,9 +36,13 @@ the countdown and voice start with its trimming), search, formats and
 automatic recording names, the piano's notes, the instruments' and the
 synthesizer's sound (in tune, without clipping, with their envelopes),
 mixing with the voice (without clipping, and a key played again cuts the
-previous note), the limiter for the live piano (chords and fast notes, with
-every instrument, stay below full scale while a single note keeps its
-volume), piano-only recordings as `.mid` with no audio (their
+previous note), moving a recording to another subfolder (its audio, `.txt` and `.mid`, in a
+device folder, in Drive and in the Drive copy, also when it was left half
+done), the playback position (steady and never going back with late, stepped or
+slightly earlier positions from the player, and ignoring the ones from
+before a seek), the live piano's sounds (generated at the output's sample
+rate and loaded into the native mixer; released, stopped or played again
+while still being prepared), piano-only recordings as `.mid` with no audio (their
 sound generated on playback, trimming, adding piano and syncing),
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
@@ -108,9 +112,13 @@ packages/voicerecorder_native/    The app's own plugin with the native code
 ├── android/…/FolderAccess.kt        Storage Access Framework (read, write, rename, delete)
 ├── android/…/SpeechTranscriber.kt   SpeechRecognizer with a file (Android 13+)
 ├── android/…/ScreenAwake.kt         FLAG_KEEP_SCREEN_ON
+├── android/…/PianoMixer.kt          Mixes the live piano's notes (fades, limiter)
+├── android/…/PianoOutput.kt         Live piano: one AudioTrack fed by PianoMixer
 ├── ios/…/AudioCodecHandler.swift    AVAudioFile + AVAssetExportSession
 ├── ios/…/FolderAccessHandler.swift  UIDocumentPicker + security-scoped bookmarks
-└── ios/…/SpeechHandler.swift        SFSpeechRecognizer with a file
+├── ios/…/SpeechHandler.swift        SFSpeechRecognizer with a file
+├── ios/…/PianoMixer.swift           The same mixer as PianoMixer.kt
+└── ios/…/PianoOutput.swift          Live piano: an AVAudioSourceNode fed by PianoMixer
 
 tool/icons.cjs                    Renders the app icons from docs/icon.svg
 ```
@@ -126,6 +134,22 @@ the UI does not block) and the result is re-encoded to AAC at the original's
 bit rate (or saved as WAV). The preview uses the same processing on the
 selection. While editing, the audio takes about 5 MB per minute in the
 temporary folder.
+
+### Live piano
+
+The keys' sounds are synthesized in Dart (`instrument_tone.dart`) at the
+sample rate of the device's output and written as WAV files to the temporary
+folder; the plugin reads each one once and plays it by its path
+(`NativePiano`, used by `NativePianoSound`). All the notes are mixed in
+native code (`PianoMixer.kt` and `PianoMixer.swift`, which must stay the
+same) and come out through a single stream: an `AudioTrack` on its own
+thread on Android and an `AVAudioSourceNode` on iOS. The mixer fades a note
+out in 10 ms when its key is played again, fades sustained notes out sample
+by sample, and limits the sum to 0.9 of full scale by lowering the volume of
+every note along a smooth curve over the 256 frames before the block that
+would go over (so the output runs one block, about 5 ms, behind), bringing
+it back over 300 ms. After 20 seconds without notes the output is paused
+until the next one.
 
 ## Permissions
 

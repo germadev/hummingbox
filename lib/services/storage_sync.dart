@@ -48,6 +48,16 @@ abstract interface class SyncTarget {
   /// no existe.
   Future<String?> rename(String ref, String fileName);
 
+  /// Mueve el archivo [ref] de la subcarpeta [from] a [to] (`''`, la
+  /// principal; [to] se crea si no existe) con el nombre [fileName].
+  /// Devuelve su nueva referencia o `null` si ya no existe.
+  Future<String?> move(
+    String ref,
+    String fileName, {
+    required String from,
+    required String to,
+  });
+
   /// Archivos y subcarpetas de la carpeta o de su subcarpeta [subfolder].
   Future<List<FolderEntry>> list({String subfolder = ''});
 
@@ -63,10 +73,13 @@ abstract interface class SyncTarget {
 }
 
 class FolderTarget implements SyncTarget {
-  FolderTarget(this._folders, this.folder);
+  FolderTarget(this._folders, this.folder, {required this._workDirectory});
 
   final FolderAccess _folders;
   final FolderSettings folder;
+
+  /// Donde se deja un momento el archivo al moverlo.
+  final Future<Directory> Function() _workDirectory;
 
   static const targetKey = Recording.folderKey;
 
@@ -103,6 +116,47 @@ class FolderTarget implements SyncTarget {
       if (e.code == 'no_permission') rethrow;
       // Se borró o se movió fuera de la app.
       return null;
+    }
+  }
+
+  /// No todos los sistemas de archivos saben mover (en Android depende de
+  /// dónde esté la carpeta): se copia en la otra subcarpeta y se borra.
+  @override
+  Future<String?> move(
+    String ref,
+    String fileName, {
+    required String from,
+    required String to,
+  }) async {
+    final directory = Directory(p.join((await _workDirectory()).path, 'moving'))
+      ..createSync(recursive: true);
+    final copy = p.join(
+      directory.path,
+      '${DateTime.now().microsecondsSinceEpoch}${p.extension(fileName)}',
+    );
+    try {
+      try {
+        await _folders.readFile(folder: folder.id, ref: ref, destination: copy);
+      } on PlatformException catch (e) {
+        // Sin permiso no se sabe si existe.
+        if (e.code == 'no_permission') rethrow;
+        // Se borró o se movió fuera de la app.
+        return null;
+      }
+      final moved = await _folders.writeFile(
+        folder: folder.id,
+        subfolder: to,
+        source: copy,
+        name: fileName,
+      );
+      await _folders.deleteFile(folder: folder.id, ref: ref);
+      return moved;
+    } finally {
+      try {
+        File(copy).deleteSync();
+      } on FileSystemException {
+        // No llegó a copiarse.
+      }
     }
   }
 
@@ -155,6 +209,28 @@ class DriveTarget implements SyncTarget {
   Future<String?> rename(String ref, String fileName) async {
     try {
       await _drive.rename(fileId: ref, name: fileName);
+      return ref;
+    } on DriveException catch (e) {
+      if (e.statusCode != 404) rethrow;
+      return null;
+    }
+  }
+
+  @override
+  Future<String?> move(
+    String ref,
+    String fileName, {
+    required String from,
+    required String to,
+  }) async {
+    try {
+      await _drive.move(
+        fileId: ref,
+        folderId: _settings.folderId,
+        from: from,
+        to: to,
+        name: fileName,
+      );
       return ref;
     } on DriveException catch (e) {
       if (e.statusCode != 404) rethrow;
@@ -552,7 +628,11 @@ class StorageSync extends ChangeNotifier {
 
   /// Donde se guardan las grabaciones, si ya se ha elegido.
   SyncTarget? get _storage => switch (_settings.storage) {
-    StorageKind.folder => FolderTarget(folders, _settings.folder!),
+    StorageKind.folder => FolderTarget(
+      folders,
+      _settings.folder!,
+      workDirectory: _workDirectory,
+    ),
     StorageKind.drive => DriveTarget(drive, _settings.drive!),
     null => null,
   };
@@ -738,6 +818,7 @@ class StorageSync extends ChangeNotifier {
         size: entry.size,
         checksum: entry.checksum ?? checksum,
         modified: entry.modified,
+        folder: file.subfolder,
       );
 
       // Renombrada fuera de la app: falta una con el mismo tamaño (y la
@@ -745,7 +826,7 @@ class StorageSync extends ChangeNotifier {
       final renamed = missing.where((r) {
         final stored = r.copies[key]!;
         return entry.size != null &&
-            r.folder == file.subfolder &&
+            (stored.folder ?? r.folder) == file.subfolder &&
             r.format == RecordingFormat.fromPath(entry.name) &&
             stored.size == entry.size &&
             _sameChecksum(entry.checksum, stored.checksum);
@@ -917,6 +998,7 @@ class StorageSync extends ChangeNotifier {
               size: bytes.length,
               checksum: checksum,
               modified: entry.modified,
+              folder: _folderBeside(midi, recording, stored),
             ),
           ),
         );
@@ -943,7 +1025,14 @@ class StorageSync extends ChangeNotifier {
   /// notas del piano de [recording]: lo crea, lo actualiza o lo renombra si
   /// hace falta, y lo borra si ya no tiene notas. Devuelve la grabación con
   /// el estado del archivo.
-  Future<Recording> _saveMidi(Recording recording, SyncTarget target) async {
+  Future<Recording> _saveMidi(Recording saved, SyncTarget target) async {
+    final recording = await _moveLinked(
+      saved,
+      target,
+      fileName: midiFileNameFor(saved),
+      fileOf: (stored) => stored.midi,
+      withFile: (stored, file) => stored.withMidi(file),
+    );
     final stored = recording.copies[target.key];
     if (stored == null || stored.destination != target.destination) {
       return recording;
@@ -1003,6 +1092,17 @@ class StorageSync extends ChangeNotifier {
       _deleteQuietly(source.path);
     }
   }
+
+  /// Subcarpeta de [file] (el `.txt` o el `.mid` de [recording]) si no es
+  /// la de su audio (se quedó atrás al moverla, ver [_moveLinked]); si lo
+  /// es, `null`.
+  static String? _folderBeside(
+    _StoredFile file,
+    Recording recording,
+    CopyState stored,
+  ) => file.subfolder == (stored.folder ?? recording.folder)
+      ? null
+      : file.subfolder;
 
   /// Clave de un archivo para emparejar el audio con su `.txt`: subcarpeta y
   /// nombre sin extensión (sin distinguir mayúsculas).
@@ -1102,6 +1202,7 @@ class StorageSync extends ChangeNotifier {
       size: bytes.length,
       checksum: checksum,
       modified: entry.modified,
+      folder: _folderBeside(text, recording, stored),
     );
     final content = _decodeText(bytes);
     final saved = await repository.setCopy(
@@ -1191,10 +1292,14 @@ class StorageSync extends ChangeNotifier {
   /// transcripción de [recording]: lo crea, lo actualiza o lo renombra si
   /// hace falta, y lo borra si ya no tiene transcripción. Devuelve la
   /// grabación con el estado del archivo.
-  Future<Recording> _saveTranscript(
-    Recording recording,
-    SyncTarget target,
-  ) async {
+  Future<Recording> _saveTranscript(Recording saved, SyncTarget target) async {
+    final recording = await _moveLinked(
+      saved,
+      target,
+      fileName: textFileNameFor(saved),
+      fileOf: (stored) => stored.transcript,
+      withFile: (stored, file) => stored.withTranscript(file),
+    );
     final stored = recording.copies[target.key];
     if (stored == null || stored.destination != target.destination) {
       return recording;
@@ -1259,6 +1364,43 @@ class StorageSync extends ChangeNotifier {
     } finally {
       _deleteQuietly(source.path);
     }
+  }
+
+  /// Si el `.txt` o el `.mid` de [recording] en [target] (el de [fileOf]) se
+  /// quedó en otra subcarpeta al moverla, lo lleva junto al audio con el
+  /// nombre [fileName]. Si ya no existe, lo olvida (se vuelve a crear al
+  /// guardarlo). Devuelve la grabación con el estado del archivo.
+  Future<Recording> _moveLinked(
+    Recording recording,
+    SyncTarget target, {
+    required String fileName,
+    required TranscriptFile? Function(CopyState stored) fileOf,
+    required CopyState Function(CopyState stored, TranscriptFile? file)
+    withFile,
+  }) async {
+    final stored = recording.copies[target.key];
+    if (stored == null || stored.destination != target.destination) {
+      return recording;
+    }
+    final linked = fileOf(stored);
+    final from = linked?.folder;
+    if (linked == null || from == null) return recording;
+    final TranscriptFile? moved;
+    if (from == recording.folder) {
+      // Ha vuelto a la de antes sin llegar a moverse.
+      moved = linked.copyWith(folder: () => null);
+    } else {
+      final ref = await target.move(
+        linked.ref,
+        fileName,
+        from: from,
+        to: recording.folder,
+      );
+      moved = ref == null
+          ? null
+          : linked.copyWith(ref: ref, name: fileName, folder: () => null);
+    }
+    return repository.setCopy(recording, target.key, withFile(stored, moved));
   }
 
   /// Indica si se puede guardar [recording] en el destino: si tiene el audio
@@ -1358,6 +1500,7 @@ class StorageSync extends ChangeNotifier {
           size: entry.size,
           checksum: checksum,
           modified: entry.modified,
+          folder: current.folder,
         ),
         audioChanged: true,
       );
@@ -1432,6 +1575,7 @@ class StorageSync extends ChangeNotifier {
           size: entry.size,
           checksum: entry.checksum,
           modified: entry.modified,
+          folder: file.subfolder,
         ),
       },
     );
@@ -1467,6 +1611,45 @@ class StorageSync extends ChangeNotifier {
     final sameDestination = stored?.destination == target.destination;
     final fileName = fileNameFor(recording);
 
+    // Se ha movido a otra subcarpeta: el audio va a la nueva (con su nombre
+    // de ahora). El `.txt` y el `.mid` se quedan en la anterior hasta
+    // guardarlos (ver [_moveLinked]).
+    final location = stored?.folder ?? recording.folder;
+    if (sameDestination && location != recording.folder) {
+      final moved = await target.move(
+        stored!.ref,
+        fileName,
+        from: location,
+        to: recording.folder,
+      );
+      if (_deleted.contains(recording.id)) {
+        if (isStorage && moved != null) await target.delete(moved);
+        return null;
+      }
+      TranscriptFile? pin(TranscriptFile? file) =>
+          file?.copyWith(folder: () => file.folder ?? location);
+      final updated = await repository.setCopy(
+        recording,
+        target.key,
+        // Si ya no existe, se vuelve a subir.
+        moved == null
+            ? null
+            : CopyState(
+                destination: target.destination,
+                ref: moved,
+                revision: stored.revision,
+                name: recording.name,
+                size: stored.size,
+                checksum: stored.checksum,
+                modified: stored.modified,
+                transcript: pin(stored.transcript),
+                midi: pin(stored.midi),
+                folder: recording.folder,
+              ),
+      );
+      return _saveAudio(updated, target, isStorage: isStorage);
+    }
+
     /// Sube el audio y devuelve el archivo subido, o `null` si no hay de
     /// dónde leer el audio (ver [_reconcile]). Su fecha de modificación se
     /// lee en la siguiente pasada.
@@ -1489,6 +1672,7 @@ class StorageSync extends ChangeNotifier {
         // En el mismo destino, el `.txt` sigue siendo el mismo.
         transcript: sameDestination ? stored!.transcript : null,
         midi: sameDestination ? stored!.midi : null,
+        folder: recording.folder,
       );
     }
 
@@ -1515,6 +1699,7 @@ class StorageSync extends ChangeNotifier {
           modified: stored.modified,
           transcript: stored.transcript,
           midi: stored.midi,
+          folder: recording.folder,
         ),
         // Ya no existe: se vuelve a crear.
         null => await upload(),

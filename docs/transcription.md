@@ -69,10 +69,11 @@ or, with Whisper only, automatic detection.
 
 ### A recording's language
 
-Each recording can have its own language: *Transcribe in another language*,
-in the recording's menu or in its transcript's menu, asks for it (*As in
-Settings*, automatic detection with Whisper, or one of the eight languages)
-and transcribes the recording again in it. The choice is kept with the
+Each recording can have its own language: the language button at the top of
+its transcript (which shows the language it was transcribed in) asks for it
+(*As in Settings*, automatic detection with Whisper, or one of the eight
+languages) without leaving the transcript and transcribes the recording again
+in it. The choice is kept with the
 recording, so *Transcribe again* and automatic transcription (for example
 after editing the audio) use it too. *As in Settings* goes back to the
 language chosen in Settings.

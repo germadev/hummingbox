@@ -62,6 +62,18 @@ abstract interface class DriveService {
   /// 404 si ya no existe.
   Future<void> rename({required String fileId, required String name});
 
+  /// Mueve el archivo [fileId] de la subcarpeta [from] de la carpeta
+  /// [folderId] a su subcarpeta [to] (`''`, la carpeta; [to] se crea si no
+  /// existe) y lo renombra a [name]. Lanza [DriveException] con código 404
+  /// si ya no existe.
+  Future<void> move({
+    required String fileId,
+    required String folderId,
+    required String from,
+    required String to,
+    required String name,
+  });
+
   /// Archivos y subcarpetas de la carpeta [folderId] o de su subcarpeta
   /// [subfolder] (ninguno si no existe). Solo se ven los que creó la app.
   Future<List<FolderEntry>> list({
@@ -212,6 +224,24 @@ class GoogleDriveService implements DriveService {
       _api.rename(fileId: fileId, name: name);
 
   @override
+  Future<void> move({
+    required String fileId,
+    required String folderId,
+    required String from,
+    required String to,
+    required String name,
+  }) async {
+    Future<String> idOf(String subfolder) async =>
+        subfolder.isEmpty ? folderId : await _subfolder(folderId, subfolder);
+    await _api.move(
+      fileId: fileId,
+      name: name,
+      from: await idOf(from),
+      to: await idOf(to),
+    );
+  }
+
+  @override
   Future<List<FolderEntry>> list({
     required String folderId,
     String subfolder = '',
@@ -337,6 +367,29 @@ class DriveApi {
         _files.replace(
           path: '${_files.path}/$fileId',
           queryParameters: {'fields': 'id'},
+        ),
+        headers: {...headers, 'Content-Type': _jsonType},
+        body: jsonEncode({'name': name}),
+      ),
+    );
+  }
+
+  /// Pasa el archivo [fileId] de la carpeta [from] a [to], con el nombre
+  /// [name].
+  Future<void> move({
+    required String fileId,
+    required String name,
+    required String from,
+    required String to,
+  }) async {
+    await _send(
+      (headers) => _client.patch(
+        _files.replace(
+          path: '${_files.path}/$fileId',
+          queryParameters: {
+            'fields': 'id',
+            if (from != to) ...{'addParents': to, 'removeParents': from},
+          },
         ),
         headers: {...headers, 'Content-Type': _jsonType},
         body: jsonEncode({'name': name}),

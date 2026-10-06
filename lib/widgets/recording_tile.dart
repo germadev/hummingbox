@@ -16,9 +16,9 @@ enum RecordingAction {
   edit,
   addPiano,
   rename,
+  move,
   transcribe,
   viewTranscript,
-  transcribeInLanguage,
   share,
   delete,
 }
@@ -57,8 +57,15 @@ List<RecordingActionEntry> recordingActions(
     label: l10n.rename,
     enabled: true,
   ),
-  // Solo el piano: no hay voz que transcribir.
-  if (recording.hasVoice) ...[
+  (
+    action: RecordingAction.move,
+    icon: Icons.drive_file_move_outlined,
+    label: l10n.moveToFolder,
+    enabled: true,
+  ),
+  // Solo el piano: no hay voz que transcribir. El idioma se cambia en la
+  // transcripción.
+  if (recording.hasVoice)
     if (recording.transcript == null)
       (
         action: RecordingAction.transcribe,
@@ -74,13 +81,6 @@ List<RecordingActionEntry> recordingActions(
         label: l10n.viewTranscript,
         enabled: true,
       ),
-    (
-      action: RecordingAction.transcribeInLanguage,
-      icon: Icons.translate,
-      label: l10n.transcribeInLanguage,
-      enabled: true,
-    ),
-  ],
   (
     action: RecordingAction.share,
     icon: Icons.share_outlined,
@@ -365,6 +365,7 @@ class RecordingTile extends StatelessWidget {
                             ? player.duration
                             : recording.duration,
                         position: isCurrent ? player.position : null,
+                        playing: isPlaying,
                         notes: recording.notes,
                         showWaveform: showWaveform,
                         onSeek: onSeek,

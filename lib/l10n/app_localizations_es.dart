@@ -82,6 +82,20 @@ class AppLocalizationsEs extends AppLocalizations {
   String get renameFailed => 'No se pudo renombrar la grabación';
 
   @override
+  String get moveToFolder => 'Mover a carpeta';
+
+  @override
+  String get moveToTitle => 'Mover a';
+
+  @override
+  String movedTo(String folder) {
+    return 'Movida a «$folder»';
+  }
+
+  @override
+  String get moveFailed => 'No se pudo mover la grabación';
+
+  @override
   String get shareFailed => 'No se pudo compartir la grabación';
 
   @override

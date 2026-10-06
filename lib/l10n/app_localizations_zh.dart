@@ -80,6 +80,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get renameFailed => '无法重命名录音';
 
   @override
+  String get moveToFolder => '移至文件夹';
+
+  @override
+  String get moveToTitle => '移至';
+
+  @override
+  String movedTo(String folder) {
+    return '已移至“$folder”';
+  }
+
+  @override
+  String get moveFailed => '无法移动录音';
+
+  @override
   String get shareFailed => '无法分享录音';
 
   @override

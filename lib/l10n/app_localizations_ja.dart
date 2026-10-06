@@ -80,6 +80,20 @@ class AppLocalizationsJa extends AppLocalizations {
   String get renameFailed => '録音の名前を変更できませんでした';
 
   @override
+  String get moveToFolder => 'フォルダに移動';
+
+  @override
+  String get moveToTitle => '移動先';
+
+  @override
+  String movedTo(String folder) {
+    return '「$folder」に移動しました';
+  }
+
+  @override
+  String get moveFailed => '録音を移動できませんでした';
+
+  @override
   String get shareFailed => '録音を共有できませんでした';
 
   @override
