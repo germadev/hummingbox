@@ -18,7 +18,6 @@ enum RecordingAction {
   rename,
   transcribe,
   viewTranscript,
-  transcribeInLanguage,
   share,
   delete,
 }
@@ -57,8 +56,9 @@ List<RecordingActionEntry> recordingActions(
     label: l10n.rename,
     enabled: true,
   ),
-  // Solo el piano: no hay voz que transcribir.
-  if (recording.hasVoice) ...[
+  // Solo el piano: no hay voz que transcribir. El idioma se cambia en la
+  // transcripción.
+  if (recording.hasVoice)
     if (recording.transcript == null)
       (
         action: RecordingAction.transcribe,
@@ -74,13 +74,6 @@ List<RecordingActionEntry> recordingActions(
         label: l10n.viewTranscript,
         enabled: true,
       ),
-    (
-      action: RecordingAction.transcribeInLanguage,
-      icon: Icons.translate,
-      label: l10n.transcribeInLanguage,
-      enabled: true,
-    ),
-  ],
   (
     action: RecordingAction.share,
     icon: Icons.share_outlined,

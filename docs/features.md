@@ -30,7 +30,7 @@ later stop using that destination.
 
   With a recording selected, sliding the panel up shows that recording's
   menu as icon buttons (edit, add piano, rename, transcribe or view the
-  transcript, transcribe in another language, share and delete; press and
+  transcript, share and delete; press and
   hold one to see its name) instead of the timer, and without the countdown
   and start-on-voice buttons.
 
@@ -301,12 +301,13 @@ From a recording's menu → *Edit*:
 Recordings are **transcribed automatically in the background** (it can be
 turned off in Settings), with the system speech recognizer or with
 **Whisper** on the device; a recording can also be transcribed from its menu
-→ *Transcribe*, and in **another language** (*Transcribe in another
-language*: each recording keeps the language chosen for it). A recording's
+→ *Transcribe*. A recording's
 card shows its transcript **while it is playing** (or paused) or when it
 **matches the search**; tapping it, or *View transcript* in the menu, opens
-the whole text to read, copy, share, transcribe again (also in another
-language) or delete it. The text is also saved as a `.txt` file next
+the whole text to read, copy, share, transcribe again or delete it. Its
+language is shown on a button at the top: tapping it transcribes the
+recording in **another language** (each recording keeps the language chosen
+for it). The text is also saved as a `.txt` file next
 to the audio. See [Transcription](transcription.md).
 
 ## Settings

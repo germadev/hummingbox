@@ -760,8 +760,6 @@ class _HomeScreenState extends State<HomeScreen> {
         await _transcribe(recording);
       case RecordingAction.viewTranscript:
         await _viewTranscript(recording);
-      case RecordingAction.transcribeInLanguage:
-        await _transcribeInLanguage(recording);
       case RecordingAction.share:
         await _share(recording, tileContext);
       case RecordingAction.delete:
@@ -929,15 +927,19 @@ class _HomeScreenState extends State<HomeScreen> {
   /// opciones (en la grabación, `null`).
   static const _sameAsSettings = '';
 
-  /// Pregunta en qué idioma se transcribe [recording], lo guarda con ella y
-  /// la vuelve a transcribir en él.
-  Future<void> _transcribeInLanguage(Recording recording) async {
+  /// Pregunta (sobre [context], la pantalla de la transcripción) en qué
+  /// idioma se transcribe [recording]. Devuelve el elegido (`null` para el
+  /// de las opciones) o, si no se elige ninguno, nada.
+  Future<({String? language})?> _askLanguage(
+    BuildContext context,
+    Recording recording,
+  ) async {
     if (_recorder.isBusy) {
       _showMessage((l10n) => l10n.stopToTranscribe);
-      return;
+      return null;
     }
     await widget.sync.load();
-    if (!mounted) return;
+    if (!context.mounted) return null;
     final l10n = context.l10n;
     final settings = widget.sync.settings.transcription;
     final current = _latest(recording);
@@ -960,12 +962,22 @@ class _HomeScreenState extends State<HomeScreen> {
           Choice(code, languageName(code)),
       ],
     );
-    if (language == null || !mounted) return;
+    if (language == null) return null;
+    return (language: language == _sameAsSettings ? null : language);
+  }
+
+  /// Guarda [language] (`null`, el de las opciones) como el idioma de
+  /// [recording] y la vuelve a transcribir en él.
+  Future<void> _transcribeInLanguage(
+    Recording recording,
+    String? language,
+  ) async {
+    if (!mounted) return;
     final Recording updated;
     try {
       updated = await widget.repository.setTranscriptionLanguage(
-        current,
-        language == _sameAsSettings ? null : language,
+        _latest(recording),
+        language,
       );
     } catch (_) {
       _showMessage((l10n) => l10n.transcriptionFailed);
@@ -1249,10 +1261,17 @@ class _HomeScreenState extends State<HomeScreen> {
     final current =
         _recordings.where((r) => r.id == recording.id).firstOrNull ?? recording;
     if (current.transcript == null) return;
+    ({String? language})? chosen;
     final action = await Navigator.push<TranscriptAction>(
       context,
       MaterialPageRoute(
-        builder: (context) => TranscriptScreen(recording: current),
+        builder: (context) => TranscriptScreen(
+          recording: current,
+          chooseLanguage: (context) async {
+            chosen = await _askLanguage(context, current);
+            return chosen != null;
+          },
+        ),
       ),
     );
     if (!mounted || action == null) return;
@@ -1260,7 +1279,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case TranscriptAction.transcribeAgain:
         await _transcribe(current);
       case TranscriptAction.transcribeInLanguage:
-        await _transcribeInLanguage(current);
+        if (chosen case (:final language)) {
+          await _transcribeInLanguage(current, language);
+        }
       case TranscriptAction.delete:
         try {
           _replaceRecording(

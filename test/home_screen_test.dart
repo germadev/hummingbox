@@ -969,7 +969,6 @@ void main() {
         'addPiano',
         'rename',
         'transcribe',
-        'transcribeInLanguage',
         'share',
         'delete',
       ]) {
@@ -1327,7 +1326,15 @@ void main() {
       await tester.tap(find.byKey(const Key('transcript-a')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('transcript-text')), findsOneWidget);
-      expect(find.textContaining('Whisper (Base) · Español'), findsOneWidget);
+      expect(find.textContaining('Whisper (Base) · '), findsOneWidget);
+      // El idioma, en su botón.
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('transcript-language')),
+          matching: find.text('Español'),
+        ),
+        findsOneWidget,
+      );
       expect(
         find.text('La grabación ha cambiado desde que se transcribió.'),
         findsNothing,
@@ -1583,9 +1590,33 @@ void main() {
 
     Future<void> chooseLanguage(WidgetTester tester, String language) async {
       expect(find.text('Idioma de la grabación'), findsOneWidget);
-      await tester.tap(find.text(language));
+      await tester.tap(find.text(language).last);
       await tester.pumpAndSettle();
     }
+
+    /// Abre la transcripción y toca su idioma.
+    Future<void> openLanguage(WidgetTester tester) async {
+      await chooseInMenu(tester, 'Ver transcripción');
+      await tester.tap(find.byKey(const Key('transcript-language')));
+      await tester.pumpAndSettle();
+    }
+
+    Recording transcribed(String name, {String? transcriptionLanguage}) =>
+        Recording(
+          id: 'a',
+          path: '/fake/a.m4a',
+          name: name,
+          createdAt: DateTime(2026, 9, 28, 8, 30),
+          duration: const Duration(seconds: 83),
+          transcriptionLanguage: transcriptionLanguage,
+          transcript: Transcript(
+            text: 'Hello everyone.',
+            engine: TranscriptionEngine.system,
+            language: 'en-US',
+            revision: 0,
+            createdAt: DateTime(2026, 9, 28, 9),
+          ),
+        );
 
     /// Al volver a transcribirla, pregunta si se renombra: se deja como está.
     Future<void> keepName(WidgetTester tester) async {
@@ -1594,12 +1625,24 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('se transcribe en el idioma elegido para la grabación, también '
-        'al volver a transcribir', (tester) async {
+    testWidgets('el idioma se cambia en la transcripción, no en el menú', (
+      tester,
+    ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Interview')]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await tester.tap(find.byTooltip('Más opciones'));
+      await tester.pumpAndSettle();
+      expect(find.text('Transcribir'), findsOneWidget);
+      expect(find.text('Transcribir en otro idioma'), findsNothing);
+    });
+
+    testWidgets('se transcribe en el idioma elegido para la grabación, también '
+        'al volver a transcribir', (tester) async {
+      repository = InMemoryRecordingsRepository([transcribed('Interview')]);
+      await pumpApp(tester);
+
+      await openLanguage(tester);
       // Por defecto, el de las opciones.
       expect(find.text('Como en las opciones'), findsOneWidget);
       expect(find.text('El de la app (Español)'), findsOneWidget);
@@ -1660,13 +1703,26 @@ void main() {
       );
     });
 
+    testWidgets('al cancelar, se sigue en la transcripción', (tester) async {
+      repository = InMemoryRecordingsRepository([transcribed('Interview')]);
+      await pumpApp(tester);
+
+      await openLanguage(tester);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('transcript-text')), findsOneWidget);
+      expect(transcriber.calls, isEmpty);
+      expect(repository.byId('a').transcriptionLanguage, isNull);
+    });
+
     testWidgets('si ya se llama así, no pregunta', (tester) async {
       repository = InMemoryRecordingsRepository([
-        sample('a', '2026-09-28.Hola, esto es una prueba'),
+        transcribed('2026-09-28.Hola, esto es una prueba'),
       ]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'English');
 
       expect(transcriber.calls, hasLength(1));
@@ -1676,32 +1732,17 @@ void main() {
     testWidgets('desde la transcripción, y «Como en las opciones» vuelve al '
         'de las opciones', (tester) async {
       repository = InMemoryRecordingsRepository([
-        Recording(
-          id: 'a',
-          path: '/fake/a.m4a',
-          name: 'Interview',
-          createdAt: DateTime(2026, 9, 28, 8, 30),
-          duration: const Duration(seconds: 83),
-          transcriptionLanguage: 'en',
-          transcript: Transcript(
-            text: 'Hello everyone.',
-            engine: TranscriptionEngine.system,
-            language: 'en-US',
-            revision: 0,
-            createdAt: DateTime(2026, 9, 28, 9),
-          ),
-        ),
+        transcribed('Interview', transcriptionLanguage: 'en'),
       ]);
       await pumpApp(tester);
 
-      await chooseInMenu(tester, 'Ver transcripción');
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'Français');
       await keepName(tester);
       expect(transcriber.calls, [('a', TranscriptionEngine.system, 'fr')]);
       expect(repository.byId('a').transcriptionLanguage, 'fr');
 
-      await chooseInMenu(tester, 'Transcribir en otro idioma');
+      await openLanguage(tester);
       await chooseLanguage(tester, 'Como en las opciones');
       await keepName(tester);
       expect(repository.byId('a').transcriptionLanguage, isNull);
