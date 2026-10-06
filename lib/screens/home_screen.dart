@@ -1479,6 +1479,11 @@ class _HomeScreenState extends State<HomeScreen> {
         countdownSeconds: widget.sync.settings.countdownSeconds,
         player: _player,
         onStopPlayback: () => unawaited(_player.stop()),
+        onPlaySelected: () {
+          final id = _player.currentId;
+          final selected = _recordings.where((r) => r.id == id).firstOrNull;
+          if (selected != null) _togglePlayback(selected);
+        },
         // Como el fondo de la lista: quita el foco del campo de búsqueda y,
         // fuera de los botones, la selección.
         onTouched: _searchFocus.unfocus,

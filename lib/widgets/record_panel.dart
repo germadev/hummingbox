@@ -5,6 +5,7 @@ import '../app.dart';
 import '../controllers/player_controller.dart';
 import '../controllers/recorder_controller.dart';
 import '../l10n/l10n.dart';
+import '../services/audio_player_service.dart';
 import '../services/audio_recorder_service.dart';
 import '../utils/formatters.dart';
 import 'waveform_view.dart';
@@ -17,9 +18,10 @@ import 'waveform_view.dart';
 /// derecha, grabar al detectar la voz. Al deslizarlo hacia abajo se vuelve a
 /// plegar. Mientras se graba o se espera para grabar está siempre desplegado.
 ///
-/// Mientras suena una grabación (o está en pausa), el botón del centro la
-/// para, y a los lados se activa o desactiva seguir con la siguiente de la
-/// lista (izquierda) y repetir (derecha).
+/// Con una grabación seleccionada (suene o no), a los lados del botón del
+/// centro se activa o desactiva seguir con la siguiente de la lista
+/// (izquierda) y repetir (derecha). El del centro la para si suena y, si no,
+/// la reproduce.
 ///
 /// Con una grabación seleccionada ([selectionActions]), al desplegarlo se
 /// ven los botones de su menú en lugar del cronómetro y la onda, y sin los
@@ -30,6 +32,7 @@ class RecordPanel extends StatefulWidget {
     required this.controller,
     required this.player,
     required this.onStopPlayback,
+    required this.onPlaySelected,
     this.onTouched,
     this.onBackgroundTapped,
     required this.onRecordPressed,
@@ -47,6 +50,9 @@ class RecordPanel extends StatefulWidget {
 
   /// Para la reproducción.
   final VoidCallback onStopPlayback;
+
+  /// Reproduce la grabación seleccionada (o sigue, si está en pausa).
+  final VoidCallback onPlaySelected;
 
   /// Al tocar el panel, en cualquier punto (p. ej. para quitar el foco del
   /// campo de búsqueda).
@@ -253,6 +259,7 @@ class _RecordPanelState extends State<RecordPanel>
                         controller: widget.controller,
                         player: widget.player,
                         onStopPlayback: widget.onStopPlayback,
+                        onPlaySelected: widget.onPlaySelected,
                         expanded: _expanded,
                         countdownSeconds: widget.countdownSeconds,
                         onRecordPressed: widget.onRecordPressed,
@@ -419,12 +426,14 @@ class _RecordingInfo extends StatelessWidget {
 
 /// Botón de grabar y, a los lados: descartar y pausar mientras se graba;
 /// cuenta atrás y grabar por voz con el panel desplegado antes de grabar; y
-/// cancelar mientras se espera para empezar.
+/// cancelar mientras se espera para empezar. Con una grabación
+/// seleccionada, en su lugar, parar o reproducir, la lista y repetir.
 class _Controls extends StatelessWidget {
   const _Controls({
     required this.controller,
     required this.player,
     required this.onStopPlayback,
+    required this.onPlaySelected,
     required this.expanded,
     required this.countdownSeconds,
     required this.onRecordPressed,
@@ -441,6 +450,7 @@ class _Controls extends StatelessWidget {
   /// al detectar la voz.
   final bool showStartOptions;
   final VoidCallback onStopPlayback;
+  final VoidCallback onPlaySelected;
   final bool expanded;
   final int countdownSeconds;
   final VoidCallback onRecordPressed;
@@ -455,8 +465,8 @@ class _Controls extends StatelessWidget {
     final waiting = controller.pending != null;
     final paused = controller.status == RecorderStatus.paused;
 
-    // Mientras suena una grabación: parar, lista y repetir.
-    if (!active && !waiting && player.isPlayingOrPaused) {
+    // Con una grabación seleccionada: parar o reproducir, lista y repetir.
+    if (!active && !waiting && player.currentId != null) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -472,7 +482,11 @@ class _Controls extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 32),
-          StopPlaybackButton(onPressed: onStopPlayback),
+          PlaybackButton(
+            playing: player.status == PlaybackStatus.playing || player.loading,
+            onStop: onStopPlayback,
+            onPlay: onPlaySelected,
+          ),
           const SizedBox(width: 32),
           _SideButton(
             visible: true,
@@ -626,17 +640,25 @@ class RecordButton extends StatelessWidget {
   }
 }
 
-/// Botón central mientras suena una grabación: un cuadrado («parar») del
-/// color principal, del mismo tamaño que el de grabar.
-class StopPlaybackButton extends StatelessWidget {
-  const StopPlaybackButton({super.key, required this.onPressed});
+/// Botón central con una grabación seleccionada, del mismo tamaño que el de
+/// grabar: mientras suena, un cuadrado («parar») del color principal; si
+/// no, un triángulo («reproducir»).
+class PlaybackButton extends StatelessWidget {
+  const PlaybackButton({
+    super.key,
+    required this.playing,
+    required this.onStop,
+    required this.onPlay,
+  });
 
-  final VoidCallback onPressed;
+  final bool playing;
+  final VoidCallback onStop;
+  final VoidCallback onPlay;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final label = context.l10n.stopPlayback;
+    final label = playing ? context.l10n.stopPlayback : context.l10n.play;
     return Semantics(
       button: true,
       label: label,
@@ -644,8 +666,8 @@ class StopPlaybackButton extends StatelessWidget {
       child: Tooltip(
         message: label,
         child: InkResponse(
-          key: const Key('stop-playback-button'),
-          onTap: onPressed,
+          key: Key(playing ? 'stop-playback-button' : 'play-selected-button'),
+          onTap: playing ? onStop : onPlay,
           radius: RecordButton._size / 2,
           child: Container(
             width: RecordButton._size,
@@ -655,14 +677,20 @@ class StopPlaybackButton extends StatelessWidget {
               border: Border.all(color: colors.outlineVariant, width: 4),
             ),
             alignment: Alignment.center,
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
+            child: playing
+                ? Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  )
+                : Icon(
+                    Icons.play_arrow_rounded,
+                    size: 56,
+                    color: colors.primary,
+                  ),
           ),
         ),
       ),

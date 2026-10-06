@@ -19,6 +19,7 @@ import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
+import 'package:voicerecorder/widgets/recording_tile.dart';
 import 'package:voicerecorder/widgets/waveform_seek_bar.dart';
 import 'package:voicerecorder/widgets/folder_drawer.dart';
 import 'package:voicerecorder/utils/recording_names.dart';
@@ -51,8 +52,14 @@ void main() {
     repository = InMemoryRecordingsRepository();
     recorder = FakeAudioRecorderService();
     player = FakeAudioPlayerService();
+    // En la vista detallada, salvo en los tests de la compacta (la de por
+    // defecto).
     store = InMemorySettingsStore(
-      const AppSettings(folder: testFolder, transcription: manual),
+      const AppSettings(
+        folder: testFolder,
+        transcription: manual,
+        compactList: false,
+      ),
     );
     folders = FakeFolderAccess();
     drive = FakeDriveService();
@@ -116,6 +123,23 @@ void main() {
   }
 
   Finder record() => find.byKey(const Key('record-button'));
+
+  /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
+  /// botón y de la onda.
+  Future<void> tapCard(WidgetTester tester, String duration) async {
+    await tester.tap(find.textContaining(duration));
+    await tester.pumpAndSettle();
+  }
+
+  /// El botón con [tooltip] de la tarjeta de la grabación [id] (no el del
+  /// panel de abajo).
+  Finder tileButton(String id, String tooltip) => find.descendant(
+    of: find.ancestor(
+      of: find.byKey(Key('name-$id')),
+      matching: find.byType(RecordingTile),
+    ),
+    matching: find.byTooltip(tooltip),
+  );
 
   testWidgets('muestra un mensaje cuando no hay grabaciones', (tester) async {
     await pumpApp(tester);
@@ -233,7 +257,7 @@ void main() {
     await tester.tap(find.byTooltip('Pausar'));
     await tester.pumpAndSettle();
     expect(player.calls.last, 'pause');
-    expect(find.byTooltip('Reproducir'), findsOneWidget);
+    expect(tileButton('a', 'Reproducir'), findsOneWidget);
   });
 
   testWidgets('mientras suena, una línea fina marca por dónde va', (
@@ -839,13 +863,6 @@ void main() {
   });
 
   group('selección', () {
-    /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
-    /// botón y de la onda.
-    Future<void> tapCard(WidgetTester tester, String duration) async {
-      await tester.tap(find.textContaining(duration));
-      await tester.pumpAndSettle();
-    }
-
     testWidgets('tocar una grabación la selecciona sin reproducirla; suena '
         'con su botón, y al seleccionar otra se para', (tester) async {
       repository = InMemoryRecordingsRepository([
@@ -969,7 +986,8 @@ void main() {
       expect(find.text('00:41'), findsOneWidget);
       expect(find.text('01:23'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Reproducir'));
+      // El de la tarjeta (el otro está en el panel de abajo).
+      await tester.tap(tileButton('a', 'Reproducir'));
       await tester.pumpAndSettle();
       expect(player.calls, ['play /fake/a.m4a @41500']);
 
@@ -1760,16 +1778,24 @@ void main() {
       );
     });
 
-    testWidgets('el botón de la vista, a la izquierda de las opciones, cambia '
-        'entre la vista detallada y la compacta, y se recuerda', (
-      tester,
-    ) async {
+    testWidgets('la vista es compacta por defecto; el botón de la vista, a '
+        'la izquierda de las opciones, cambia a la detallada y vuelve, y se '
+        'recuerda', (tester) async {
+      store.settings = const AppSettings(folder: testFolder);
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
       final view = find.byKey(const Key('view-mode-button'));
       final settings = tester.getRect(find.byKey(const Key('settings-button')));
       expect(tester.getRect(view).right, settings.left);
-      // Detallada: el formato y la onda.
+      // Compacta: sin el formato ni la onda.
+      expect(find.byKey(const Key('audio-info-a')), findsNothing);
+      expect(find.byKey(const Key('waveform-a')), findsNothing);
+      expect(find.byTooltip('Vista detallada'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Vista detallada'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.compactList, isFalse);
       expect(find.byKey(const Key('audio-info-a')), findsOneWidget);
       expect(find.byKey(const Key('waveform-a')), findsOneWidget);
 
@@ -1779,10 +1805,9 @@ void main() {
       expect(store.settings.compactList, isTrue);
       expect(find.byKey(const Key('audio-info-a')), findsNothing);
       expect(find.byKey(const Key('waveform-a')), findsNothing);
-      expect(find.byTooltip('Vista detallada'), findsOneWidget);
 
       // La seleccionada sí tiene la onda, para saltar.
-      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.tap(tileButton('a', 'Reproducir'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('waveform-a')), findsOneWidget);
 
@@ -2583,6 +2608,49 @@ void main() {
       expect(record(), findsOneWidget);
     });
 
+    testWidgets('con una seleccionada, sin sonar: reproducir en el centro, '
+        'con la lista y repetir', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      expect(find.byKey(const Key('play-selected-button')), findsNothing);
+
+      await tapCard(tester, '01:23');
+      expect(player.calls, isEmpty);
+      expect(record(), findsNothing);
+      expect(find.byKey(const Key('stop-playback-button')), findsNothing);
+      final play = tester.getCenter(
+        find.byKey(const Key('play-selected-button')),
+      );
+      expect(
+        tester.getCenter(find.byKey(const Key('playlist-button'))).dx,
+        lessThan(play.dx),
+      );
+      expect(
+        tester.getCenter(find.byKey(const Key('loop-button'))).dx,
+        greaterThan(play.dx),
+      );
+
+      // Reproduce la seleccionada, y el centro pasa a parar.
+      await tester.tap(find.byKey(const Key('play-selected-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls, ['play /fake/a.m4a @0']);
+      expect(find.byKey(const Key('play-selected-button')), findsNothing);
+      expect(find.byKey(const Key('stop-playback-button')), findsOneWidget);
+
+      // En pausa, reproducir sigue.
+      await tester.tap(tileButton('a', 'Pausar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('play-selected-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'resume');
+
+      // Parar la quita, y vuelve el botón de grabar.
+      await tester.tap(find.byKey(const Key('stop-playback-button')));
+      await tester.pumpAndSettle();
+      expect(record(), findsOneWidget);
+      expect(find.byKey(const Key('playlist-button')), findsNothing);
+    });
+
     testWidgets('repetir vuelve a empezar la misma', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
@@ -3264,7 +3332,10 @@ void main() {
           hasVoice: false,
         ),
       ]);
-      store.settings = const AppSettings(folder: testFolder);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        compactList: false,
+      );
       await pumpApp(tester);
 
       final paint = tester.widget<CustomPaint>(

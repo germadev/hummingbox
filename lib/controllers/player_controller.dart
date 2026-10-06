@@ -88,6 +88,9 @@ class PlayerController extends ChangeNotifier {
   /// (p. ej. descargándolo de Google Drive).
   bool isLoading(Recording recording) => isCurrent(recording) && _loading;
 
+  /// Indica si se está leyendo el audio de la grabación cargada.
+  bool get loading => _currentId != null && _loading;
+
   /// Reproduce [recording] o, si ya es la actual, alterna entre reproducir y
   /// pausar.
   Future<void> toggle(Recording recording) async {
