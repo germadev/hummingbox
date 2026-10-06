@@ -82,6 +82,20 @@ class AppLocalizationsIt extends AppLocalizations {
   String get renameFailed => 'Impossibile rinominare la registrazione';
 
   @override
+  String get moveToFolder => 'Sposta in una cartella';
+
+  @override
+  String get moveToTitle => 'Sposta in';
+
+  @override
+  String movedTo(String folder) {
+    return 'Spostata in «$folder»';
+  }
+
+  @override
+  String get moveFailed => 'Impossibile spostare la registrazione';
+
+  @override
   String get shareFailed => 'Impossibile condividere la registrazione';
 
   @override

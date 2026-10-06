@@ -968,6 +968,7 @@ void main() {
         'edit',
         'addPiano',
         'rename',
+        'move',
         'transcribe',
         'share',
         'delete',
@@ -2643,6 +2644,129 @@ void main() {
       await tester.dragFrom(const Offset(60, 300), const Offset(300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
+    });
+
+    group('mover una grabación', () {
+      Future<void> openMoveDialog(WidgetTester tester) async {
+        await tester.tap(find.byTooltip('Más opciones'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Mover a carpeta'));
+        await tester.pumpAndSettle();
+        expect(find.text('Mover a'), findsOneWidget);
+      }
+
+      testWidgets('desde su menú, a una subcarpeta: deja de verse aquí y se '
+          've en ella', (tester) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista'),
+          sample('b', 'Tema 1', folder: 'Clases'),
+        ]);
+        store.settings = const AppSettings(
+          folder: testFolder,
+          folders: ['Ideas'],
+        );
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        // Las carpetas, como en el menú; en la que está no se puede tocar.
+        expect(find.byKey(const Key('move-to-Clases')), findsOneWidget);
+        expect(find.byKey(const Key('move-to-Ideas')), findsOneWidget);
+        expect(
+          tester.widget<ListTile>(find.byKey(const Key('move-to-'))).enabled,
+          isFalse,
+        );
+        await tester.tap(find.byKey(const Key('move-to-Clases')));
+        await tester.pumpAndSettle();
+
+        expect(repository.byId('a').folder, 'Clases');
+        expect(repository.byId('a').name, 'Entrevista');
+        expect(find.text('Movida a «Clases»'), findsOneWidget);
+        expect(find.text('Entrevista'), findsNothing);
+        // Se guarda en su nueva subcarpeta.
+        expect(folders.calls, contains('write Clases/Entrevista.m4a'));
+
+        await openDrawer(tester);
+        await tester.tap(find.text('Clases'));
+        await tester.pumpAndSettle();
+        expect(find.text('Entrevista'), findsOneWidget);
+        expect(find.text('Tema 1'), findsOneWidget);
+      });
+
+      testWidgets('si allí hay otra con su nombre, se le añade un número', (
+        tester,
+      ) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista'),
+          sample('b', 'Entrevista', folder: 'Clases'),
+        ]);
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-Clases')));
+        await tester.pumpAndSettle();
+
+        expect(repository.byId('a').name, 'Entrevista (2)');
+        expect(repository.byId('a').folder, 'Clases');
+      });
+
+      testWidgets('a una carpeta nueva', (tester) async {
+        repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-new-folder')));
+        await tester.pumpAndSettle();
+        await tester.enterText(dialogField(), 'Viajes');
+        await tester.pump();
+        await tester.tap(find.text('Crear'));
+        await tester.pumpAndSettle();
+
+        expect(store.settings.folders, ['Viajes']);
+        expect(repository.byId('a').folder, 'Viajes');
+        expect(find.text('Movida a «Viajes»'), findsOneWidget);
+        // Se sigue en la que estaba.
+        expect(title(tester), '');
+      });
+
+      testWidgets('de una subcarpeta a la principal, y al cancelar no se '
+          'mueve', (tester) async {
+        repository = InMemoryRecordingsRepository([
+          sample('a', 'Entrevista', folder: 'Clases'),
+        ]);
+        store.settings = const AppSettings(
+          folder: testFolder,
+          openFolder: 'Clases',
+        );
+        await pumpApp(tester);
+
+        await openMoveDialog(tester);
+        await tester.tap(find.text('Cancelar'));
+        await tester.pumpAndSettle();
+        expect(repository.byId('a').folder, 'Clases');
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-')));
+        await tester.pumpAndSettle();
+        expect(repository.byId('a').folder, '');
+        expect(find.text('Movida a «Grabaciones»'), findsOneWidget);
+      });
+
+      testWidgets('si es la que suena, se para', (tester) async {
+        repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+        await pumpApp(tester);
+        await tester.tap(find.byTooltip('Reproducir'));
+        await tester.pumpAndSettle();
+
+        await openMoveDialog(tester);
+        await tester.tap(find.byKey(const Key('move-to-new-folder')));
+        await tester.pumpAndSettle();
+        await tester.enterText(dialogField(), 'Viajes');
+        await tester.pump();
+        await tester.tap(find.text('Crear'));
+        await tester.pumpAndSettle();
+
+        expect(player.calls.last, 'stop');
+      });
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {

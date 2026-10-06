@@ -29,8 +29,8 @@ later stop using that destination.
   While waiting, the X cancels and the red button starts right away.
 
   With a recording selected, sliding the panel up shows that recording's
-  menu as icon buttons (edit, add piano, rename, transcribe or view the
-  transcript, share and delete; press and
+  menu as icon buttons (edit, add piano, rename, move to folder, transcribe
+  or view the transcript, share and delete; press and
   hold one to see its name) instead of the timer, and without the countdown
   and start-on-voice buttons.
 
@@ -120,7 +120,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   Stopping it keeps it selected, ready to play again from the beginning;
   tapping outside the recordings deselects it and brings back the record
   button.
-- **Rename**, **share** (with the name you gave it) and **delete**.
+- **Rename**, **move to folder**, **share** (with the name you gave it) and
+  **delete**.
 
 ## Folders
 
@@ -130,6 +131,16 @@ menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, at the right of the search
 field (the main folder has no title), the list shows its recordings and **new recordings go there**.
+
+*Move to folder* in a recording's menu asks where it goes: the main folder,
+one of the subfolders (the one it is in can't be picked) or a *New folder*.
+It leaves the open folder (if it was playing, it stops) and its audio,
+transcript (`.txt`) and piano notes (`.mid`) are moved to the new subfolder
+in the destination, and in the Drive copy. If a recording there already has
+its name, a number is added (`Interview (2)`). In Drive the files keep
+their id (only their folder changes); in a device folder they are copied to
+the new subfolder and then removed from the previous one. If moving is
+interrupted (no connection, the app closes), it finishes on the next sync.
 
 ## Back button
 
@@ -354,6 +365,5 @@ language, see [Development](development.md#localization).
   file is matched to the audio by name: if the system adds a suffix when
   creating the audio file ("Idea (1).m4a" because there was already one),
   the `.txt` file is named after the recording, not the file.
-- Recordings cannot be moved to another subfolder from the app.
 - Saving to and reading from the destination happens while the app is open;
   there is no background upload.

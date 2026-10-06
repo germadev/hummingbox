@@ -217,6 +217,25 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
       _replace(byId(recording.id).copyWith(name: name, provisionalName: false));
 
   @override
+  Future<Recording> move(
+    Recording recording,
+    String folder, {
+    String? name,
+  }) async {
+    final current = byId(recording.id);
+    return _replace(
+      current.copyWith(
+        folder: folder,
+        name: name,
+        copies: {
+          for (final MapEntry(:key, :value) in current.copies.entries)
+            key: value.copyWith(folder: value.folder ?? current.folder),
+        },
+      ),
+    );
+  }
+
+  @override
   Future<Recording> replaceAudio(
     Recording recording, {
     required String sourcePath,
@@ -378,6 +397,8 @@ class InMemoryRecordingsRepository implements RecordingsRepository {
             checksum: file.checksum,
             modified: file.modified,
             transcript: file.transcript,
+            midi: file.midi,
+            folder: file.folder,
           ),
         },
         audio: audioChanged ? null : current.audio,
@@ -946,6 +967,28 @@ class FakeDriveService implements DriveService {
       throw const DriveException(404, 'File not found');
     }
     files[fileId] = name;
+  }
+
+  @override
+  Future<void> move({
+    required String fileId,
+    required String folderId,
+    required String from,
+    required String to,
+    required String name,
+  }) async {
+    final target = to.isEmpty ? name : '$to/$name';
+    calls.add('move $fileId → $target');
+    if (!files.containsKey(fileId)) {
+      throw const DriveException(404, 'File not found');
+    }
+    files[fileId] = name;
+    if (to.isEmpty) {
+      fileFolders.remove(fileId);
+    } else {
+      fileFolders[fileId] = to;
+      subfolders.add(to);
+    }
   }
 
   @override

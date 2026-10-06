@@ -205,6 +205,29 @@ void main() {
     expect(jsonDecode(requests.last.body), {'name': 'Nuevo.m4a'});
   });
 
+  test(
+    'mueve un archivo de carpeta cambiando sus padres, con su nombre',
+    () async {
+      final drive = api((request) async => json({'id': 'file1'}));
+
+      await drive.move(
+        fileId: 'file1',
+        name: 'Clase.m4a',
+        from: 'folder1',
+        to: 'sub1',
+      );
+
+      expect(requests.single.method, 'PATCH');
+      expect(requests.single.url.path, '/drive/v3/files/file1');
+      expect(requests.single.url.queryParameters, {
+        'fields': 'id',
+        'addParents': 'sub1',
+        'removeParents': 'folder1',
+      });
+      expect(jsonDecode(requests.single.body), {'name': 'Clase.m4a'});
+    },
+  );
+
   test('traduce los errores de la API', () async {
     final drive = api(
       (request) async => json({

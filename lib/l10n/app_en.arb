@@ -58,6 +58,17 @@
   "stopToLeave": "Stop recording before leaving",
   "changesSaved": "Changes saved",
   "renameFailed": "Couldn't rename the recording",
+  "moveToFolder": "Move to folder",
+  "moveToTitle": "Move to",
+  "movedTo": "Moved to “{folder}”",
+  "@movedTo": {
+    "placeholders": {
+      "folder": {
+        "type": "String"
+      }
+    }
+  },
+  "moveFailed": "Couldn't move the recording",
   "shareFailed": "Couldn't share the recording",
   "deleteTitle": "Delete “{name}”?",
   "@deleteTitle": {

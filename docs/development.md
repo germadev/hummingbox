@@ -36,7 +36,9 @@ the countdown and voice start with its trimming), search, formats and
 automatic recording names, the piano's notes, the instruments' and the
 synthesizer's sound (in tune, without clipping, with their envelopes),
 mixing with the voice (without clipping, and a key played again cuts the
-previous note), the playback position (steady and never going back with late, stepped or
+previous note), moving a recording to another subfolder (its audio, `.txt` and `.mid`, in a
+device folder, in Drive and in the Drive copy, also when it was left half
+done), the playback position (steady and never going back with late, stepped or
 slightly earlier positions from the player, and ignoring the ones from
 before a seek), the live piano's sounds (generated at the output's sample
 rate and loaded into the native mixer; released, stopped or played again

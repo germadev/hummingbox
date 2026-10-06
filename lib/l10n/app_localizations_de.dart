@@ -86,6 +86,20 @@ class AppLocalizationsDe extends AppLocalizations {
   String get renameFailed => 'Die Aufnahme konnte nicht umbenannt werden';
 
   @override
+  String get moveToFolder => 'In Ordner verschieben';
+
+  @override
+  String get moveToTitle => 'Verschieben nach';
+
+  @override
+  String movedTo(String folder) {
+    return 'Nach „$folder“ verschoben';
+  }
+
+  @override
+  String get moveFailed => 'Die Aufnahme konnte nicht verschoben werden';
+
+  @override
   String get shareFailed => 'Die Aufnahme konnte nicht geteilt werden';
 
   @override

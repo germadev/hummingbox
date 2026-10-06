@@ -692,6 +692,150 @@ void main() {
       expect((await single()).isSavedIn('folder'), isTrue);
     });
 
+    group('moverla a otra subcarpeta', () {
+      const notes = [
+        PianoNote(
+          key: 60,
+          start: Duration(milliseconds: 500),
+          duration: Duration(milliseconds: 250),
+        ),
+      ];
+
+      /// Una grabación guardada en la carpeta principal con su `.txt` y su
+      /// `.mid`.
+      Future<Recording> saved() async {
+        final recording = await addRecording(bytes: [7, 8, 9]);
+        await repository.setNotes(await transcribe(recording, 'Hola'), notes);
+        await sync.sync();
+        return single();
+      }
+
+      test('lleva allí su audio, su .txt y su .mid', () async {
+        final before = (await saved()).copies['folder']!;
+        expect(before.folder, '');
+
+        await repository.move(await single(), 'Clases');
+        await sync.sync();
+
+        final recording = await single();
+        expect(recording.folder, 'Clases');
+        final after = recording.copies['folder']!;
+        expect(after.folder, 'Clases');
+        expect(after.transcript!.folder, isNull);
+        expect(after.midi!.folder, isNull);
+        expect(recording.isSavedIn('folder'), isTrue);
+        // En la nueva, con su contenido; en la principal ya no están.
+        for (final (ref, name) in [
+          (after.ref, 'Grabación 1.m4a'),
+          (after.transcript!.ref, 'Grabación 1.txt'),
+          (after.midi!.ref, 'Grabación 1.mid'),
+        ]) {
+          expect(folders.files[ref], name);
+          expect(folders.fileFolders[ref], 'Clases');
+        }
+        expect(folders.contents[after.ref], [7, 8, 9]);
+        expect(textOf(folders, after.transcript!.ref), 'Hola');
+        expect(Midi.decode(folders.contents[after.midi!.ref]!), notes);
+        for (final ref in [
+          before.ref,
+          before.transcript!.ref,
+          before.midi!.ref,
+        ]) {
+          expect(folders.files, isNot(contains(ref)));
+        }
+
+        // Ya está: no se vuelve a mover. Al ser archivos nuevos, tienen otra
+        // fecha: se comprueba una vez su contenido.
+        var calls = folders.calls.length;
+        await sync.sync();
+        expect(folders.calls.skip(calls).where((c) => !c.startsWith('list')), [
+          'read ${after.ref}',
+          'read ${after.transcript!.ref}',
+          'read ${after.midi!.ref}',
+        ]);
+        calls = folders.calls.length;
+        await sync.sync();
+        expect(
+          folders.calls.skip(calls).where((c) => !c.startsWith('list')),
+          isEmpty,
+        );
+      });
+
+      test('con otro nombre, si se le da al moverla', () async {
+        await saved();
+
+        await repository.move(
+          await single(),
+          'Clases',
+          name: 'Grabación 1 (2)',
+        );
+        await sync.sync();
+
+        final after = (await single()).copies['folder']!;
+        expect(folders.files[after.ref], 'Grabación 1 (2).m4a');
+        expect(folders.files[after.transcript!.ref], 'Grabación 1 (2).txt');
+        expect(folders.files[after.midi!.ref], 'Grabación 1 (2).mid');
+        expect(folders.calls, isNot(contains(startsWith('rename'))));
+      });
+
+      test('si se quedó a medias, termina en la siguiente pasada', () async {
+        final recording = await saved();
+        final stored = recording.copies['folder']!;
+        // El audio ya está en «Clases»; el .txt, aún en la principal.
+        folders.fileFolders[stored.ref] = 'Clases';
+        folders.subfolders.putIfAbsent(folder.id, () => {}).add('Clases');
+        final moved = await repository.move(recording, 'Clases');
+        await repository.setCopy(
+          moved,
+          'folder',
+          moved.copies['folder']!.withTranscript(
+            stored.transcript!.copyWith(folder: () => ''),
+          ),
+        );
+        await repository.setCopy(
+          await single(),
+          'folder',
+          (await single()).copies['folder']!.copyWith(folder: 'Clases'),
+        );
+
+        await sync.sync();
+
+        final after = (await single()).copies['folder']!;
+        expect(after.ref, stored.ref);
+        expect(after.transcript!.folder, isNull);
+        expect(folders.fileFolders[after.transcript!.ref], 'Clases');
+        expect(folders.files, isNot(contains(stored.transcript!.ref)));
+        expect(folders.calls, isNot(contains('read ${stored.ref}')));
+      });
+
+      test('de una versión anterior (sin saber dónde estaban sus archivos), '
+          'los busca en la de antes', () async {
+        final recording = await saved();
+        // Como en el índice de versiones anteriores.
+        await repository.setCopy(
+          recording,
+          'folder',
+          CopyState(
+            destination: recording.copies['folder']!.destination,
+            ref: recording.copies['folder']!.ref,
+            revision: recording.revision,
+            name: recording.name,
+            size: 3,
+            transcript: recording.copies['folder']!.transcript,
+            midi: recording.copies['folder']!.midi,
+          ),
+        );
+
+        await repository.move(await single(), 'Clases');
+        expect((await single()).copies['folder']!.folder, '');
+        await sync.sync();
+
+        final after = (await single()).copies['folder']!;
+        expect(folders.fileFolders[after.ref], 'Clases');
+        expect(folders.fileFolders[after.transcript!.ref], 'Clases');
+      });
+    });
+
     test('al editarla, guarda el audio nuevo sobre su archivo', () async {
       final recording = await addRecording();
       await sync.sync();
@@ -946,6 +1090,29 @@ void main() {
       expect((await single()).transcript!.text, 'Adiós');
     });
 
+    test('moverla cambia su carpeta en Drive, sin volver a subirla', () async {
+      await addRecording();
+      await sync.sync();
+      await transcribe(await single(), 'Hola');
+      await sync.sync();
+      drive.calls.clear();
+
+      await repository.move(await single(), 'Clases');
+      await sync.sync();
+
+      expect(drive.calls, [
+        'move file0 → Clases/Grabación 1.m4a',
+        'move file1 → Clases/Grabación 1.txt',
+      ]);
+      expect(drive.fileFolders, {'file0': 'Clases', 'file1': 'Clases'});
+      expect((await single()).copies['drive']!.folder, 'Clases');
+
+      // Y de vuelta a la principal.
+      await repository.move(await single(), '');
+      await sync.sync();
+      expect(drive.fileFolders, isEmpty);
+    });
+
     test('eliminarla la manda a la papelera de Drive', () async {
       drive.addFile('Idea.m4a');
       await sync.sync();
@@ -1035,6 +1202,19 @@ void main() {
 
       expect(folders.files, isEmpty);
       expect(drive.files.values, ['Grabación 1.m4a']);
+    });
+
+    test('mueve también la copia', () async {
+      await addRecording();
+      await sync.sync();
+
+      await repository.move(await single(), 'Clases');
+      await sync.sync();
+
+      final recording = await single();
+      expect(folders.fileFolders[recording.copies['folder']!.ref], 'Clases');
+      expect(drive.calls.last, 'move file0 → Clases/Grabación 1.m4a');
+      expect(recording.isSavedIn('drive'), isTrue);
     });
 
     test('renombra también la copia', () async {

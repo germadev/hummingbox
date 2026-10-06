@@ -16,6 +16,7 @@ enum RecordingAction {
   edit,
   addPiano,
   rename,
+  move,
   transcribe,
   viewTranscript,
   share,
@@ -54,6 +55,12 @@ List<RecordingActionEntry> recordingActions(
     action: RecordingAction.rename,
     icon: Icons.edit_outlined,
     label: l10n.rename,
+    enabled: true,
+  ),
+  (
+    action: RecordingAction.move,
+    icon: Icons.drive_file_move_outlined,
+    label: l10n.moveToFolder,
     enabled: true,
   ),
   // Solo el piano: no hay voz que transcribir. El idioma se cambia en la

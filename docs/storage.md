@@ -16,8 +16,9 @@ the app.
   without copying it. It is read again when the folder is chosen, when the
   app comes back to the foreground, when the side menu opens and with
   *Sync now*.
-- **Both ways**: renaming, editing or deleting a recording in the app does
-  the same to its file (in Drive, deleting moves it to the trash). Files
+- **Both ways**: renaming, moving to another subfolder, editing or deleting
+  a recording in the app does the same to its file (in Drive, deleting moves
+  it to the trash). Files
   deleted from the destination outside the app disappear from the app,
   changed files are read again and renamed files keep their waveform (they
   are recognized by subfolder, size and, when known, MD5 checksum).

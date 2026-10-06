@@ -51,6 +51,12 @@ abstract interface class RecordingsRepository {
   /// Cambia el nombre de [recording] (ya no es provisional).
   Future<Recording> rename(Recording recording, String name);
 
+  /// Pasa [recording] a la subcarpeta [folder] (`''`, la carpeta principal)
+  /// y, si se indica, a llamarse [name] (para no repetir el de otra de allí).
+  /// Sus archivos de fuera de la app siguen donde estaban hasta que se
+  /// muevan al guardarla (ver [CopyState.folder]).
+  Future<Recording> move(Recording recording, String folder, {String? name});
+
   /// Sustituye el audio de [recording] por el archivo de [sourcePath], que se
   /// mueve a su sitio, y aumenta su revisión.
   Future<Recording> replaceAudio(
@@ -308,6 +314,29 @@ class FileRecordingsRepository implements RecordingsRepository {
   }
 
   @override
+  Future<Recording> move(Recording recording, String folder, {String? name}) {
+    return _update(recording, (metadata) {
+      final previous = metadata['folder'] as String? ?? '';
+      if (folder.isEmpty) {
+        metadata.remove('folder');
+      } else {
+        metadata['folder'] = folder;
+      }
+      if (name != null) metadata['name'] = name.trim();
+      // Los archivos de fuera siguen en la anterior hasta que se muevan.
+      final copies = metadata['copies'] as Map<String, dynamic>?;
+      if (copies != null) {
+        metadata['copies'] = {
+          for (final MapEntry(:key, :value) in copies.entries)
+            key: value is Map<String, dynamic> && value['subfolder'] == null
+                ? {...value, 'subfolder': previous}
+                : value,
+        };
+      }
+    });
+  }
+
+  @override
   Future<Recording> replaceAudio(
     Recording recording, {
     required String sourcePath,
@@ -465,6 +494,7 @@ class FileRecordingsRepository implements RecordingsRepository {
           modified: file.modified,
           transcript: file.transcript,
           midi: file.midi,
+          folder: file.folder,
         ).toJson(),
       };
     });

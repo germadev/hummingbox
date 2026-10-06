@@ -605,20 +605,74 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _createFolder() async {
+    final name = await _newFolder();
+    if (name == null || !mounted) return;
+    await _openFolder(name);
+  }
+
+  /// Pide el nombre de una subcarpeta nueva y la crea. Devuelve su nombre,
+  /// o `null` si se cancela o no vale.
+  Future<String?> _newFolder() async {
     final input = await showNameDialog(
       context,
       title: context.l10n.newFolder,
       confirmLabel: context.l10n.create,
     );
-    if (input == null || !mounted) return;
+    if (input == null || !mounted) return null;
     final name = safeFileName(input, fallback: '');
     if (name.isEmpty || name.startsWith('.')) {
       _showMessage((l10n) => l10n.invalidFolderName);
-      return;
+      return null;
     }
     await widget.sync.createFolder(name);
-    if (!mounted) return;
-    await _openFolder(name);
+    return name;
+  }
+
+  /// Nombre de la carpeta principal: el de la carpeta del dispositivo o el
+  /// de la de Drive.
+  String _rootName(AppLocalizations l10n) =>
+      widget.sync.settings.folder?.name ??
+      widget.sync.settings.drive?.folderName ??
+      l10n.rootFolder;
+
+  /// Pregunta a qué carpeta se mueve [recording] (o crea una nueva) y la
+  /// mueve. Si allí hay otra con su nombre, se le añade un número. Sus
+  /// archivos se mueven al guardarla.
+  Future<void> _move(Recording recording) async {
+    final l10n = context.l10n;
+    final current = _latest(recording);
+    final choice = await showFolderDialog(
+      context,
+      title: l10n.moveToTitle,
+      rootName: _rootName(l10n),
+      folders: _folderNames,
+      current: current.folder,
+    );
+    if (choice == null || !mounted) return;
+    final folder = choice.folder ?? await _newFolder();
+    if (folder == null || folder == current.folder || !mounted) return;
+    final name = RecordingNames.unique(current.name, [
+      for (final r in _recordings)
+        if (r.folder == folder && r.id != current.id) r.name,
+    ]);
+    // Deja de verse aquí: si es la seleccionada, se para.
+    if (_player.isCurrent(current)) await _player.stop();
+    final Recording moved;
+    try {
+      moved = await widget.repository.move(
+        current,
+        folder,
+        name: name == current.name ? null : name,
+      );
+    } catch (_) {
+      _showMessage((l10n) => l10n.moveFailed);
+      return;
+    }
+    _replaceRecording(moved);
+    _syncStorage();
+    _showMessage(
+      (l10n) => l10n.movedTo(folder.isEmpty ? _rootName(l10n) : folder),
+    );
   }
 
   // --- Grabación ---
@@ -756,6 +810,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _openPianoOver(recording);
       case RecordingAction.rename:
         await _rename(recording);
+      case RecordingAction.move:
+        await _move(recording);
       case RecordingAction.transcribe:
         await _transcribe(recording);
       case RecordingAction.viewTranscript:
@@ -1444,10 +1500,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // [_SwipeToOpenDrawers]) o con su botón. Al abrirlo se buscan
       // subcarpetas nuevas.
       drawer: FolderDrawer(
-        rootName:
-            sync.settings.folder?.name ??
-            sync.settings.drive?.folderName ??
-            context.l10n.rootFolder,
+        rootName: _rootName(context.l10n),
         folders: folderNames,
         counts: {
           for (final name in ['', ...folderNames]) name: _countIn(name),

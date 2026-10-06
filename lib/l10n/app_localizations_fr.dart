@@ -84,6 +84,20 @@ class AppLocalizationsFr extends AppLocalizations {
   String get renameFailed => 'Impossible de renommer l\'enregistrement';
 
   @override
+  String get moveToFolder => 'Déplacer dans un dossier';
+
+  @override
+  String get moveToTitle => 'Déplacer vers';
+
+  @override
+  String movedTo(String folder) {
+    return 'Déplacé dans « $folder »';
+  }
+
+  @override
+  String get moveFailed => 'Impossible de déplacer l\'enregistrement';
+
+  @override
   String get shareFailed => 'Impossible de partager l\'enregistrement';
 
   @override
