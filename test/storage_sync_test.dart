@@ -808,6 +808,32 @@ void main() {
         expect(folders.calls, isNot(contains('read ${stored.ref}')));
       });
 
+      test('si a medias se cambia fuera su .txt, lo lee y lo lleva', () async {
+        final recording = await saved();
+        final stored = recording.copies['folder']!;
+        folders.fileFolders[stored.ref] = 'Clases';
+        folders.subfolders.putIfAbsent(folder.id, () => {}).add('Clases');
+        final moved = await repository.move(recording, 'Clases');
+        await repository.setCopy(
+          moved,
+          'folder',
+          moved.copies['folder']!
+              .copyWith(folder: 'Clases')
+              .withTranscript(stored.transcript!.copyWith(folder: () => '')),
+        );
+        // Otra app cambia el .txt, que sigue en la principal.
+        folders.changeFile(stored.transcript!.ref, utf8.encode('Adiós'));
+
+        await sync.sync();
+
+        final after = await single();
+        expect(after.transcript!.text, 'Adiós');
+        final file = after.copies['folder']!.transcript!;
+        expect(file.folder, isNull);
+        expect(folders.fileFolders[file.ref], 'Clases');
+        expect(textOf(folders, file.ref), 'Adiós');
+      });
+
       test('de una versión anterior (sin saber dónde estaban sus archivos), '
           'los busca en la de antes', () async {
         final recording = await saved();

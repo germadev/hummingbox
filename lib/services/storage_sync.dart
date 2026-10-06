@@ -998,6 +998,7 @@ class StorageSync extends ChangeNotifier {
               size: bytes.length,
               checksum: checksum,
               modified: entry.modified,
+              folder: _folderBeside(midi, recording, stored),
             ),
           ),
         );
@@ -1091,6 +1092,17 @@ class StorageSync extends ChangeNotifier {
       _deleteQuietly(source.path);
     }
   }
+
+  /// Subcarpeta de [file] (el `.txt` o el `.mid` de [recording]) si no es
+  /// la de su audio (se quedó atrás al moverla, ver [_moveLinked]); si lo
+  /// es, `null`.
+  static String? _folderBeside(
+    _StoredFile file,
+    Recording recording,
+    CopyState stored,
+  ) => file.subfolder == (stored.folder ?? recording.folder)
+      ? null
+      : file.subfolder;
 
   /// Clave de un archivo para emparejar el audio con su `.txt`: subcarpeta y
   /// nombre sin extensión (sin distinguir mayúsculas).
@@ -1190,6 +1202,7 @@ class StorageSync extends ChangeNotifier {
       size: bytes.length,
       checksum: checksum,
       modified: entry.modified,
+      folder: _folderBeside(text, recording, stored),
     );
     final content = _decodeText(bytes);
     final saved = await repository.setCopy(
