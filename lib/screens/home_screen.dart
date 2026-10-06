@@ -453,6 +453,25 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  /// El dedo con el que se ha tirado de la lista para buscar: al levantarlo
+  /// no le quita el foco al campo (ver [_onTapUpOutsideSearch]).
+  int? _pullPointer;
+
+  /// Al soltar la lista tras tirar de ella hacia abajo con [pointer].
+  void _onPulled(int? pointer) {
+    _pullPointer = pointer;
+    _startSearch();
+  }
+
+  /// Al levantar el dedo fuera del campo de búsqueda (en una grabación, el
+  /// dock, la barra…) se le quita el foco, salvo si es el que acaba de
+  /// tirar de la lista para buscar. Al bajarlo no: el gesto de «atrás»
+  /// desde el borde empieza con un toque en la app que el sistema cancela, y
+  /// ese «atrás» tiene que quitar el foco, no abrir el menú de las carpetas.
+  void _onTapUpOutsideSearch(PointerUpEvent event) {
+    if (event.pointer != _pullPointer) _searchFocus.unfocus();
+  }
+
   /// Borra lo buscado y quita el foco del campo.
   void _closeSearch() {
     _search.clear();
@@ -1466,6 +1485,7 @@ class _HomeScreenState extends State<HomeScreen> {
           searching: searching,
           folder: folder,
           onClear: _closeSearch,
+          onTapUpOutside: _onTapUpOutsideSearch,
         ),
         actions: [
           if (!searching)
@@ -1575,9 +1595,7 @@ class _HomeScreenState extends State<HomeScreen> {
           final selected = _recordings.where((r) => r.id == id).firstOrNull;
           if (selected != null) _togglePlayback(selected);
         },
-        // Como el fondo de la lista: quita el foco del campo de búsqueda y,
-        // fuera de los botones, la selección.
-        onTouched: _searchFocus.unfocus,
+        // Fuera de los botones, como el fondo de la lista.
         onBackgroundTapped: _onBackgroundTapped,
         onRecordPressed: _onRecordPressed,
         onCancelPressed: _confirmCancel,
@@ -1683,7 +1701,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Tirando hacia abajo desde arriba de la lista se busca.
     return _PullToSearch(
       pull: _pull,
-      onPull: _startSearch,
+      onPull: _onPulled,
       child: recordings.isEmpty
           ? switch ((searching, folder.isEmpty)) {
               (true, _) => _EmptyState(
@@ -1928,6 +1946,7 @@ class _SearchField extends StatelessWidget {
     required this.searching,
     required this.folder,
     required this.onClear,
+    required this.onTapUpOutside,
   });
 
   final TextEditingController controller;
@@ -1936,6 +1955,9 @@ class _SearchField extends StatelessWidget {
   final bool searching;
   final String folder;
   final VoidCallback onClear;
+
+  /// Al levantar el dedo fuera del campo, si al bajarlo tenía el foco.
+  final TapRegionUpCallback onTapUpOutside;
 
   /// Lo que ocupa como mucho el nombre de la subcarpeta.
   static const _folderMaxWidth = 160.0;
@@ -1949,12 +1971,21 @@ class _SearchField extends StatelessWidget {
       controller: controller,
       focusNode: focusNode,
       // Pierde el foco (y se oculta el teclado) al tocar en cualquier otro
-      // sitio, también en una grabación, que no avisa al fondo de la lista.
-      onTapOutside: (_) => focusNode.unfocus(),
+      // sitio, también en una grabación, que no avisa al fondo de la lista
+      // (ver [_HomeScreenState._onTapUpOutsideSearch]).
+      onTapUpOutside: onTapUpOutside,
       textInputAction: TextInputAction.search,
       textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
         hintText: l10n.search,
+        // Sin el foco, «Buscar» se ve más apagado.
+        hintStyle: WidgetStateTextStyle.resolveWith(
+          (states) => TextStyle(
+            color: states.contains(WidgetState.focused)
+                ? null
+                : theme.colorScheme.outline,
+          ),
+        ),
         border: InputBorder.none,
         contentPadding: EdgeInsets.zero,
         prefixIcon: _SearchButton(pull: pull),
@@ -2050,7 +2081,9 @@ class _PullToSearch extends StatefulWidget {
   static const distance = 72.0;
 
   final ValueNotifier<_Pull> pull;
-  final VoidCallback onPull;
+
+  /// Recibe el dedo que se ha levantado, si se busca al levantarlo.
+  final ValueChanged<int?> onPull;
   final Widget child;
 
   @override
@@ -2113,19 +2146,19 @@ class _PullToSearchState extends State<_PullToSearch> {
     return false;
   }
 
-  void _onPointerUp() {
+  void _onPointerUp(PointerEvent event) {
     if (!_dragging) return;
-    _release();
+    _release(event.pointer);
     _pulling = false;
   }
 
   /// Al soltar tras pasar el punto, se busca.
-  void _release() {
+  void _release([int? pointer]) {
     _dragging = false;
     if (!_armed) return;
     _searched = true;
     widget.pull.value = _Pull.none;
-    widget.onPull();
+    widget.onPull(pointer);
   }
 
   /// Margen de la lista sobre la primera grabación: el texto no pasa de ahí.
@@ -2138,8 +2171,8 @@ class _PullToSearchState extends State<_PullToSearch> {
     // Al levantar el dedo se busca ya, sin esperar a que la lista empiece a
     // volver a su sitio.
     return Listener(
-      onPointerUp: (_) => _onPointerUp(),
-      onPointerCancel: (_) => _onPointerUp(),
+      onPointerUp: _onPointerUp,
+      onPointerCancel: _onPointerUp,
       child: NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: Stack(

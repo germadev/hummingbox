@@ -2319,6 +2319,56 @@ void main() {
       expect(find.text('Entrevista'), findsOneWidget);
     });
 
+    testWidgets('«Buscar» se ve más apagado sin el foco', (tester) async {
+      await pumpApp(tester);
+      final colors = Theme.of(tester.element(searchField())).colorScheme;
+      Color? hintColor() => tester
+          .widget<Text>(
+            find.descendant(of: searchField(), matching: find.text('Buscar')),
+          )
+          .style!
+          .color;
+
+      expect(hintColor(), colors.outline);
+
+      await tester.tap(searchField());
+      await tester.pumpAndSettle();
+      expect(hintColor(), colors.onSurfaceVariant);
+
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(hintColor(), colors.outline);
+    });
+
+    testWidgets('el gesto de «atrás» desde el borde quita el foco de la '
+        'búsqueda sin abrir las carpetas', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      final list = tester.getCenter(find.byType(ListView));
+      final dock = tester.getCenter(find.byType(RecordPanel));
+
+      for (final start in [Offset(2, list.dy), Offset(2, dock.dy)]) {
+        await tester.tap(searchField());
+        await tester.pumpAndSettle();
+        expect(searchFocused(tester), isTrue);
+
+        // El sistema reconoce el gesto y cancela el toque que había
+        // empezado en la app; después llega «atrás».
+        final gesture = await tester.startGesture(start);
+        await tester.pump();
+        await gesture.moveBy(const Offset(40, 0));
+        await tester.pump();
+        await gesture.cancel();
+        await tester.pump();
+        expect(searchFocused(tester), isTrue);
+
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expectNotSearching(tester);
+        expect(find.byKey(const Key('new-folder')), findsNothing);
+      }
+    });
+
     testWidgets('tirar de la lista hacia abajo da el foco a la búsqueda', (
       tester,
     ) async {

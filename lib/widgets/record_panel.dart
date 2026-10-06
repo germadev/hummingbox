@@ -33,7 +33,6 @@ class RecordPanel extends StatefulWidget {
     required this.player,
     required this.onStopPlayback,
     required this.onPlaySelected,
-    this.onTouched,
     this.onBackgroundTapped,
     required this.onRecordPressed,
     required this.onCancelPressed,
@@ -53,10 +52,6 @@ class RecordPanel extends StatefulWidget {
 
   /// Reproduce la grabación seleccionada (o sigue, si está en pausa).
   final VoidCallback onPlaySelected;
-
-  /// Al tocar el panel, en cualquier punto (p. ej. para quitar el foco del
-  /// campo de búsqueda).
-  final VoidCallback? onTouched;
 
   /// Al tocar el panel fuera de sus botones (como el fondo de la lista).
   final VoidCallback? onBackgroundTapped;
@@ -198,80 +193,72 @@ class _RecordPanelState extends State<RecordPanel>
       ),
       child: SafeArea(
         top: false,
-        child: Listener(
-          onPointerDown: (_) => widget.onTouched?.call(),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onBackgroundTapped,
-            onVerticalDragUpdate: _onDragUpdate,
-            onVerticalDragEnd: _onDragEnd,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
-              child: ListenableBuilder(
-                listenable: Listenable.merge([
-                  widget.controller,
-                  widget.player,
-                  _expansion,
-                ]),
-                builder: (context, _) {
-                  final actions = _active
-                      ? null
-                      : widget.selectionActions?.call(context);
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _DragHandle(
-                        visible: !_active,
-                        expanded: _expanded,
-                        onPressed: _toggle,
-                      ),
-                      SizeTransition(
-                        sizeFactor: _expansion,
-                        alignment: Alignment.bottomCenter,
-                        child: FadeTransition(
-                          opacity: _expansion,
-                          // Plegado del todo, el contenido no se pinta ni se
-                          // anuncia, pero se sigue midiendo para el arrastre.
-                          child: Offstage(
-                            offstage: _expansion.value == 0 && !_active,
-                            child: Padding(
-                              key: _infoKey,
-                              padding: const EdgeInsets.only(
-                                top: 4,
-                                bottom: 20,
-                              ),
-                              child: actions == null
-                                  ? _RecordingInfo(
-                                      controller: widget.controller,
-                                    )
-                                  // Tocar entre los botones no quita la
-                                  // selección.
-                                  : GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () {},
-                                      child: actions,
-                                    ),
-                            ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onBackgroundTapped,
+          onVerticalDragUpdate: _onDragUpdate,
+          onVerticalDragEnd: _onDragEnd,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+            child: ListenableBuilder(
+              listenable: Listenable.merge([
+                widget.controller,
+                widget.player,
+                _expansion,
+              ]),
+              builder: (context, _) {
+                final actions = _active
+                    ? null
+                    : widget.selectionActions?.call(context);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _DragHandle(
+                      visible: !_active,
+                      expanded: _expanded,
+                      onPressed: _toggle,
+                    ),
+                    SizeTransition(
+                      sizeFactor: _expansion,
+                      alignment: Alignment.bottomCenter,
+                      child: FadeTransition(
+                        opacity: _expansion,
+                        // Plegado del todo, el contenido no se pinta ni se
+                        // anuncia, pero se sigue midiendo para el arrastre.
+                        child: Offstage(
+                          offstage: _expansion.value == 0 && !_active,
+                          child: Padding(
+                            key: _infoKey,
+                            padding: const EdgeInsets.only(top: 4, bottom: 20),
+                            child: actions == null
+                                ? _RecordingInfo(controller: widget.controller)
+                                // Tocar entre los botones no quita la
+                                // selección.
+                                : GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {},
+                                    child: actions,
+                                  ),
                           ),
                         ),
                       ),
-                      _Controls(
-                        controller: widget.controller,
-                        player: widget.player,
-                        onStopPlayback: widget.onStopPlayback,
-                        onPlaySelected: widget.onPlaySelected,
-                        expanded: _expanded,
-                        countdownSeconds: widget.countdownSeconds,
-                        onRecordPressed: widget.onRecordPressed,
-                        onCancelPressed: widget.onCancelPressed,
-                        onCountdownPressed: widget.onCountdownPressed,
-                        onVoicePressed: widget.onVoicePressed,
-                        showStartOptions: actions == null,
-                      ),
-                    ],
-                  );
-                },
-              ),
+                    ),
+                    _Controls(
+                      controller: widget.controller,
+                      player: widget.player,
+                      onStopPlayback: widget.onStopPlayback,
+                      onPlaySelected: widget.onPlaySelected,
+                      expanded: _expanded,
+                      countdownSeconds: widget.countdownSeconds,
+                      onRecordPressed: widget.onRecordPressed,
+                      onCancelPressed: widget.onCancelPressed,
+                      onCountdownPressed: widget.onCountdownPressed,
+                      onVoicePressed: widget.onVoicePressed,
+                      showStartOptions: actions == null,
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),

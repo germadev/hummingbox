@@ -261,8 +261,9 @@ The recording goes to the open folder, like any other.
 ## Search
 
 The **search field is always in the top bar**, next to the folders button,
-with a magnifier at its left and "Search" as placeholder (in a subfolder, its
-name at the right). Tapping it, or **pulling the list down**
+with a magnifier at its left and "Search" as placeholder, dimmer while the
+field doesn't have the focus (in a subfolder, its name at the right).
+Tapping it, or **pulling the list down**
 when it is already at the top (a drag that scrolls up to the top and keeps
 pulling doesn't count), gives it the focus: it then spans the top bar,
 from the folder button to ⚙, with an X where the view button was (and the
@@ -276,10 +277,12 @@ field already has the focus, pulling shows the keyboard again (for example
 after hiding it with Back on Android). Tapping the list's background (outside
 the recordings) takes the focus away from the field and hides the keyboard
 (with nothing typed, the buttons come back), and deselects the recording unless
-it is playing. Touching the bottom panel also takes the focus away from the
-field, and tapping it outside its buttons works like the list's background.
-Tapping anywhere else, such as on a recording to select it, takes the focus
-away from the field too.
+it is playing. Tapping the bottom panel outside its buttons works like the
+list's background. Tapping anywhere else, such as on a recording to select it
+or on the bottom panel, takes the focus away from the field too, when the
+finger is lifted: the system's Back gesture from the edge, which starts as a
+touch in the app, doesn't, so that Back takes the focus away instead of
+opening the folders menu.
 
 It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.
