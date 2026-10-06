@@ -208,9 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
     widget.sync.removeListener(_updateScreen);
     widget.sync.removeListener(_onSettingsChanged);
     if (_screenKeptOn) unawaited(widget.screen.keepOn(false));
-    if (_pianoOpen) {
-      unawaited(SystemChrome.setPreferredOrientations(const []));
-    }
     _recorder.dispose();
     _player.dispose();
     _transcriptions.dispose();
@@ -485,20 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Piano ---
 
-  bool _pianoOpen = false;
-
-  /// Mientras el piano está abierto, la pantalla no gira (en vertical, el
-  /// piano se dibuja girado para verlo en horizontal girando el móvil); al
-  /// cerrarlo vuelve a girar como diga el sistema.
   void _onPianoChanged(bool opened) {
-    _pianoOpen = opened;
-    unawaited(
-      SystemChrome.setPreferredOrientations(
-        opened
-            ? PianoPanel.orientationsFor(MediaQuery.orientationOf(context))
-            : const [],
-      ),
-    );
     // Al cerrarlo mientras se graba, se guarda lo grabado.
     if (!opened && _pianoRecorder.isRecording) {
       unawaited(_stopPianoRecording());
@@ -704,15 +688,16 @@ class _HomeScreenState extends State<HomeScreen> {
     unawaited(_play(() => _player.toggle(recording)));
   }
 
+  /// Selecciona [recording] sin reproducirla: suena con su botón.
+  void _select(Recording recording) => unawaited(_player.pick(recording));
+
+  /// Salta a [position] de [recording]: si no es la seleccionada, la
+  /// selecciona ahí, sin reproducirla.
   void _seek(Recording recording, Duration position) {
-    if (_recorder.isBusy) {
-      _showMessage((l10n) => l10n.stopToPlay);
-      return;
-    }
     if (_player.isCurrent(recording)) {
       _player.seek(position);
     } else {
-      unawaited(_play(() => _player.playFrom(recording, position)));
+      unawaited(_player.pick(recording, position: position));
     }
   }
 
@@ -1468,7 +1453,9 @@ class _HomeScreenState extends State<HomeScreen> {
           onClose: () => _scaffoldKey.currentState?.closeEndDrawer(),
         ),
       ),
-      endDrawerEnableOpenDragGesture: !_recorder.isBusy,
+      // No desde el borde, donde se va atrás con los gestos del sistema: se
+      // abre deslizando en la lista (ver [_SwipeToOpenDrawers]).
+      endDrawerEnableOpenDragGesture: false,
       onEndDrawerChanged: _onPianoChanged,
       // También se abren deslizando en cualquier punto de la lista, no solo
       // desde el borde: hacia la derecha las carpetas y hacia la izquierda
@@ -1499,6 +1486,18 @@ class _HomeScreenState extends State<HomeScreen> {
         onCancelPressed: _confirmCancel,
         onCountdownPressed: _startAfterCountdown,
         onVoicePressed: _startWhenVoice,
+        selectionActions: (context) {
+          final id = _player.currentId;
+          final selected = _recordings.where((r) => r.id == id).firstOrNull;
+          if (selected == null) return null;
+          return RecordingActionsBar(
+            key: ValueKey(selected.id),
+            recording: selected,
+            transcriptions: _transcriptions,
+            onAction: (action, buttonContext) =>
+                _onAction(selected, action, buttonContext),
+          );
+        },
       ),
     );
 
@@ -1641,6 +1640,7 @@ class _HomeScreenState extends State<HomeScreen> {
           compact: widget.sync.settings.compactList,
           onCancelTranscription: () => _transcriptions.cancel(recording),
           onTogglePlay: () => _togglePlayback(recording),
+          onSelect: () => _select(recording),
           onSeek: (position) => _seek(recording, position),
           onAction: (action, tileContext) =>
               _onAction(recording, action, tileContext),
@@ -1678,8 +1678,16 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Velocidad a partir de la cual basta con un gesto rápido.
   static const _flingVelocity = 300.0;
 
+  /// Margen junto al borde del piano (el derecho, o el izquierdo de derecha
+  /// a izquierda) en el que deslizar no lo abre: desde el borde se va
+  /// atrás con los gestos del sistema. Si el sistema reserva más, lo suyo.
+  static const edgeMargin = 32.0;
+
   double _dragged = 0;
   bool _opened = false;
+
+  /// Si el gesto empezó junto al borde del piano: no lo abre.
+  bool _fromEndEdge = false;
 
   double get _direction =>
       Directionality.of(context) == TextDirection.rtl ? -1 : 1;
@@ -1687,7 +1695,7 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Abre el menú de las carpetas si [forward] (hacia la derecha) o, si no,
   /// el piano.
   void _open({required bool forward}) {
-    if (_opened) return;
+    if (_opened || (!forward && _fromEndEdge)) return;
     _opened = true;
     (forward ? widget.onOpenDrawer : widget.onOpenEndDrawer)();
   }
@@ -1697,6 +1705,14 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
     if (!widget.enabled) return widget.child;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onHorizontalDragDown: (details) {
+        final width = MediaQuery.sizeOf(context).width;
+        final insets = MediaQuery.systemGestureInsetsOf(context);
+        final x = details.globalPosition.dx;
+        _fromEndEdge = _direction > 0
+            ? x >= width - math.max(edgeMargin, insets.right)
+            : x <= math.max(edgeMargin, insets.left);
+      },
       onHorizontalDragStart: (_) {
         _dragged = 0;
         _opened = false;
@@ -1916,6 +1932,11 @@ class _PullToSearchState extends State<_PullToSearch> {
   /// deslizándola): solo entonces baja la lupa.
   bool _pulling = false;
 
+  /// Si el arrastre empezó con la lista arriba del todo: solo así se busca
+  /// al tirar (no al llegar arriba subiendo por la lista con el mismo
+  /// arrastre).
+  bool _fromTop = false;
+
   bool get _armed => widget.pull.value.armed;
 
   /// Si ya se ha buscado al soltar: mientras la lista vuelve a su sitio, la
@@ -1930,11 +1951,14 @@ class _PullToSearchState extends State<_PullToSearch> {
     switch (notification) {
       case ScrollStartNotification(:final dragDetails):
         _dragging = dragDetails != null;
-        if (_dragging) armed = false;
+        if (_dragging) {
+          armed = false;
+          _fromTop = metrics.pixels <= metrics.minScrollExtent + 0.5;
+        }
       case ScrollUpdateNotification(:final dragDetails):
         // Al soltar, la lista vuelve a su sitio sin que se arrastre.
         if (_dragging && dragDetails == null) _release();
-        if (_dragging) {
+        if (_dragging && _fromTop) {
           if (pulled > 0) _pulling = true;
           armed = pulled >= _PullToSearch.distance;
         }

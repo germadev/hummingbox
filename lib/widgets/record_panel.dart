@@ -20,6 +20,10 @@ import 'waveform_view.dart';
 /// Mientras suena una grabación (o está en pausa), el botón del centro la
 /// para, y a los lados se activa o desactiva seguir con la siguiente de la
 /// lista (izquierda) y repetir (derecha).
+///
+/// Con una grabación seleccionada ([selectionActions]), al desplegarlo se
+/// ven los botones de su menú en lugar del cronómetro y la onda, y sin los
+/// de grabar tras una cuenta atrás o al detectar la voz.
 class RecordPanel extends StatefulWidget {
   const RecordPanel({
     super.key,
@@ -32,6 +36,7 @@ class RecordPanel extends StatefulWidget {
     required this.onCancelPressed,
     required this.onCountdownPressed,
     required this.onVoicePressed,
+    this.selectionActions,
     this.countdownSeconds = 3,
   });
 
@@ -58,6 +63,10 @@ class RecordPanel extends StatefulWidget {
   final VoidCallback onCancelPressed;
   final VoidCallback onCountdownPressed;
   final VoidCallback onVoicePressed;
+
+  /// Los botones del menú de la grabación seleccionada, o `null` si no hay
+  /// ninguna. Se pide cada vez que cambia el reproductor.
+  final Widget? Function(BuildContext context)? selectionActions;
 
   /// Duración de la cuenta atrás, para el texto del botón.
   final int countdownSeconds;
@@ -198,46 +207,63 @@ class _RecordPanelState extends State<RecordPanel>
                   widget.player,
                   _expansion,
                 ]),
-                builder: (context, _) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _DragHandle(
-                      visible: !_active,
-                      expanded: _expanded,
-                      onPressed: _toggle,
-                    ),
-                    SizeTransition(
-                      sizeFactor: _expansion,
-                      alignment: Alignment.bottomCenter,
-                      child: FadeTransition(
-                        opacity: _expansion,
-                        // Plegado del todo, el contenido no se pinta ni se
-                        // anuncia, pero se sigue midiendo para el arrastre.
-                        child: Offstage(
-                          offstage: _expansion.value == 0 && !_active,
-                          child: Padding(
-                            key: _infoKey,
-                            padding: const EdgeInsets.only(top: 4, bottom: 20),
-                            child: _RecordingInfo(
-                              controller: widget.controller,
+                builder: (context, _) {
+                  final actions = _active
+                      ? null
+                      : widget.selectionActions?.call(context);
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _DragHandle(
+                        visible: !_active,
+                        expanded: _expanded,
+                        onPressed: _toggle,
+                      ),
+                      SizeTransition(
+                        sizeFactor: _expansion,
+                        alignment: Alignment.bottomCenter,
+                        child: FadeTransition(
+                          opacity: _expansion,
+                          // Plegado del todo, el contenido no se pinta ni se
+                          // anuncia, pero se sigue midiendo para el arrastre.
+                          child: Offstage(
+                            offstage: _expansion.value == 0 && !_active,
+                            child: Padding(
+                              key: _infoKey,
+                              padding: const EdgeInsets.only(
+                                top: 4,
+                                bottom: 20,
+                              ),
+                              child: actions == null
+                                  ? _RecordingInfo(
+                                      controller: widget.controller,
+                                    )
+                                  // Tocar entre los botones no quita la
+                                  // selección.
+                                  : GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {},
+                                      child: actions,
+                                    ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    _Controls(
-                      controller: widget.controller,
-                      player: widget.player,
-                      onStopPlayback: widget.onStopPlayback,
-                      expanded: _expanded,
-                      countdownSeconds: widget.countdownSeconds,
-                      onRecordPressed: widget.onRecordPressed,
-                      onCancelPressed: widget.onCancelPressed,
-                      onCountdownPressed: widget.onCountdownPressed,
-                      onVoicePressed: widget.onVoicePressed,
-                    ),
-                  ],
-                ),
+                      _Controls(
+                        controller: widget.controller,
+                        player: widget.player,
+                        onStopPlayback: widget.onStopPlayback,
+                        expanded: _expanded,
+                        countdownSeconds: widget.countdownSeconds,
+                        onRecordPressed: widget.onRecordPressed,
+                        onCancelPressed: widget.onCancelPressed,
+                        onCountdownPressed: widget.onCountdownPressed,
+                        onVoicePressed: widget.onVoicePressed,
+                        showStartOptions: actions == null,
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -405,10 +431,15 @@ class _Controls extends StatelessWidget {
     required this.onCancelPressed,
     required this.onCountdownPressed,
     required this.onVoicePressed,
+    required this.showStartOptions,
   });
 
   final RecorderController controller;
   final PlayerController player;
+
+  /// Si, desplegado, se ven los botones de grabar tras una cuenta atrás y
+  /// al detectar la voz.
+  final bool showStartOptions;
   final VoidCallback onStopPlayback;
   final bool expanded;
   final int countdownSeconds;
@@ -493,7 +524,10 @@ class _Controls extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _SideButton(visible: active || waiting || expanded, child: left),
+        _SideButton(
+          visible: active || waiting || (expanded && showStartOptions),
+          child: left,
+        ),
         const SizedBox(width: 32),
         RecordButton(
           recording: active,
@@ -501,7 +535,10 @@ class _Controls extends StatelessWidget {
           onPressed: onRecordPressed,
         ),
         const SizedBox(width: 32),
-        _SideButton(visible: active || (!waiting && expanded), child: right),
+        _SideButton(
+          visible: active || (!waiting && expanded && showStartOptions),
+          child: right,
+        ),
       ],
     );
   }

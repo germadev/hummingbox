@@ -20,6 +20,7 @@ import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
 import 'package:voicerecorder/widgets/waveform_seek_bar.dart';
 import 'package:voicerecorder/widgets/folder_drawer.dart';
+import 'package:voicerecorder/utils/recording_names.dart';
 import 'package:voicerecorder/widgets/piano.dart';
 
 import 'fakes.dart';
@@ -145,7 +146,7 @@ void main() {
 
     expect(find.text('Grabando'), findsNothing);
     expect(panelHeight(tester), collapsed);
-    expect(find.text('2026-10-05 14.32'), findsOneWidget);
+    expect(find.text('14.32'), findsOneWidget);
     expect(find.text('Guardada como «2026-10-05 14.32»'), findsOneWidget);
     expect(recorder.calls, ['hasPermission', 'start', 'pause', 'stop']);
   });
@@ -513,7 +514,7 @@ void main() {
       await tester.tap(record());
       await tester.pumpAndSettle();
 
-      expect(find.text('2026-10-05 14.32').hitTestable(), findsOneWidget);
+      expect(find.text('14.32').hitTestable(), findsOneWidget);
       expect(find.text('Toma 0').hitTestable(), findsNothing);
     });
   });
@@ -752,7 +753,7 @@ void main() {
 
       await tester.tap(record());
       await tester.pumpAndSettle();
-      expect(find.text('2026-10-05 14.32'), findsOneWidget);
+      expect(find.text('14.32'), findsOneWidget);
     });
 
     testWidgets('cancela la cuenta atrás con la X', (tester) async {
@@ -788,7 +789,7 @@ void main() {
       await tester.tap(record());
       await tester.pumpAndSettle();
 
-      expect(find.text('2026-10-05 14.32'), findsOneWidget);
+      expect(find.text('14.32'), findsOneWidget);
       expect(editor.trims, {
         recorder.path!: const Duration(milliseconds: 2200),
       });
@@ -836,10 +837,124 @@ void main() {
     });
   });
 
+  group('selección', () {
+    /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
+    /// botón y de la onda.
+    Future<void> tapCard(WidgetTester tester, String duration) async {
+      await tester.tap(find.textContaining(duration));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tocar una grabación la selecciona sin reproducirla; suena '
+        'con su botón, y al seleccionar otra se para', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Entrevista', waveform: [0.5]),
+        Recording(
+          id: 'b',
+          path: '/fake/b.m4a',
+          name: 'Idea',
+          createdAt: DateTime(2026, 9, 29),
+          duration: const Duration(seconds: 12),
+          waveform: const [0.5],
+        ),
+      ]);
+      await pumpApp(tester);
+
+      await tapCard(tester, '01:23');
+      expect(player.calls, isEmpty);
+      // Seleccionada: con sus tiempos.
+      expect(find.text('00:00'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Reproducir').first);
+      await tester.pumpAndSettle();
+      expect(player.calls, ['play /fake/a.m4a @0']);
+
+      await tapCard(tester, '00:12');
+      expect(player.calls, ['play /fake/a.m4a @0', 'stop']);
+      expect(find.byTooltip('Pausar'), findsNothing);
+    });
+
+    testWidgets('con una seleccionada, el panel desplegado muestra sus '
+        'acciones en lugar de lo de grabar', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Entrevista', waveform: [0.5]),
+      ]);
+      await pumpApp(tester);
+      await tapCard(tester, '01:23');
+
+      await tester.drag(
+        find.byKey(const Key('panel-handle')),
+        const Offset(0, -300),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Lista para grabar'), findsNothing);
+      expect(find.byKey(const Key('countdown-button')), findsNothing);
+      expect(find.byKey(const Key('voice-button')), findsNothing);
+      for (final action in [
+        'edit',
+        'addPiano',
+        'rename',
+        'transcribe',
+        'transcribeInLanguage',
+        'share',
+        'delete',
+      ]) {
+        expect(find.byKey(Key('action-$action')), findsOneWidget);
+      }
+      // Solo el icono, con su nombre como ayuda.
+      expect(find.byTooltip('Renombrar'), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('action-rename')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      // Sin selección, lo de grabar.
+      await tester.tap(find.byKey(const Key('list-background')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('action-rename')), findsNothing);
+      expect(find.text('Lista para grabar'), findsOneWidget);
+      expect(find.byKey(const Key('countdown-button')), findsOneWidget);
+    });
+
+    testWidgets('sin audio que se oiga, no se dibuja la onda', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        sample('a', 'Entrevista', waveform: [0.5, 0.2]),
+        Recording(
+          id: 'b',
+          path: '/fake/b.m4a',
+          name: 'Silencio',
+          createdAt: DateTime(2026, 9, 29),
+          duration: const Duration(seconds: 12),
+          waveform: const [0.02, 0.05, 0.1],
+        ),
+      ]);
+      await pumpApp(tester);
+
+      CustomPainter? painterOf(String id) => tester
+          .widgetList<CustomPaint>(
+            find.descendant(
+              of: find.byKey(Key('waveform-$id')),
+              matching: find.byType(CustomPaint),
+            ),
+          )
+          .map((paint) => paint.painter)
+          .nonNulls
+          .firstOrNull;
+
+      expect(painterOf('a'), isA<SeekWaveformPainter>());
+      // Sin onda ni notas, no ocupa sitio hasta seleccionarla.
+      expect(find.byKey(const Key('waveform-b')), findsNothing);
+      await tapCard(tester, '00:12');
+      expect(find.byKey(const Key('waveform-b')), findsOneWidget);
+      expect(painterOf('b'), isNull);
+    });
+  });
+
   group('onda de las grabaciones', () {
-    testWidgets('tocar la onda reproduce desde ese punto y luego salta', (
-      tester,
-    ) async {
+    testWidgets('tocar la onda la selecciona en ese punto, sin reproducirla; '
+        'el botón la reproduce desde ahí, y luego salta', (tester) async {
       repository = InMemoryRecordingsRepository([
         sample('a', 'Entrevista', waveform: [0.2, 0.8, 0.4]),
       ]);
@@ -849,9 +964,13 @@ void main() {
 
       await tester.tap(waveform);
       await tester.pumpAndSettle();
-      expect(player.calls, ['play /fake/a.m4a @41500']);
+      expect(player.calls, isEmpty);
       expect(find.text('00:41'), findsOneWidget);
       expect(find.text('01:23'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(player.calls, ['play /fake/a.m4a @41500']);
 
       final box = tester.getRect(waveform);
       await tester.tapAt(Offset(box.left + box.width / 4, box.top + 10));
@@ -2004,6 +2123,42 @@ void main() {
       expect(searchField(), findsOneWidget);
     });
 
+    testWidgets('solo si se empieza a tirar con la lista arriba del todo', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([
+        for (var i = 0; i < 20; i++)
+          sample(
+            '$i',
+            'Grabación $i',
+            createdAt: DateTime(2026, 9, 1).add(Duration(days: i)),
+          ),
+      ]);
+      await pumpApp(tester);
+      // Empieza abajo del todo: subiendo y tirando con el mismo arrastre,
+      // no se busca.
+      final scrollable = tester.state<ScrollableState>(
+        find.byType(Scrollable).last,
+      );
+      expect(scrollable.position.pixels, greaterThan(0));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView)),
+      );
+      for (var i = 0; i < 100; i++) {
+        await gesture.moveBy(const Offset(0, 60));
+        await tester.pump();
+      }
+      expect(scrollable.position.pixels, lessThan(0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(searchField(), findsNothing);
+
+      // Ya arriba, sí.
+      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.pumpAndSettle();
+      expect(searchField(), findsOneWidget);
+    });
+
     testWidgets('un tirón corto no la abre', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
@@ -2200,7 +2355,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(repository.recordings.single.folder, 'Clases');
-      expect(find.text('2026-10-05 14.32'), findsOneWidget);
+      expect(find.text('14.32'), findsOneWidget);
     });
 
     testWidgets('el menú lateral se abre deslizando en la lista', (
@@ -2229,6 +2384,21 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const Key('new-folder')), findsNothing);
+      expect(find.byKey(const Key('piano-keyboard')), findsOneWidget);
+    });
+
+    testWidgets('deslizar desde el borde derecho (para ir atrás) no abre el '
+        'piano', (tester) async {
+      await pumpApp(tester);
+      final width =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+
+      await tester.dragFrom(Offset(width - 10, 300), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('piano-keyboard')), findsNothing);
+
+      await tester.dragFrom(Offset(width - 60, 300), const Offset(-300, 0));
+      await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-keyboard')), findsOneWidget);
     });
 
@@ -2541,8 +2711,8 @@ void main() {
       addTearDown(tester.view.reset);
     }
 
-    testWidgets('en horizontal, la pantalla no gira mientras está abierto y '
-        'al cerrarlo gira como diga el sistema', (tester) async {
+    testWidgets('en horizontal se ve sin girar, y la pantalla gira como '
+        'siempre', (tester) async {
       final orientations = watchOrientations(tester);
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
@@ -2550,9 +2720,8 @@ void main() {
       await tester.drag(find.text('Entrevista'), const Offset(-200, 0));
       await tester.pumpAndSettle();
       expect(keyboard(), findsOneWidget);
-      expect(orientations, [
-        ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight'],
-      ]);
+      // Sin fijar la orientación de la pantalla.
+      expect(orientations, isEmpty);
       // Sin girar.
       expect(
         tester.widget<RotatedBox>(find.byKey(const Key('piano-rotation'))),
@@ -2565,11 +2734,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(keyboard(), findsNothing);
       expect(find.text('Entrevista'), findsOneWidget);
-      expect(orientations.last, isEmpty);
+      expect(orientations, isEmpty);
     });
 
-    testWidgets('en vertical se ve girado desde que se desliza, y la '
-        'pantalla no gira al girar el móvil', (tester) async {
+    testWidgets('en vertical se ve girado desde que se desliza, y al girar '
+        'la pantalla se ve sin girar', (tester) async {
       portraitScreen(tester);
       final orientations = watchOrientations(tester);
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
@@ -2594,9 +2763,7 @@ void main() {
       // (abajo).
       final rect = tester.getRect(keyboard());
       expect(rect.height, greaterThan(rect.width));
-      expect(orientations, [
-        ['DeviceOrientation.portraitUp'],
-      ]);
+      expect(orientations, isEmpty);
       final height = rect.height / PianoPanel.initialKeyCount;
       await tester.tapAt(Offset(rect.left + 20, rect.top + height / 2));
       await tester.tapAt(Offset(rect.left + 20, rect.bottom - height / 2));
@@ -2612,14 +2779,82 @@ void main() {
       );
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(orientations.last, isEmpty);
       await openPiano(tester);
       await tester.pumpAndSettle();
       expect(
         tester.widget<RotatedBox>(find.byKey(const Key('piano-rotation'))),
         isA<RotatedBox>().having((box) => box.quarterTurns, 'turns', 3),
       );
+
+      // Al girar la pantalla, sin girar.
+      tester.view.physicalSize = const Size(2340, 1080);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<RotatedBox>(find.byKey(const Key('piano-rotation'))),
+        isA<RotatedBox>().having((box) => box.quarterTurns, 'turns', 0),
+      );
+      expect(keyboard(), findsOneWidget);
+      expect(orientations, isEmpty);
     });
+
+    testWidgets('en vertical, deslizar de lado lo cierra sin que suene', (
+      tester,
+    ) async {
+      portraitScreen(tester);
+      await pumpApp(tester);
+      await openPiano(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('piano-record')));
+      await tester.pump();
+
+      final rect = tester.getRect(keyboard());
+      final gesture = await tester.startGesture(
+        Offset(rect.left + 20, rect.top + 30),
+      );
+      await tester.pump();
+      expect(piano.played, [48]);
+      for (var i = 0; i < 10; i++) {
+        await gesture.moveBy(const Offset(40, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(keyboard(), findsNothing);
+      // La tecla del principio se calla y no suena ninguna otra.
+      expect(piano.stopped, [48]);
+      expect(piano.played, [48]);
+      // Ni se graba.
+      expect(editor.pianoSaves, isEmpty);
+    });
+
+    testWidgets(
+      'en vertical, deslizar a lo largo del teclado toca las teclas',
+      (tester) async {
+        portraitScreen(tester);
+        await pumpApp(tester);
+        await openPiano(tester);
+        await tester.pumpAndSettle();
+
+        final rect = tester.getRect(keyboard());
+        final height = rect.height / PianoPanel.initialKeyCount;
+        final gesture = await tester.startGesture(
+          Offset(rect.left + 20, rect.top + height / 2),
+        );
+        for (var i = 1; i <= 3; i++) {
+          await gesture.moveTo(
+            Offset(rect.left + 20, rect.top + height * (i + 0.5)),
+          );
+          await tester.pump();
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+
+        expect(keyboard(), findsOneWidget);
+        expect(piano.played, [48, 50, 52, 53]);
+        expect(piano.stopped, isEmpty);
+      },
+    );
 
     testWidgets('arrastrar de izquierda a derecha no lo cierra', (
       tester,
@@ -2882,7 +3117,7 @@ void main() {
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.text(saved.name), findsOneWidget);
+      expect(find.text(RecordingNames.withoutDate(saved.name)), findsOneWidget);
     });
 
     testWidgets('sin tocar nada no guarda, y lo dice', (tester) async {
@@ -2924,7 +3159,7 @@ void main() {
       expect(saved.hasVoice, isTrue);
       expect(saved.notes.single.key, 57);
       expect(editor.pianoAdded[saved.id], saved.notes);
-      expect(find.text(saved.name), findsOneWidget);
+      expect(find.text(RecordingNames.withoutDate(saved.name)), findsOneWidget);
 
       // Se recuerda qué se graba.
       await openPiano(tester);
