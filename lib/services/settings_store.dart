@@ -108,7 +108,7 @@ class AppSettings {
     this.transcription = const TranscriptionSettings(),
     this.searchSimilarWords = true,
     this.theme = AppTheme.system,
-    this.compactList = false,
+    this.compactList = true,
     this.instrument = Instrument.piano,
     this.synth = const SynthPatch(),
   });
@@ -163,8 +163,8 @@ class AppSettings {
   /// Tema de la app: el del sistema, claro u oscuro.
   final AppTheme theme;
 
-  /// Si la lista es compacta: cada grabación en poco espacio, con su onda
-  /// solo mientras está seleccionada.
+  /// Si la lista es compacta (por defecto): cada grabación en poco espacio,
+  /// con su onda solo mientras está seleccionada.
   final bool compactList;
 
   /// Con qué suenan las teclas del piano.
@@ -247,7 +247,7 @@ class AppSettings {
       'transcription': transcription.toJson(),
     if (!searchSimilarWords) 'searchSimilarWords': false,
     if (theme != AppTheme.system) 'theme': theme.name,
-    if (compactList) 'compactList': true,
+    if (!compactList) 'compactList': false,
     if (instrument != Instrument.piano) 'instrument': instrument.name,
     if (synth != const SynthPatch()) 'synth': synth.toJson(),
   };
@@ -273,7 +273,7 @@ class AppSettings {
       transcription: TranscriptionSettings.fromJson(json['transcription']),
       searchSimilarWords: json['searchSimilarWords'] != false,
       theme: AppTheme.values.asNameMap()[json['theme']] ?? AppTheme.system,
-      compactList: json['compactList'] == true,
+      compactList: json['compactList'] != false,
       instrument: Instrument.byName(json['instrument']) ?? Instrument.piano,
       synth: SynthPatch.fromJson(json['synth']),
     );

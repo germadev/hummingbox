@@ -25,9 +25,8 @@ import 'synth_controls.dart';
 /// desliza para abrirlo. La pantalla gira como siempre: al ponerla en
 /// horizontal, se ve sin girar.
 ///
-/// En horizontal, los arrastres no lo cierran (es fácil arrastrar sin querer
-/// al tocar). En vertical, deslizar de lado lo cierra, y la tecla que se
-/// pulsó al empezar deja de sonar.
+/// Los arrastres no lo cierran, para poder tocar deslizando el dedo por
+/// todas las teclas: se cierra con su botón (o con «atrás»).
 class PianoPanel extends StatefulWidget {
   const PianoPanel({
     super.key,
@@ -180,13 +179,6 @@ class _PianoPanelState extends State<PianoPanel> {
     widget.recorder.noteOff(key);
   }
 
-  /// La tecla [key] se pulsó al empezar a deslizar para cerrar el panel:
-  /// deja de sonar y no se graba.
-  void _cancel(int key) {
-    unawaited(widget.sound.stop(key));
-    widget.recorder.cancel(key);
-  }
-
   Future<void> _record(PianoRecordingMode mode) async {
     setState(() => _message = null);
     final error = await widget.onRecord(mode);
@@ -216,20 +208,7 @@ class _PianoPanelState extends State<PianoPanel> {
   @override
   Widget build(BuildContext context) {
     final portrait = MediaQuery.orientationOf(context) == Orientation.portrait;
-    // En horizontal, los arrastres horizontales no cierran el panel (solo
-    // se cierra con su botón o con «atrás»): al tocar es fácil arrastrar sin
-    // querer. En vertical, sí.
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque,
-      gestures: {
-        if (!portrait)
-          HorizontalDragGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<
-                HorizontalDragGestureRecognizer
-              >(HorizontalDragGestureRecognizer.new, (recognizer) {
-                recognizer.onUpdate = (_) {};
-              }),
-      },
+    return _NoCloseOnDrag(
       child: SafeArea(
         child: ValueListenableBuilder<int>(
           valueListenable: widget.portraitTurns,
@@ -248,17 +227,7 @@ class _PianoPanelState extends State<PianoPanel> {
                 child: Overlay.wrap(
                   child: Material(
                     type: MaterialType.transparency,
-                    child: _buildPanel(
-                      context,
-                      rotated: quarterTurns != 0,
-                      // Hacia donde se cierra: el borde de la pantalla en el
-                      // que está el panel.
-                      closeSwipe: portrait
-                          ? (Directionality.of(context) == TextDirection.ltr
-                                ? 1.0
-                                : -1.0)
-                          : null,
-                    ),
+                    child: _buildPanel(context, rotated: quarterTurns != 0),
                   ),
                 ),
               ),
@@ -269,11 +238,7 @@ class _PianoPanelState extends State<PianoPanel> {
     );
   }
 
-  Widget _buildPanel(
-    BuildContext context, {
-    required bool rotated,
-    double? closeSwipe,
-  }) {
+  Widget _buildPanel(BuildContext context, {required bool rotated}) {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final names = noteNames(l10n.noteNames);
@@ -386,8 +351,6 @@ class _PianoPanelState extends State<PianoPanel> {
                       names: names,
                       onPressed: _play,
                       onReleased: _release,
-                      closeSwipe: closeSwipe,
-                      onCancelled: _cancel,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -613,8 +576,6 @@ class PianoKeyboard extends StatefulWidget {
     required this.names,
     required this.onPressed,
     this.onReleased,
-    this.closeSwipe,
-    this.onCancelled,
   });
 
   final double firstKey;
@@ -627,15 +588,6 @@ class PianoKeyboard extends StatefulWidget {
   /// Al soltar una tecla (o salir de ella deslizando el dedo), si no la
   /// sigue pulsando otro dedo.
   final ValueChanged<int>? onReleased;
-
-  /// Si deslizar de lado cierra el panel (en vertical): hacia dónde, en la
-  /// pantalla (1, a la derecha; -1, a la izquierda). El dedo que lo hace deja
-  /// de tocar: su tecla se cancela ([onCancelled]) y no se tocan otras.
-  final double? closeSwipe;
-
-  /// La tecla de un dedo que desliza para cerrar el panel (ver
-  /// [closeSwipe]), si no la pulsa otro.
-  final ValueChanged<int>? onCancelled;
 
   /// Alto de las negras respecto al de las blancas.
   static const blackHeight = 0.6;
@@ -650,13 +602,6 @@ class PianoKeyboard extends StatefulWidget {
 class _PianoKeyboardState extends State<PianoKeyboard> {
   /// Tecla bajo cada dedo.
   final _pointers = <int, int>{};
-
-  /// Dónde empezó cada dedo, en la pantalla, mientras puede estar
-  /// deslizando para cerrar el panel.
-  final _starts = <int, Offset>{};
-
-  /// Dedos que deslizan para cerrar el panel: ya no tocan.
-  final _closing = <int>{};
 
   Set<int> get _pressed => _pointers.values.toSet();
 
@@ -700,43 +645,13 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
     if (key != null) widget.onPressed(key);
   }
 
-  void _down(PointerDownEvent event) {
-    if (widget.closeSwipe != null) _starts[event.pointer] = event.position;
-    _update(event.pointer, event.localPosition);
-  }
+  void _down(PointerDownEvent event) =>
+      _update(event.pointer, event.localPosition);
 
-  void _move(PointerMoveEvent event) {
-    if (_closing.contains(event.pointer)) return;
-    if (_isClosing(event)) {
-      _closing.add(event.pointer);
-      _starts.remove(event.pointer);
-      final key = _pointers[event.pointer];
-      if (key == null) return;
-      setState(() => _pointers.remove(event.pointer));
-      if (!_pointers.containsValue(key)) widget.onCancelled?.call(key);
-      return;
-    }
-    _update(event.pointer, event.localPosition);
-  }
+  void _move(PointerMoveEvent event) =>
+      _update(event.pointer, event.localPosition);
 
-  /// Si el dedo de [event] desliza de lado, hacia donde se cierra el panel.
-  bool _isClosing(PointerMoveEvent event) {
-    final direction = widget.closeSwipe;
-    final start = _starts[event.pointer];
-    if (direction == null || start == null) return false;
-    final moved = event.position - start;
-    final along = moved.dx * direction;
-    if (along > kTouchSlop && along > moved.dy.abs()) return true;
-    // Se mueve por el teclado: ya no es para cerrar.
-    if (moved.distance > kTouchSlop) _starts.remove(event.pointer);
-    return false;
-  }
-
-  void _up(int pointer) {
-    _starts.remove(pointer);
-    _closing.remove(pointer);
-    _release(pointer);
-  }
+  void _up(int pointer) => _release(pointer);
 
   void _release(int pointer) {
     if (!_pointers.containsKey(pointer)) return;
@@ -755,35 +670,56 @@ class _PianoKeyboardState extends State<PianoKeyboard> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    // Los arrastres horizontales son para tocar, no para cerrar el panel.
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _down,
+      onPointerMove: _move,
+      onPointerUp: (event) => _up(event.pointer),
+      onPointerCancel: (event) => _up(event.pointer),
+      child: CustomPaint(
+        size: Size.infinite,
+        painter: _KeyboardPainter(
+          firstKey: widget.firstKey,
+          whiteKeys: widget.whiteKeys,
+          names: widget.names,
+          pressed: _pressed,
+          pressedColor: colors.primary,
+          outline: colors.outlineVariant,
+          labelColor: colors.outline,
+        ),
+      ),
+    );
+  }
+}
+
+/// Los arrastres horizontales que empiezan en [child] y que no usa nada de
+/// dentro (p. ej. las octavas) no llegan al `Drawer` del piano: no lo
+/// cierran.
+///
+/// Con el mismo umbral que el `Drawer` (el del dispositivo, que en Android
+/// es menor que el de por defecto): si fuera mayor, el `Drawer` llegaría
+/// antes y se lo quedaría. Con el mismo, gana el de más adentro.
+class _NoCloseOnDrag extends StatelessWidget {
+  const _NoCloseOnDrag({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = MediaQuery.maybeGestureSettingsOf(context);
     return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
       gestures: {
         HorizontalDragGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<
               HorizontalDragGestureRecognizer
             >(HorizontalDragGestureRecognizer.new, (recognizer) {
-              recognizer.onUpdate = (_) {};
+              recognizer
+                ..gestureSettings = settings
+                ..onUpdate = (_) {};
             }),
       },
-      child: Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: _down,
-        onPointerMove: _move,
-        onPointerUp: (event) => _up(event.pointer),
-        onPointerCancel: (event) => _up(event.pointer),
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: _KeyboardPainter(
-            firstKey: widget.firstKey,
-            whiteKeys: widget.whiteKeys,
-            names: widget.names,
-            pressed: _pressed,
-            pressedColor: colors.primary,
-            outline: colors.outlineVariant,
-            labelColor: colors.outline,
-          ),
-        ),
-      ),
+      child: child,
     );
   }
 }

@@ -83,6 +83,14 @@ void main() {
     expect(const AppSettings().toJson().containsKey('theme'), isFalse);
   });
 
+  test('guarda la vista de la lista; por defecto, la compacta', () async {
+    expect((await store.load()).compactList, isTrue);
+    expect(const AppSettings().toJson().containsKey('compactList'), isFalse);
+
+    await store.save(const AppSettings(compactList: false));
+    expect((await store.load()).compactList, isFalse);
+  });
+
   test('guarda el instrumento del piano; por defecto, el piano', () async {
     expect((await store.load()).instrument, Instrument.piano);
 

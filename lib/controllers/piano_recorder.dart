@@ -128,10 +128,6 @@ class PianoRecorder extends ChangeNotifier {
     _held[key] = (elapsed, instrument, synth);
   }
 
-  /// La tecla [key] se pulsó sin querer (al deslizar para cerrar el
-  /// piano): no se graba.
-  void cancel(int key) => _held.remove(key);
-
   /// Se ha soltado la tecla [key].
   void noteOff(int key) {
     if (_held.remove(key) case (final start, final instrument, final synth)) {

@@ -78,10 +78,10 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   only drawn when the recording is selected.
 - While a recording plays (or is paused), a thin vertical line on its
   waveform marks where it is.
-- **Compact or detailed view**: the button to the left of Settings switches
-  the list between the detailed view and a compact one (one line with the
-  date and duration, and the waveform only on the selected recording). The
-  choice is remembered.
+- **Compact or detailed view**: the list is compact by default (one line
+  with the date and duration, and the waveform only on the selected
+  recording). The button to the left of Settings switches it to the detailed
+  view and back. The choice is remembered.
 - Each one shows the date ("Today", "Yesterday"…), duration, **format and
   quality** ("AAC · 128 kbps · 44.1 kHz") and the **full waveform**
   (none if it has no audible sound, such as piano-only or silent
@@ -89,8 +89,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   date at its start (`2026-10-05.Hello` shows as `Hello`), since the date is
   right below it.
 - **Tap a recording to select it**, without playing it: it is highlighted,
-  with its transcript. It plays only with its **play button**. Selecting
-  another one stops the one playing.
+  with its transcript. It plays only with its **play button** (or the one in
+  the bottom panel). Selecting another one stops the one playing.
 - **Names**: a new recording is called after its date and time
   (`2026-10-05 14.32`) and, when it is transcribed for the first time, after
   its date and the first words of the transcript
@@ -104,16 +104,20 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek. On a recording that isn't selected, it selects it at that point
   without playing it.
-- **Loop and playlist**: while a recording plays (or is paused), the bottom
-  panel shows a button to stop it in the middle, *Play one after another* on
+- **Loop and playlist**: while a recording is selected, the bottom panel
+  shows, in place of the record button, a button to stop it while it plays
+  or to play it (or resume it) otherwise, *Play one after another* on
   the left (when it ends, the next one in the list plays) and *Repeat* on the
   right (it starts again; with *Play one after another*, the whole list
   repeats). Both stay on until you turn them off, while the app is open.
+  Stopping it, or tapping outside the recordings, deselects it and brings
+  back the record button.
 - **Rename**, **share** (with the name you gave it) and **delete**.
 
 ## Folders
 
-The folder button (top left), or swiping right anywhere on the list, opens a
+The folder button (top left), or swiping right anywhere on the list (not
+from the left or right edge, where the system's Back gesture is), opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, next to the folder button
@@ -131,18 +135,16 @@ leave.
 ## Piano
 
 The piano button (at the bottom of the folders menu), or swiping left
-anywhere on the list (not from the right edge, where the system's Back
-gesture is), opens a piano across the whole screen to find the notes of what
-you hummed. It is always laid out in **landscape**, and the screen rotates as
-usual while it is open:
+anywhere on the list (not from the left or right edge, where the system's
+Back gesture is), opens a piano across the whole screen to find the notes of what
+you hummed. Swiping on it doesn't close it, so you can slide your finger
+across all the keys: close it with its button (or Back). It is always laid
+out in **landscape**, and the screen rotates as usual while it is open:
 
 - With the phone in **portrait**, the piano is drawn sideways, already while
   it slides in. The button next to the close button turns it around if it
-  shows upside down (it is remembered). Swiping sideways closes it; the key
-  touched when the swipe starts stops sounding and isn't recorded.
-- With the phone in **landscape**, it is drawn normally, and horizontal
-  swipes don't close it (it's easy to swipe while playing): close it with its
-  button or Back.
+  shows upside down (it is remembered).
+- With the phone in **landscape**, it is drawn normally.
 - Each key has its own player with its sound already loaded, so it sounds as
   soon as it is touched.
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'package:voicerecorder/services/audio_player_service.dart';
 import 'package:voicerecorder/services/transcriber.dart';
 import 'package:voicerecorder/services/settings_store.dart';
 import 'package:voicerecorder/widgets/record_panel.dart';
+import 'package:voicerecorder/widgets/recording_tile.dart';
 import 'package:voicerecorder/widgets/waveform_seek_bar.dart';
 import 'package:voicerecorder/widgets/folder_drawer.dart';
 import 'package:voicerecorder/utils/recording_names.dart';
@@ -50,8 +52,14 @@ void main() {
     repository = InMemoryRecordingsRepository();
     recorder = FakeAudioRecorderService();
     player = FakeAudioPlayerService();
+    // En la vista detallada, salvo en los tests de la compacta (la de por
+    // defecto).
     store = InMemorySettingsStore(
-      const AppSettings(folder: testFolder, transcription: manual),
+      const AppSettings(
+        folder: testFolder,
+        transcription: manual,
+        compactList: false,
+      ),
     );
     folders = FakeFolderAccess();
     drive = FakeDriveService();
@@ -115,6 +123,23 @@ void main() {
   }
 
   Finder record() => find.byKey(const Key('record-button'));
+
+  /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
+  /// botón y de la onda.
+  Future<void> tapCard(WidgetTester tester, String duration) async {
+    await tester.tap(find.textContaining(duration));
+    await tester.pumpAndSettle();
+  }
+
+  /// El botón con [tooltip] de la tarjeta de la grabación [id] (no el del
+  /// panel de abajo).
+  Finder tileButton(String id, String tooltip) => find.descendant(
+    of: find.ancestor(
+      of: find.byKey(Key('name-$id')),
+      matching: find.byType(RecordingTile),
+    ),
+    matching: find.byTooltip(tooltip),
+  );
 
   testWidgets('muestra un mensaje cuando no hay grabaciones', (tester) async {
     await pumpApp(tester);
@@ -232,7 +257,7 @@ void main() {
     await tester.tap(find.byTooltip('Pausar'));
     await tester.pumpAndSettle();
     expect(player.calls.last, 'pause');
-    expect(find.byTooltip('Reproducir'), findsOneWidget);
+    expect(tileButton('a', 'Reproducir'), findsOneWidget);
   });
 
   testWidgets('mientras suena, una línea fina marca por dónde va', (
@@ -838,13 +863,6 @@ void main() {
   });
 
   group('selección', () {
-    /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
-    /// botón y de la onda.
-    Future<void> tapCard(WidgetTester tester, String duration) async {
-      await tester.tap(find.textContaining(duration));
-      await tester.pumpAndSettle();
-    }
-
     testWidgets('tocar una grabación la selecciona sin reproducirla; suena '
         'con su botón, y al seleccionar otra se para', (tester) async {
       repository = InMemoryRecordingsRepository([
@@ -968,7 +986,8 @@ void main() {
       expect(find.text('00:41'), findsOneWidget);
       expect(find.text('01:23'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Reproducir'));
+      // El de la tarjeta (el otro está en el panel de abajo).
+      await tester.tap(tileButton('a', 'Reproducir'));
       await tester.pumpAndSettle();
       expect(player.calls, ['play /fake/a.m4a @41500']);
 
@@ -1759,16 +1778,24 @@ void main() {
       );
     });
 
-    testWidgets('el botón de la vista, a la izquierda de las opciones, cambia '
-        'entre la vista detallada y la compacta, y se recuerda', (
-      tester,
-    ) async {
+    testWidgets('la vista es compacta por defecto; el botón de la vista, a '
+        'la izquierda de las opciones, cambia a la detallada y vuelve, y se '
+        'recuerda', (tester) async {
+      store.settings = const AppSettings(folder: testFolder);
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
       final view = find.byKey(const Key('view-mode-button'));
       final settings = tester.getRect(find.byKey(const Key('settings-button')));
       expect(tester.getRect(view).right, settings.left);
-      // Detallada: el formato y la onda.
+      // Compacta: sin el formato ni la onda.
+      expect(find.byKey(const Key('audio-info-a')), findsNothing);
+      expect(find.byKey(const Key('waveform-a')), findsNothing);
+      expect(find.byTooltip('Vista detallada'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Vista detallada'));
+      await tester.pumpAndSettle();
+
+      expect(store.settings.compactList, isFalse);
       expect(find.byKey(const Key('audio-info-a')), findsOneWidget);
       expect(find.byKey(const Key('waveform-a')), findsOneWidget);
 
@@ -1778,10 +1805,9 @@ void main() {
       expect(store.settings.compactList, isTrue);
       expect(find.byKey(const Key('audio-info-a')), findsNothing);
       expect(find.byKey(const Key('waveform-a')), findsNothing);
-      expect(find.byTooltip('Vista detallada'), findsOneWidget);
 
       // La seleccionada sí tiene la onda, para saltar.
-      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.tap(tileButton('a', 'Reproducir'));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('waveform-a')), findsOneWidget);
 
@@ -2295,8 +2321,8 @@ void main() {
 
   group('carpetas', () {
     Future<void> openDrawer(WidgetTester tester) async {
-      // Deslizando desde el borde izquierdo.
-      await tester.dragFrom(const Offset(2, 300), const Offset(300, 0));
+      // Deslizando hacia la derecha en la lista, lejos del borde.
+      await tester.dragFrom(const Offset(100, 300), const Offset(300, 0));
       await tester.pumpAndSettle();
     }
 
@@ -2396,10 +2422,30 @@ void main() {
       await tester.dragFrom(Offset(width - 10, 300), const Offset(-300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-keyboard')), findsNothing);
+      // Ni hacia el otro lado abre las carpetas.
+      await tester.dragFrom(Offset(width - 10, 300), const Offset(-30, 0));
+      await tester.dragFrom(Offset(width - 40, 300), const Offset(30, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsNothing);
 
       await tester.dragFrom(Offset(width - 60, 300), const Offset(-300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-keyboard')), findsOneWidget);
+    });
+
+    testWidgets('deslizar desde el borde izquierdo (para ir atrás) no abre '
+        'las carpetas', (tester) async {
+      await pumpApp(tester);
+
+      for (final x in [2.0, 10.0, 30.0]) {
+        await tester.dragFrom(Offset(x, 300), const Offset(300, 0));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-folder')), findsNothing);
+      }
+
+      await tester.dragFrom(const Offset(60, 300), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {
@@ -2562,6 +2608,49 @@ void main() {
       expect(record(), findsOneWidget);
     });
 
+    testWidgets('con una seleccionada, sin sonar: reproducir en el centro, '
+        'con la lista y repetir', (tester) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      expect(find.byKey(const Key('play-selected-button')), findsNothing);
+
+      await tapCard(tester, '01:23');
+      expect(player.calls, isEmpty);
+      expect(record(), findsNothing);
+      expect(find.byKey(const Key('stop-playback-button')), findsNothing);
+      final play = tester.getCenter(
+        find.byKey(const Key('play-selected-button')),
+      );
+      expect(
+        tester.getCenter(find.byKey(const Key('playlist-button'))).dx,
+        lessThan(play.dx),
+      );
+      expect(
+        tester.getCenter(find.byKey(const Key('loop-button'))).dx,
+        greaterThan(play.dx),
+      );
+
+      // Reproduce la seleccionada, y el centro pasa a parar.
+      await tester.tap(find.byKey(const Key('play-selected-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls, ['play /fake/a.m4a @0']);
+      expect(find.byKey(const Key('play-selected-button')), findsNothing);
+      expect(find.byKey(const Key('stop-playback-button')), findsOneWidget);
+
+      // En pausa, reproducir sigue.
+      await tester.tap(tileButton('a', 'Pausar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('play-selected-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'resume');
+
+      // Parar la quita, y vuelve el botón de grabar.
+      await tester.tap(find.byKey(const Key('stop-playback-button')));
+      await tester.pumpAndSettle();
+      expect(record(), findsOneWidget);
+      expect(find.byKey(const Key('playlist-button')), findsNothing);
+    });
+
     testWidgets('repetir vuelve a empezar la misma', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
@@ -2703,6 +2792,15 @@ void main() {
       return orientations;
     }
 
+    /// El umbral de los arrastres de Android (8 puntos), menor que el de
+    /// por defecto en los tests.
+    void androidTouchSlop(WidgetTester tester) {
+      tester.view.gestureSettings = ui.GestureSettings(
+        physicalTouchSlop: 8 * tester.view.devicePixelRatio,
+      );
+      addTearDown(tester.view.resetGestureSettings);
+    }
+
     /// Pantalla de un móvil en vertical.
     void portraitScreen(WidgetTester tester) {
       tester.view
@@ -2797,35 +2895,41 @@ void main() {
       expect(orientations, isEmpty);
     });
 
-    testWidgets('en vertical, deslizar de lado lo cierra sin que suene', (
-      tester,
-    ) async {
+    testWidgets('en vertical, deslizar de lado no lo cierra', (tester) async {
       portraitScreen(tester);
+      androidTouchSlop(tester);
       await pumpApp(tester);
       await openPiano(tester);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('piano-record')));
-      await tester.pump();
 
+      // Por las teclas y por la cabecera, poco a poco y deprisa.
       final rect = tester.getRect(keyboard());
       final gesture = await tester.startGesture(
         Offset(rect.left + 20, rect.top + 30),
       );
       await tester.pump();
       expect(piano.played, [48]);
-      for (var i = 0; i < 10; i++) {
-        await gesture.moveBy(const Offset(40, 0));
+      for (var i = 0; i < 60; i++) {
+        await gesture.moveBy(const Offset(4, 0));
         await tester.pump();
       }
       await gesture.up();
       await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(piano.stopped, isEmpty);
 
+      await tester.flingFrom(
+        Offset(rect.left - 10, rect.center.dy),
+        const Offset(300, 0),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+
+      // Se cierra con su botón.
+      await tester.tap(find.byTooltip('Cerrar'));
+      await tester.pumpAndSettle();
       expect(keyboard(), findsNothing);
-      // La tecla del principio se calla y no suena ninguna otra.
-      expect(piano.stopped, [48]);
-      expect(piano.played, [48]);
-      // Ni se graba.
-      expect(editor.pianoSaves, isEmpty);
     });
 
     testWidgets(
@@ -2859,9 +2963,24 @@ void main() {
     testWidgets('arrastrar de izquierda a derecha no lo cierra', (
       tester,
     ) async {
+      androidTouchSlop(tester);
       await pumpApp(tester);
       await openPiano(tester);
       await tester.pumpAndSettle();
+
+      // Por todas las teclas, poco a poco: suenan todas.
+      final from = whiteKey(tester, 0);
+      final to = whiteKey(tester, 4);
+      final gesture = await tester.startGesture(from);
+      for (var x = from.dx; x < to.dx; x += 4) {
+        await gesture.moveTo(Offset(x, from.dy));
+        await tester.pump();
+      }
+      await gesture.moveTo(to);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(piano.played, [48, 50, 52, 53, 55]);
 
       // En la cabecera, fuera de las teclas.
       await tester.dragFrom(
@@ -3213,7 +3332,10 @@ void main() {
           hasVoice: false,
         ),
       ]);
-      store.settings = const AppSettings(folder: testFolder);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        compactList: false,
+      );
       await pumpApp(tester);
 
       final paint = tester.widget<CustomPaint>(
