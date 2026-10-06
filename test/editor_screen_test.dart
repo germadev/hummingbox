@@ -95,6 +95,26 @@ void main() {
     expect(canSave(tester), isFalse);
   });
 
+  testWidgets('una de solo notas solo se recorta: sin volumen ni fundidos', (
+    tester,
+  ) async {
+    recording = Recording(
+      id: 'm',
+      path: '/fake/m.mid',
+      name: 'Melodía',
+      createdAt: DateTime(2026, 9, 28),
+      duration: const Duration(seconds: 10),
+    );
+    await pumpEditor(tester);
+
+    expect(find.byKey(const Key('trim-waveform')), findsOneWidget);
+    expect(find.byKey(const Key('preview-button')), findsOneWidget);
+    expect(find.byKey(const Key('gain-slider')), findsNothing);
+    expect(find.text('Normalizar'), findsNothing);
+    expect(find.byKey(const Key('fade-in-slider')), findsNothing);
+    expect(find.byKey(const Key('fade-out-slider')), findsNothing);
+  });
+
   testWidgets('normaliza y avisa si el audio se va a saturar', (tester) async {
     await pumpEditor(tester);
 

@@ -3229,6 +3229,9 @@ void main() {
 
       final saved = repository.recordings.single;
       expect(saved.hasVoice, isFalse);
+      // Sin audio: solo las notas, en un .mid.
+      expect(saved.isNotesOnly, isTrue);
+      expect(saved.path, endsWith('.mid'));
       expect(saved.folder, 'Ideas');
       expect(saved.notes.map((n) => n.key), [48, 52]);
       expect(recorder.calls, isEmpty);
@@ -3356,6 +3359,50 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Transcribir'), findsNothing);
       expect(find.text('Compartir'), findsOneWidget);
+    });
+
+    testWidgets('las de solo notas suenan con el sonido de sus notas, sin '
+        'onda, y las añadidas desde fuera leen las notas de su .mid', (
+      tester,
+    ) async {
+      const notes = [
+        PianoNote(
+          key: 60,
+          start: Duration(seconds: 1),
+          duration: Duration(milliseconds: 500),
+        ),
+      ];
+      repository = InMemoryRecordingsRepository([
+        Recording(
+          id: 'm',
+          path: '/fake/m.mid',
+          name: 'Melodía',
+          createdAt: DateTime(2026, 9, 28),
+          duration: Duration.zero,
+        ),
+      ]);
+      store.settings = const AppSettings(
+        folder: testFolder,
+        compactList: false,
+        transcription: manual,
+      );
+      await pumpApp(tester, (editor) => editor.midiNotes = notes);
+      await tester.pumpAndSettle();
+
+      expect(editor.notesRead, ['m']);
+      final read = repository.byId('m');
+      expect(read.notes, notes);
+      expect(read.duration, const Duration(milliseconds: 2600));
+      expect(find.text('MIDI'), findsOneWidget);
+      // Ni onda ni formato que leer de un audio.
+      expect(editor.extracted, isEmpty);
+
+      await tester.tap(find.byTooltip('Reproducir'));
+      await tester.pumpAndSettle();
+      expect(editor.pianoAudios, ['m']);
+      expect(player.calls.last, 'play /fake/piano/m.wav @0');
+      // Ya tiene sus notas: no se vuelven a leer.
+      expect(editor.notesRead, ['m']);
     });
 
     testWidgets('desde una grabación, «Añadir piano» toca sobre ella mientras '

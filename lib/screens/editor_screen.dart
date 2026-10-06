@@ -422,8 +422,6 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final theme = Theme.of(context);
     final l10n = context.l10n;
-    final maxFade = _maxFadeFor(_edit);
-    final gainLabel = formatGain(_edit.gainDb);
 
     return AbsorbPointer(
       absorbing: _saving,
@@ -477,77 +475,89 @@ class _EditorScreenState extends State<EditorScreen> {
               onPressed: _togglePreview,
             ),
           ),
-          const Divider(height: 32),
-          _SectionHeader(
-            icon: Icons.volume_up_outlined,
-            title: l10n.volume,
-            value: gainLabel,
-          ),
-          Slider(
-            key: const Key('gain-slider'),
-            value: _edit.gainDb,
-            min: _minGainDb,
-            max: _maxGainDb,
-            divisions: ((_maxGainDb - _minGainDb) * 2).round(),
-            onChanged: (value) => _setEdit(_edit.copyWith(gainDb: value)),
-          ),
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                icon: const Icon(Icons.auto_fix_high),
-                label: Text(l10n.normalize),
-                onPressed: _selectionPeak > 0 ? _normalize : null,
-              ),
-              if (_clips)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 20,
-                      color: theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.clippingWarning,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-          const Divider(height: 32),
-          _SectionHeader(
-            icon: Icons.trending_up,
-            title: l10n.fadeIn,
-            value: formatSeconds(_edit.fadeIn),
-          ),
-          _FadeSlider(
-            key: const Key('fade-in-slider'),
-            value: _edit.fadeIn,
-            max: maxFade,
-            onChanged: (value) => _setEdit(_edit.copyWith(fadeIn: value)),
-          ),
-          _SectionHeader(
-            icon: Icons.trending_down,
-            title: l10n.fadeOut,
-            value: formatSeconds(_edit.fadeOut),
-          ),
-          _FadeSlider(
-            key: const Key('fade-out-slider'),
-            value: _edit.fadeOut,
-            max: maxFade,
-            onChanged: (value) => _setEdit(_edit.copyWith(fadeOut: value)),
-          ),
-          const SizedBox(height: 8),
+          // Sin audio, solo se recortan las notas.
+          if (!widget.recording.isNotesOnly) ..._buildSoundControls(),
         ],
       ),
     );
+  }
+
+  /// El volumen y los fundidos.
+  List<Widget> _buildSoundControls() {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final maxFade = _maxFadeFor(_edit);
+    final gainLabel = formatGain(_edit.gainDb);
+    return [
+      const Divider(height: 32),
+      _SectionHeader(
+        icon: Icons.volume_up_outlined,
+        title: l10n.volume,
+        value: gainLabel,
+      ),
+      Slider(
+        key: const Key('gain-slider'),
+        value: _edit.gainDb,
+        min: _minGainDb,
+        max: _maxGainDb,
+        divisions: ((_maxGainDb - _minGainDb) * 2).round(),
+        onChanged: (value) => _setEdit(_edit.copyWith(gainDb: value)),
+      ),
+      Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          OutlinedButton.icon(
+            icon: const Icon(Icons.auto_fix_high),
+            label: Text(l10n.normalize),
+            onPressed: _selectionPeak > 0 ? _normalize : null,
+          ),
+          if (_clips)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 20,
+                  color: theme.colorScheme.error,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  l10n.clippingWarning,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+      const Divider(height: 32),
+      _SectionHeader(
+        icon: Icons.trending_up,
+        title: l10n.fadeIn,
+        value: formatSeconds(_edit.fadeIn),
+      ),
+      _FadeSlider(
+        key: const Key('fade-in-slider'),
+        value: _edit.fadeIn,
+        max: maxFade,
+        onChanged: (value) => _setEdit(_edit.copyWith(fadeIn: value)),
+      ),
+      _SectionHeader(
+        icon: Icons.trending_down,
+        title: l10n.fadeOut,
+        value: formatSeconds(_edit.fadeOut),
+      ),
+      _FadeSlider(
+        key: const Key('fade-out-slider'),
+        value: _edit.fadeOut,
+        max: maxFade,
+        onChanged: (value) => _setEdit(_edit.copyWith(fadeOut: value)),
+      ),
+      const SizedBox(height: 8),
+    ];
   }
 }
 

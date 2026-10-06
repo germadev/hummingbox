@@ -109,13 +109,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: l10n.format,
       selected: options.format,
       choices: [
-        for (final format in RecordingFormat.values)
+        for (final format in RecordingFormat.audio)
           Choice(
             format,
             _formatTitle(format),
             subtitle: switch (format) {
               RecordingFormat.aac => l10n.aacDescription,
-              RecordingFormat.wav => l10n.wavDescription,
+              RecordingFormat.wav ||
+              RecordingFormat.midi => l10n.wavDescription,
             },
           ),
       ],
@@ -328,7 +329,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     formatSampleRate(options.sampleRate),
     switch (options.format) {
       RecordingFormat.aac => formatBitRate(options.bitRate),
-      RecordingFormat.wav => l10n.bitDepth(16),
+      RecordingFormat.wav || RecordingFormat.midi => l10n.bitDepth(16),
     },
     l10n.perMinute(formatMegabytes(options.bytesPerMinute)),
   ].join(' · ');

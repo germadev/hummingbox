@@ -35,7 +35,8 @@ Google Drive.
   more or fewer keys. Play it as a piano, organ, guitar, marimba or a
   synthesizer with its own controls. Record it alone, with your voice or
   over a recording; the notes are drawn like
-  a MIDI editor and saved as `.mid` files next to the audio.
+  a MIDI editor and saved as `.mid` files next to the audio. Piano-only
+  recordings are just the `.mid`, with no audio file.
 - **Named for you**: new recordings are named after their date and the first
   words of their transcript (`2026-10-05.Hello, how are you`).
 - **Transcribe** automatically, in the background, on the device with the

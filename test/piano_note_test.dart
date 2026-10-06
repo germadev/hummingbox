@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
+import 'package:voicerecorder/models/synth_patch.dart';
 
 void main() {
   test('en los metadatos, el instrumento solo si no es el piano', () {
@@ -25,7 +26,7 @@ void main() {
     expect(
       PianoNote.listFromJson([
         [60, 0, 100, 'theremin'],
-        [60, 0, 100, 'organ', 'extra'],
+        [60, 0, 100, 'organ', 'extra', 'more'],
         [60, 0],
       ]),
       [
@@ -36,6 +37,30 @@ void main() {
         ),
       ],
     );
+  });
+
+  test('en los metadatos, el sonido del sintetizador si no es el de por '
+      'defecto', () {
+    const synth = SynthPatch(wave: SynthWave.square, sustain: 0.5);
+    const custom = PianoNote(
+      key: 60,
+      start: Duration.zero,
+      duration: Duration(milliseconds: 100),
+      instrument: Instrument.synth,
+      synth: synth,
+    );
+    const plain = PianoNote(
+      key: 62,
+      start: Duration(milliseconds: 100),
+      duration: Duration(milliseconds: 100),
+      instrument: Instrument.synth,
+    );
+    expect(plain.toJson(), [62, 100, 100, 'synth']);
+    expect(custom.toJson(), hasLength(5));
+    final read = PianoNote.listFromJson([custom.toJson(), plain.toJson()]);
+    expect(read, [custom, plain]);
+    expect(read.first.synth, synth);
+    expect(read.last.synth, const SynthPatch());
   });
 
   test('al recortar, cada nota conserva su instrumento', () {

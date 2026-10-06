@@ -66,10 +66,11 @@ String formatGain(double db) {
 String formatSeconds(Duration duration) =>
     '${NumberFormat('0.0').format(duration.inMilliseconds / 1000)} s';
 
-/// Nombre corto de un formato: `AAC` o `WAV`.
+/// Nombre corto de un formato: `AAC`, `WAV` o `MIDI`.
 String formatName(RecordingFormat format) => switch (format) {
   RecordingFormat.aac => 'AAC',
   RecordingFormat.wav => 'WAV',
+  RecordingFormat.midi => 'MIDI',
 };
 
 /// Frecuencia de muestreo: `44,1 kHz`, `16 kHz`.

@@ -50,6 +50,7 @@ class RecordAudioRecorderService implements AudioRecorderService {
         encoder: switch (options.format) {
           RecordingFormat.aac => AudioEncoder.aacLc,
           RecordingFormat.wav => AudioEncoder.wav,
+          RecordingFormat.midi => throw ArgumentError('No se graba en MIDI'),
         },
         bitRate: options.bitRate,
         sampleRate: options.sampleRate,

@@ -5,9 +5,12 @@ import 'package:path/path.dart' as p;
 import 'package:voicerecorder/audio/audio_edit.dart';
 import 'package:voicerecorder/audio/audio_info.dart';
 import 'package:voicerecorder/audio/levels.dart';
+import 'package:voicerecorder/audio/midi.dart';
+import 'package:voicerecorder/models/instrument.dart';
 import 'package:voicerecorder/models/piano_note.dart';
 import 'package:voicerecorder/models/recording.dart';
 import 'package:voicerecorder/models/recording_options.dart';
+import 'package:voicerecorder/models/synth_patch.dart';
 import 'package:voicerecorder/services/recording_editor.dart';
 import 'package:voicerecorder/services/recordings_repository.dart';
 
@@ -244,30 +247,178 @@ void main() {
     int firstSound(List<int> samples) =>
         samples.indexWhere((s) => s.abs() > 50);
 
-    test('guarda solo el piano: cada nota suena cuando se tocó', () async {
+    test('guarda solo el piano sin audio: un .mid con las notas', () async {
       final editor = newEditor();
       final saved = await editor.savePiano(
         notes: notes,
         duration: const Duration(seconds: 2),
-        options: const RecordingOptions(format: RecordingFormat.wav),
         folder: 'Ideas',
       );
 
+      expect(saved.isNotesOnly, isTrue);
       expect(saved.hasVoice, isFalse);
       expect(saved.notes, notes);
       expect(saved.folder, 'Ideas');
-      expect(saved.format, RecordingFormat.wav);
+      expect(saved.format, RecordingFormat.midi);
+      expect(p.extension(saved.path), '.mid');
+      expect(saved.waveform, isNull);
       // Dura hasta que se apaga la última nota.
       expect(saved.duration, const Duration(milliseconds: 3100));
+      // No se crea ningún audio, ni en la app ni en los temporales.
+      expect(Midi.decode(File(saved.path).readAsBytesSync()), notes);
+      expect(
+        library.listSync().where(
+          (e) => RecordingFormat.fromPath(e.path)?.isAudio ?? false,
+        ),
+        hasLength(1),
+      );
+      expect(temp.listSync(recursive: true).whereType<File>(), isEmpty);
 
-      final samples = await readSamples(saved.path);
-      final rate = const RecordingOptions(format: RecordingFormat.wav)
-          .sampleRate;
+      final loaded = (await repository.loadAll()).singleWhere(
+        (r) => r.id == saved.id,
+      );
+      expect(loaded.isNotesOnly, isTrue);
+      expect(loaded.hasVoice, isFalse);
+      expect(loaded.notes, notes);
+    });
+
+    test('genera el sonido de las notas para escucharlas: cada una cuando '
+        'se tocó, y solo una vez', () async {
+      final editor = newEditor();
+      final saved = await editor.savePiano(
+        notes: notes,
+        duration: const Duration(seconds: 2),
+      );
+
+      final path = await editor.pianoAudio(saved);
+
+      final samples = await readSamples(path);
+      const rate = RecordingEditor.pianoSampleRate;
+      expect(samples.length, rate * 3100 ~/ 1000);
       expect(firstSound(samples), closeTo(rate * 0.5, rate * 0.01));
       // Entre que empieza la primera y la segunda pasa un segundo, como al
       // tocarlas.
       final second = firstSound(samples.sublist(rate * 1495 ~/ 1000));
       expect(second, lessThan(rate * 0.02));
+
+      final modified = File(path).lastModifiedSync();
+      expect(await editor.pianoAudio(saved), path);
+      expect(File(path).lastModifiedSync(), modified);
+
+      // Con otras notas, otro sonido (y el anterior se borra).
+      final more = await editor.addPiano(saved, [
+        const PianoNote(
+          key: 67,
+          start: Duration(milliseconds: 100),
+          duration: Duration(milliseconds: 100),
+        ),
+      ]);
+      final other = await editor.pianoAudio(more);
+      expect(other, isNot(path));
+      expect(File(other).existsSync(), isTrue);
+      expect(File(path).existsSync(), isFalse);
+    });
+
+    test('el sintetizador suena como cuando se tocó', () async {
+      final editor = newEditor();
+      const synth = SynthPatch(
+        wave: SynthWave.sine,
+        release: Duration(seconds: 2),
+      );
+      final saved = await editor.savePiano(
+        notes: const [
+          PianoNote(
+            key: 60,
+            start: Duration.zero,
+            duration: Duration(milliseconds: 100),
+            instrument: Instrument.synth,
+            synth: synth,
+          ),
+        ],
+        duration: const Duration(milliseconds: 200),
+      );
+
+      final loaded = (await repository.loadAll()).singleWhere(
+        (r) => r.id == saved.id,
+      );
+      expect(loaded.notes.single.synth, synth);
+      // Lo que se mantuvo más lo que tarda en apagarse.
+      expect(loaded.duration, const Duration(milliseconds: 2100));
+    });
+
+    test('al añadir piano a una de solo notas, se suman a su .mid sin '
+        'crear audio', () async {
+      final editor = newEditor();
+      final saved = await editor.savePiano(
+        notes: [notes[1]],
+        duration: const Duration(seconds: 2),
+      );
+
+      final added = await editor.addPiano(saved, [notes[0]]);
+
+      expect(added.isNotesOnly, isTrue);
+      expect(added.notes, notes);
+      expect(added.revision, 1);
+      expect(Midi.decode(File(added.path).readAsBytesSync()), notes);
+    });
+
+    test('al editar una de solo notas, se recortan las notas', () async {
+      final editor = newEditor();
+      final saved = await editor.savePiano(
+        notes: notes,
+        duration: const Duration(seconds: 2),
+      );
+      final session = await editor.open(saved);
+      expect(session.duration, const Duration(milliseconds: 3100));
+
+      const edit = AudioEdit(
+        start: Duration(milliseconds: 1000),
+        end: Duration(milliseconds: 2500),
+        gainDb: 6,
+      );
+      final copy = await editor.save(
+        session,
+        edit,
+        asCopy: true,
+        copyName: 'Copia',
+      );
+      final edited = await editor.save(session, edit, asCopy: false);
+      await editor.close(session);
+
+      const trimmed = [
+        PianoNote(
+          key: 64,
+          start: Duration(milliseconds: 500),
+          duration: Duration(milliseconds: 300),
+        ),
+      ];
+      for (final recording in [copy, edited]) {
+        expect(recording.isNotesOnly, isTrue);
+        expect(recording.notes, trimmed);
+        expect(recording.duration, const Duration(milliseconds: 1500));
+        expect(Midi.decode(File(recording.path).readAsBytesSync()), trimmed);
+      }
+      expect(copy.name, 'Copia');
+      expect(edited.id, saved.id);
+      expect(edited.revision, 1);
+    });
+
+    test('lee las notas del .mid de una añadida desde fuera', () async {
+      final editor = newEditor();
+      final path = await repository.createRecordingPath(
+        format: RecordingFormat.midi,
+      );
+      File(path).writeAsBytesSync(Midi.encode(notes));
+      final imported = (await repository.add(
+        path: path,
+        duration: Duration.zero,
+      ))!;
+      expect(imported.hasVoice, isFalse);
+
+      final read = await editor.readNotes(imported);
+
+      expect(read.notes, notes);
+      expect(read.duration, const Duration(milliseconds: 3100));
     });
 
     test('añade el piano a la voz y conserva la onda de la voz', () async {
