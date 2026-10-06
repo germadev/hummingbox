@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -114,6 +115,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   late final StreamSubscription<int> _changes;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  /// Si está abierto el menú de las carpetas (ver [_BackEdgeGuard]).
+  final _drawerOpen = ValueNotifier(false);
+
   /// Búsqueda en los nombres y las transcripciones.
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
@@ -206,6 +210,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _pianoPortraitTurns.dispose();
     _pianoMode.dispose();
     _pianoTarget.dispose();
+    _drawerOpen.dispose();
     _pianoRecorder.dispose();
     _scroll.dispose();
     widget.sync.removeListener(_updateScreen);
@@ -1552,6 +1557,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             : () => _scaffoldKey.currentState?.openEndDrawer(),
       ),
       onDrawerChanged: (opened) {
+        _drawerOpen.value = opened;
         if (opened) _syncStorage();
       },
       // No desde el borde, donde se va atrás con los gestos del sistema.
@@ -1639,7 +1645,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) unawaited(_onBack());
       },
-      child: scaffold,
+      child: _BackEdgeGuard(drawerOpen: _drawerOpen, child: scaffold),
     );
   }
 
@@ -1856,6 +1862,46 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
         }
       },
       child: widget.child,
+    );
+  }
+}
+
+/// Con el menú de las carpetas abierto, los toques que empiezan junto al
+/// borde de fuera del menú (el derecho, o el izquierdo en los idiomas que se
+/// escriben de derecha a izquierda) no llegan a [child]: desde ahí se va
+/// atrás con los gestos del sistema, que empiezan con un toque en la app que
+/// el sistema cancela al reconocerlos. Si llegara, arrastraría el menú y, al
+/// cancelarse, lo cerraría como un gesto rápido; el «atrás» que llega
+/// después lo volvería a abrir en lugar de salir de la app.
+class _BackEdgeGuard extends StatelessWidget {
+  const _BackEdgeGuard({required this.drawerOpen, required this.child});
+
+  final ValueListenable<bool> drawerOpen;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final insets = MediaQuery.systemGestureInsetsOf(context);
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        PositionedDirectional(
+          top: 0,
+          bottom: 0,
+          end: 0,
+          width: math.max(
+            _SwipeToOpenDrawersState.edgeMargin,
+            rtl ? insets.left : insets.right,
+          ),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: drawerOpen,
+            builder: (context, open, _) =>
+                AbsorbPointer(absorbing: open, child: const SizedBox.expand()),
+          ),
+        ),
+      ],
     );
   }
 }
