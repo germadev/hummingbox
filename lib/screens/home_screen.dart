@@ -101,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   late final PlayerController _player = PlayerController(
     player: widget.playerFactory(),
-    audioPath: widget.sync.audioPath,
+    audioPath: _playbackPath,
     // Con «reproducir lista», sigue con la siguiente de las que se ven.
     queue: () => _visibleRecordings,
   );
@@ -244,17 +244,25 @@ class _HomeScreenState extends State<HomeScreen> {
     await _transcribeMissing();
   }
 
+  /// Ruta local del audio de [recording] para escucharla: el sonido
+  /// generado con sus notas si es solo de notas.
+  Future<String> _playbackPath(Recording recording) => recording.isNotesOnly
+      ? widget.editor.pianoAudio(recording)
+      : widget.sync.audioPath(recording);
+
   bool _addingDetails = false;
   bool _detailsPending = false;
 
   /// Calcula lo que les falta a las grabaciones hechas con versiones
   /// anteriores de la app o añadidas desde el destino: la onda (decodificando
-  /// el audio), el formato y, si no se conoce, la duración. Si algo falla,
-  /// se reintenta al volver a abrir la app.
+  /// el audio), el formato y, si no se conoce, la duración. De las solo de
+  /// notas, sin audio, se leen las notas de su `.mid` (si se ha añadido desde
+  /// el destino o se ha cambiado allí). Si algo falla, se reintenta al volver
+  /// a abrir la app.
   ///
   /// Las que están en Google Drive y no se han descargado se dejan para
   /// cuando se descarguen (p. ej. al escucharlas): no se descarga nada solo
-  /// para mostrar la lista.
+  /// para mostrar la lista, salvo los `.mid`, que son pequeños.
   Future<void> _addMissingDetails() async {
     if (_addingDetails) {
       // Se repite al terminar para incluir las que han llegado entretanto.
@@ -267,11 +275,17 @@ class _HomeScreenState extends State<HomeScreen> {
         _detailsPending = false;
         final pending = [
           for (final recording in _recordings)
-            if (recording.waveform == null || recording.audio == null)
+            if (recording.isNotesOnly
+                ? recording.duration == Duration.zero
+                : recording.waveform == null || recording.audio == null)
               recording,
         ];
         for (final recording in pending) {
           if (!mounted) return;
+          if (recording.isNotesOnly) {
+            await _readNotes(recording);
+            continue;
+          }
           if (!await widget.sync.hasLocalAudio(recording)) continue;
           await _addDetails(recording);
         }
@@ -332,6 +346,27 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       // Se reintenta en el siguiente arranque.
     }
+  }
+
+  /// Lee las notas del `.mid` de [recording], una grabación solo de notas.
+  Future<void> _readNotes(Recording recording) async {
+    final Recording updated;
+    try {
+      updated = await widget.editor.readNotes(recording);
+    } catch (_) {
+      // No se pudo leer o no es un MIDI: se reintenta en el siguiente
+      // arranque.
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _recordings = [
+        for (final r in _recordings)
+          r.id == recording.id && r.revision == recording.revision
+              ? r.copyWith(notes: updated.notes, duration: updated.duration)
+              : r,
+      ];
+    });
   }
 
   void _syncStorage() => unawaited(widget.sync.sync());
@@ -804,9 +839,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ? box.localToGlobal(Offset.zero) & box.size
         : null;
     try {
+      // De las solo de notas, el sonido generado con ellas.
       await shareRecording(
         recording,
-        path: await widget.sync.audioPath(recording),
+        path: await _playbackPath(recording),
+        format: recording.isNotesOnly ? RecordingFormat.wav : null,
         origin: origin,
       );
     } catch (_) {

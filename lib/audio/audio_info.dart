@@ -78,13 +78,14 @@ class AudioProbe {
 /// existe o no se reconoce.
 Future<AudioProbe?> probeAudio(String path) async {
   final format = RecordingFormat.fromPath(path);
-  if (format == null) return null;
+  if (format == null || !format.isAudio) return null;
   RandomAccessFile? file;
   try {
     file = await File(path).open();
     return switch (format) {
       RecordingFormat.aac => await _probeMp4(file),
       RecordingFormat.wav => await _probeWav(file),
+      RecordingFormat.midi => null,
     };
   } catch (_) {
     // Archivo inexistente, truncado o con una estructura inesperada.

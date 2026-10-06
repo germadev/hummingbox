@@ -6,14 +6,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/recording.dart';
+import '../models/recording_options.dart';
 
 /// Comparte el audio de [path] de una grabación con otras apps usando el
-/// nombre que le dio el usuario como nombre de archivo.
+/// nombre que le dio el usuario como nombre de archivo. [format] es el del
+/// archivo, si no es el de la grabación (p. ej. el sonido generado de una
+/// grabación solo de notas).
 Future<void> shareRecording(
   Recording recording, {
   required String path,
+  RecordingFormat? format,
   Rect? origin,
 }) async {
+  format ??= recording.format;
   final temp = await getTemporaryDirectory();
   final shareDirectory = Directory(p.join(temp.path, 'share'));
   // Limpia las copias de comparticiones anteriores.
@@ -23,13 +28,12 @@ Future<void> shareRecording(
   await shareDirectory.create(recursive: true);
 
   final fileName = safeFileName(recording.name, fallback: recording.id);
-  final copy = await File(
-    path,
-  ).copy(p.join(shareDirectory.path, '$fileName${recording.format.extension}'));
+  final copy = await File(path)
+      .copy(p.join(shareDirectory.path, '$fileName${format.extension}'));
 
   await SharePlus.instance.share(
     ShareParams(
-      files: [XFile(copy.path, mimeType: recording.format.mimeType)],
+      files: [XFile(copy.path, mimeType: format.mimeType)],
       sharePositionOrigin: origin,
     ),
   );

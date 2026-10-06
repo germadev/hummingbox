@@ -24,9 +24,9 @@ class PianoNote {
   /// Con qué sonó.
   final Instrument instrument;
 
-  /// Cómo sonaba el sintetizador, si sonó con él. Solo sirve para generar
-  /// su sonido al terminar de grabar: no se guarda en los metadatos (el
-  /// sonido ya está en el audio) ni cuenta al comparar notas.
+  /// Cómo sonaba el sintetizador, si sonó con él, para generar su sonido (al
+  /// terminar de grabar o, en las grabaciones solo de notas, al
+  /// escucharlas). No cuenta al comparar notas.
   final SynthPatch synth;
 
   Duration get end => start + duration;
@@ -42,26 +42,33 @@ class PianoNote {
   );
 
   /// En los metadatos, en poco espacio: `[tecla, inicio, duración]`, en
-  /// milisegundos, y el nombre del instrumento si no es el piano.
+  /// milisegundos, el nombre del instrumento si no es el piano y, con el
+  /// sintetizador, su sonido si no es el de por defecto.
   List<Object> toJson() => [
     key,
     start.inMilliseconds,
     duration.inMilliseconds,
     if (instrument != Instrument.piano) instrument.name,
+    if (instrument == Instrument.synth && synth != const SynthPatch())
+      synth.toJson(),
   ];
 
   static PianoNote? fromJson(Object? json) {
     if (json
         case [final int key, final int start, final int duration, ...final rest]
-        when rest.length <= 1) {
+        when rest.length <= 2) {
+      // Un instrumento que no se conoce (de una versión más nueva), piano.
+      final instrument = rest.isEmpty
+          ? Instrument.piano
+          : Instrument.byName(rest.first) ?? Instrument.piano;
       return PianoNote(
         key: key,
         start: Duration(milliseconds: start),
         duration: Duration(milliseconds: duration),
-        // Un instrumento que no se conoce (de una versión más nueva), piano.
-        instrument: rest.isEmpty
-            ? Instrument.piano
-            : Instrument.byName(rest.single) ?? Instrument.piano,
+        instrument: instrument,
+        synth: instrument == Instrument.synth && rest.length == 2
+            ? SynthPatch.fromJson(rest.last)
+            : const SynthPatch(),
       );
     }
     return null;

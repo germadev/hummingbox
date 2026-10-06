@@ -375,21 +375,106 @@ void main() {
             'Idea.mid',
             bytes: Midi.encode(notes),
           );
-          // Un .mid sin audio no es de ninguna grabación.
+          // Un .mid sin audio es otra grabación, solo de notas.
           folders.addFile(folder.id, 'Suelto.mid', bytes: Midi.encode(notes));
+          Future<Recording> idea() async =>
+              (await all()).singleWhere((r) => r.name == 'Idea');
 
           await sync.sync();
-          expect((await single()).notes, notes);
-          expect((await single()).copies['folder']!.midi!.name, 'Idea.mid');
+          expect((await idea()).notes, notes);
+          expect((await idea()).isNotesOnly, isFalse);
+          expect((await idea()).copies['folder']!.midi!.name, 'Idea.mid');
+          final loose = (await all()).singleWhere((r) => r.name == 'Suelto');
+          expect(loose.isNotesOnly, isTrue);
+          expect(await all(), hasLength(2));
           await sync.sync();
           expect(writes(), isEmpty);
 
           folders.files.remove(midi);
           await sync.sync();
-          expect((await single()).notes, isEmpty);
-          expect((await single()).copies['folder']!.midi, isNull);
+          expect((await idea()).notes, isEmpty);
+          expect((await idea()).copies['folder']!.midi, isNull);
+          // Sin su audio al lado, sigue siendo de la grabación.
+          expect(await all(), hasLength(2));
         },
       );
+
+      /// Añade una grabación solo de notas llamada «Grabación N».
+      Future<Recording> addNotesOnly({String folder = ''}) async {
+        final path = await repository.createRecordingPath(
+          format: RecordingFormat.midi,
+        );
+        await File(path).writeAsBytes(Midi.encode(notes));
+        added++;
+        return (await repository.add(
+          path: path,
+          duration: const Duration(seconds: 3),
+          folder: folder,
+          name: 'Grabación $added',
+          notes: notes,
+          hasVoice: false,
+        ))!;
+      }
+
+      test('una grabación solo de notas se guarda como un .mid, sin audio, '
+          'y se renombra y se borra con ella', () async {
+        final recording = await addNotesOnly(folder: 'Clases');
+
+        await sync.sync();
+
+        expect(writes(), ['write Clases/Grabación 1.mid']);
+        final saved = await single();
+        expect(saved.isNotesOnly, isTrue);
+        expect(saved.copies['folder']!.midi, isNull);
+        final ref = saved.copies['folder']!.ref;
+        expect(Midi.decode(folders.contents[ref]!), notes);
+        // Ya no está dentro de la app: queda en la caché.
+        expect(File(recording.path).existsSync(), isFalse);
+
+        // Sin cambios, no se vuelve a escribir ni se toma por otra.
+        await sync.sync();
+        expect(writes(), hasLength(1));
+        expect(await all(), hasLength(1));
+        expect((await single()).notes, notes);
+
+        await repository.rename(await single(), 'Melodía');
+        await sync.sync();
+        expect(folders.files[ref], 'Melodía.mid');
+        expect(await all(), hasLength(1));
+
+        await sync.delete(await single());
+        expect(folders.files, isEmpty);
+      });
+
+      test('un .mid sin audio en la carpeta se añade como grabación solo de '
+          'notas', () async {
+        final ref = folders.addFile(
+          folder.id,
+          'Melodía.mid',
+          subfolder: 'Clases',
+          bytes: Midi.encode(notes),
+        );
+
+        await sync.sync();
+
+        final recording = await single();
+        expect(recording.name, 'Melodía');
+        expect(recording.folder, 'Clases');
+        expect(recording.isNotesOnly, isTrue);
+        expect(recording.hasVoice, isFalse);
+        expect(recording.needsTranscript, isFalse);
+        expect(recording.copies['folder']!.ref, ref);
+        expect(recording.copies['folder']!.midi, isNull);
+        // Las notas se leen después (ver `RecordingEditor.readNotes`).
+        expect(File(await sync.audioPath(recording)).readAsBytesSync(), [
+          ...Midi.encode(notes),
+        ]);
+        expect(changes, [1]);
+
+        await sync.sync();
+        expect(writes(), isEmpty);
+        expect(await all(), hasLength(1));
+      });
 
       test('un .mid que no es MIDI se ignora', () async {
         folders.addFile(folder.id, 'Idea.m4a');

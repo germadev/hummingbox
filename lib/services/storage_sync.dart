@@ -255,7 +255,7 @@ class SyncError {
       'noPermission: $noPermission)';
 }
 
-/// Archivo de audio del destino y la subcarpeta en la que está.
+/// Archivo del destino y la subcarpeta en la que está.
 typedef _StoredFile = ({String subfolder, FolderEntry entry});
 
 /// Guarda las grabaciones en el destino elegido (la carpeta del dispositivo
@@ -658,9 +658,9 @@ class StorageSync extends ChangeNotifier {
         for (final entry in await storage.list(subfolder: subfolder))
           (subfolder: subfolder, entry: entry),
     ]..removeWhere((file) => file.entry.isDirectory);
-    final files = [
+    final audio = [
       for (final file in listed)
-        if (RecordingFormat.fromPath(file.entry.name) != null) file,
+        if (RecordingFormat.fromPath(file.entry.name)?.isAudio ?? false) file,
     ];
     // Las transcripciones y las notas del piano, junto a su audio y con el
     // mismo nombre.
@@ -668,9 +668,19 @@ class StorageSync extends ChangeNotifier {
       for (final file in listed)
         if (_isTextFile(file.entry.name)) file,
     ];
+    final isNotesOf = await _midiRoles(storage, audio);
     final midis = [
       for (final file in listed)
-        if (_isMidiFile(file.entry.name)) file,
+        if (_isMidiFile(file.entry.name) && isNotesOf(file)) file,
+    ];
+    // Los archivos de las grabaciones: los audios y los `.mid` que no son
+    // las notas de un audio (las grabaciones solo de notas).
+    final files = [
+      ...audio,
+      for (final file in listed)
+        if (RecordingFormat.fromPath(file.entry.name) == RecordingFormat.midi &&
+            !isNotesOf(file))
+          file,
     ];
     if (_disposed || !_isCurrent(storage, () => _storage)) return;
     if (!listEquals(subfolders, _storageFolders)) {
@@ -808,6 +818,32 @@ class StorageSync extends ChangeNotifier {
   static bool _isMidiFile(String name) =>
       const {'.mid', '.midi'}.contains(p.extension(name).toLowerCase());
 
+  /// Indica, de cada `.mid` del destino, si son las notas del piano de un
+  /// audio de [audio] (y no una grabación solo de notas): si lo son de una
+  /// grabación de la app o, si no es de ninguna, si hay un audio con su
+  /// mismo nombre al lado.
+  Future<bool Function(_StoredFile file)> _midiRoles(
+    SyncTarget storage,
+    List<_StoredFile> audio,
+  ) async {
+    final recordings = <String>{};
+    final notes = <String>{};
+    for (final recording in await repository.loadAll()) {
+      final stored = recording.copies[storage.key];
+      if (stored == null || stored.destination != storage.destination) {
+        continue;
+      }
+      if (recording.isNotesOnly) recordings.add(stored.ref);
+      if (stored.midi case final midi?) notes.add(midi.ref);
+    }
+    final pairs = {for (final file in audio) _pairKey(file)};
+    return (file) {
+      final ref = file.entry.ref;
+      if (recordings.contains(ref)) return false;
+      return notes.contains(ref) || pairs.contains(_pairKey(file));
+    };
+  }
+
   /// Compara las notas del piano de las grabaciones guardadas en [storage]
   /// con los `.mid` que hay junto a su audio: lee los que la app no tiene o
   /// se cambiaron fuera y quita las notas si se borraron allí. Los que faltan
@@ -826,7 +862,10 @@ class StorageSync extends ChangeNotifier {
     for (final recording in await repository.loadAll()) {
       if (_disposed || !_isCurrent(storage, () => _storage)) break;
       final stored = recording.copies[key];
-      if (stored == null || stored.destination != storage.destination) {
+      if (stored == null ||
+          stored.destination != storage.destination ||
+          // Su archivo ya es el `.mid`.
+          recording.isNotesOnly) {
         continue;
       }
       final audioFile = audioByRef[stored.ref];
@@ -1410,7 +1449,8 @@ class StorageSync extends ChangeNotifier {
     var saved = await _saveAudio(recording, target, isStorage: isStorage);
     if (saved == null || _deleted.contains(recording.id)) return;
     saved = await _saveTranscript(saved, target);
-    saved = await _saveMidi(saved, target);
+    // Las solo de notas no tienen otro `.mid`: es su archivo.
+    if (!saved.isNotesOnly) saved = await _saveMidi(saved, target);
     if (isStorage) await _release(saved, target);
   }
 

@@ -63,6 +63,8 @@ Transcripts are also saved in the destination, as `.txt` files next to the
 audio: see [Transcription](transcription.md#txt-files). The notes played on
 the piano are saved the same way, as `.mid` files (see
 [Recording from the piano](features.md#recording-from-the-piano)).
+Piano-only recordings have no audio: their file in the destination is the
+`.mid` itself.
 
 On Android the folder is chosen with the system picker and the permission is
 kept across restarts. On iOS the document picker is used (On My iPhone,

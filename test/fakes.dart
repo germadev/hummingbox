@@ -544,12 +544,11 @@ class FakeRecordingEditor extends RecordingEditor {
   Future<Recording> savePiano({
     required List<PianoNote> notes,
     required Duration duration,
-    required RecordingOptions options,
     String folder = '',
   }) async {
     pianoSaves.add((notes, duration));
     return (await repository.add(
-      path: await repository.createRecordingPath(format: options.format),
+      path: await repository.createRecordingPath(format: RecordingFormat.midi),
       duration: duration,
       folder: folder,
       notes: notes,
@@ -567,6 +566,30 @@ class FakeRecordingEditor extends RecordingEditor {
       recording,
       [...recording.notes, ...notes]
         ..sort((a, b) => a.start.compareTo(b.start)),
+    );
+  }
+
+  /// Grabaciones solo de notas cuyo sonido se ha generado (ids).
+  final pianoAudios = <String>[];
+
+  @override
+  Future<String> pianoAudio(Recording recording) async {
+    pianoAudios.add(recording.id);
+    return '/fake/piano/${recording.id}.wav';
+  }
+
+  /// Notas que devuelve [readNotes] (las del `.mid`) y las grabaciones
+  /// leídas (ids).
+  List<PianoNote> midiNotes = const [];
+  final notesRead = <String>[];
+
+  @override
+  Future<Recording> readNotes(Recording recording) async {
+    notesRead.add(recording.id);
+    final updated = await repository.setNotes(recording, midiNotes);
+    return repository.setDetails(
+      updated,
+      duration: RecordingEditor.pianoLength(midiNotes, Duration.zero),
     );
   }
 

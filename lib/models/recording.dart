@@ -23,8 +23,8 @@ class Recording {
     this.transcriptionLanguage,
     this.provisionalName = false,
     this.notes = const [],
-    this.hasVoice = true,
-  });
+    bool hasVoice = true,
+  }) : _voice = hasVoice;
 
   /// Clave de [copies] del archivo de la carpeta del dispositivo.
   static const folderKey = 'folder';
@@ -122,11 +122,18 @@ class Recording {
   final bool provisionalName;
 
   /// Notas tocadas en el piano mientras se grababa, en orden. Su sonido está
-  /// en el audio; aquí están para dibujarlas.
+  /// en el audio, salvo si es solo de notas ([isNotesOnly]): entonces se
+  /// genera con ellas al escucharla.
   final List<PianoNote> notes;
 
+  final bool _voice;
+
   /// Indica si se grabó la voz (con el micrófono). Si no, es solo el piano.
-  final bool hasVoice;
+  bool get hasVoice => _voice && !isNotesOnly;
+
+  /// Indica si es solo de notas: se grabó solo el piano y su archivo es el
+  /// `.mid` con las notas, sin audio.
+  bool get isNotesOnly => format == RecordingFormat.midi;
 
   /// Indica si se debe transcribir automáticamente: tiene voz, no tiene
   /// transcripción y no se ha quedado sin ella a propósito (ver

@@ -1,12 +1,15 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../audio/audio_edit.dart';
 import '../audio/audio_info.dart';
 import '../audio/levels.dart';
+import '../audio/midi.dart';
 import '../audio/piano_mix.dart';
 import '../audio/instrument_tone.dart';
 import '../audio/wav.dart';
@@ -43,6 +46,11 @@ class EditSession {
 /// Edita grabaciones: las decodifica a WAV, aplica los cambios en un isolate
 /// aparte para no bloquear la interfaz y las vuelve a guardar en su formato
 /// (`.m4a` o `.wav`).
+///
+/// Las grabaciones solo de notas ([Recording.isNotesOnly]) no tienen audio:
+/// su archivo es un `.mid`, y su sonido se genera con las notas para
+/// escucharlas ([pianoAudio]) o editarlas. Al editarlas solo se recortan
+/// las notas.
 class RecordingEditor {
   RecordingEditor({
     required this.codec,
@@ -72,11 +80,31 @@ class RecordingEditor {
   /// Sufijo del nombre de las copias editadas.
   static const copySuffix = ' (editada)';
 
+  /// Frecuencia de muestreo del sonido de las grabaciones solo de notas.
+  static const pianoSampleRate = 44100;
+
+  /// Lo que dura el sonido de [notes] tocadas durante [duration]: hasta que
+  /// se apaga la última, si suena más allá.
+  static Duration pianoLength(List<PianoNote> notes, Duration duration) {
+    var length = duration;
+    for (final note in notes) {
+      final end =
+          note.start +
+          toneLength(note.instrument, note.duration, synth: note.synth);
+      if (end > length) length = end;
+    }
+    return length;
+  }
+
   Future<EditSession> open(Recording recording) async {
     final directory = await _createSessionDirectory();
     try {
       final source = p.join(directory.path, 'source.wav');
-      await _decode(await _audioPath(recording), source);
+      if (recording.isNotesOnly) {
+        await _renderNotes(recording, source);
+      } else {
+        await _decode(await _audioPath(recording), source);
+      }
       final analysis = await _analyze(source, editorResolution);
       return EditSession(
         recording: recording,
@@ -100,6 +128,9 @@ class RecordingEditor {
     String? copyName,
   }) async {
     final recording = session.recording;
+    if (recording.isNotesOnly) {
+      return _saveNotes(session, edit, asCopy: asCopy, copyName: copyName);
+    }
     final edited = p.join(session.directory.path, 'edited.wav');
     final result = await _process(session.sourcePath, edited, edit);
 
@@ -107,7 +138,7 @@ class RecordingEditor {
     final format = recording.format;
     final String output;
     switch (format) {
-      case RecordingFormat.wav:
+      case RecordingFormat.wav || RecordingFormat.midi:
         output = edited;
       case RecordingFormat.aac:
         output = p.join(session.directory.path, 'edited.m4a');
@@ -149,59 +180,155 @@ class RecordingEditor {
     return copy;
   }
 
-  /// Guarda como grabación nueva de la subcarpeta [folder] las [notes]
-  /// tocadas en el piano (sin voz) durante [duration], con el formato y la
-  /// calidad de [options]. Si la última nota suena más allá, dura hasta que
-  /// se apaga.
+  /// Guarda en una grabación de notas ([Recording.isNotesOnly]) de la
+  /// subcarpeta [folder] las [notes] tocadas en el piano (sin voz) durante
+  /// [duration]: un `.mid`, sin audio. Si la última nota suena más allá,
+  /// dura hasta que se apaga.
   Future<Recording> savePiano({
     required List<PianoNote> notes,
     required Duration duration,
-    required RecordingOptions options,
     String folder = '',
   }) async {
-    final directory = await _createSessionDirectory();
-    try {
-      var length = duration;
-      for (final note in notes) {
-        final end =
-            note.start +
-            toneLength(note.instrument, note.duration, synth: note.synth);
-        if (end > length) length = end;
-      }
-      final wav = p.join(directory.path, 'piano.wav');
-      await _renderPiano(wav, notes, length, options.sampleRate);
-      final analysis = await _analyze(wav, waveformResolution);
-      final output = await _encode(
-        wav,
-        options.format,
-        options.bitRate,
-        directory,
-      );
-      final path = await repository.createRecordingPath(format: options.format);
-      await moveFile(output, path);
-      final recording = await repository.add(
-        path: path,
-        duration: analysis.duration,
-        waveform: analysis.levels,
-        audio: (await probe(path))?.info,
-        folder: folder,
-        notes: notes,
-        hasVoice: false,
-      );
-      if (recording == null) throw StateError('No se pudo registrar');
-      return recording;
-    } finally {
-      await deleteQuietly(directory);
-    }
+    final path = await repository.createRecordingPath(
+      format: RecordingFormat.midi,
+    );
+    await File(path).writeAsBytes(Midi.encode(notes), flush: true);
+    final recording = await repository.add(
+      path: path,
+      duration: pianoLength(notes, duration),
+      folder: folder,
+      notes: notes,
+      hasVoice: false,
+    );
+    if (recording == null) throw StateError('No se pudo registrar');
+    return recording;
   }
+
+  /// Guarda la edición de una grabación solo de notas: las notas que quedan
+  /// entre el principio y el final de [edit] (el volumen y los fundidos no
+  /// se aplican), en ella o, si [asCopy], en una nueva.
+  Future<Recording> _saveNotes(
+    EditSession session,
+    AudioEdit edit, {
+    required bool asCopy,
+    String? copyName,
+  }) async {
+    final recording = session.recording;
+    final notes = PianoNote.between(recording.notes, edit.start, edit.end);
+    final output = p.join(session.directory.path, 'edited.mid');
+    await File(output).writeAsBytes(Midi.encode(notes), flush: true);
+    if (!asCopy) {
+      final replaced = await repository.replaceAudio(
+        recording,
+        sourcePath: output,
+        duration: edit.length,
+      );
+      return repository.setNotes(replaced, notes);
+    }
+    final path = await repository.createRecordingPath(
+      format: RecordingFormat.midi,
+    );
+    await moveFile(output, path);
+    final copy = await repository.add(
+      path: path,
+      duration: edit.length,
+      name: copyName ?? '${recording.name}$copySuffix',
+      folder: recording.folder,
+      notes: notes,
+      hasVoice: false,
+    );
+    if (copy == null) throw StateError('No se pudo registrar la copia');
+    return copy;
+  }
+
+  /// Lee las notas del `.mid` de [recording], una grabación solo de notas
+  /// añadida desde el destino o cambiada fuera de la app, y las guarda con
+  /// la duración de su sonido.
+  Future<Recording> readNotes(Recording recording) async {
+    final bytes = await File(await _audioPath(recording)).readAsBytes();
+    final notes = Midi.decode(bytes);
+    final updated = await repository.setNotes(recording, notes);
+    return repository.setDetails(
+      updated,
+      duration: pianoLength(notes, Duration.zero),
+    );
+  }
+
+  /// Sonidos de las grabaciones solo de notas que se están generando, por
+  /// ruta.
+  final _renderingNotes = <String, Future<String>>{};
+
+  /// Ruta de un WAV con el sonido de [recording], una grabación solo de
+  /// notas ([Recording.isNotesOnly]), para escucharla o compartirla. Se
+  /// genera la primera vez y se reutiliza mientras no cambien sus notas.
+  Future<String> pianoAudio(Recording recording) async {
+    final key = md5
+        .convert(
+          utf8.encode(
+            jsonEncode([
+              recording.duration.inMilliseconds,
+              for (final note in recording.notes) note.toJson(),
+            ]),
+          ),
+        )
+        .toString();
+    final directory = Directory(p.join((await _workDirectory()).path, 'piano'));
+    final path = p.join(directory.path, '${recording.id}.$key.wav');
+    if (File(path).existsSync()) return path;
+    return _renderingNotes[path] ??= () async {
+      try {
+        await directory.create(recursive: true);
+        final partial = '$path.part';
+        await _renderNotes(recording, partial);
+        await File(partial).rename(path);
+        // Los de notas anteriores ya no sirven.
+        for (final entity in directory.listSync()) {
+          if (entity is File &&
+              entity.path != path &&
+              !entity.path.endsWith('.part') &&
+              p.basename(entity.path).startsWith('${recording.id}.')) {
+            try {
+              await entity.delete();
+            } on FileSystemException {
+              // Es un temporal: lo borrará el sistema.
+            }
+          }
+        }
+        return path;
+      } finally {
+        _renderingNotes.remove(path);
+      }
+    }();
+  }
+
+  /// Escribe en [output] el sonido de las notas de [recording].
+  Future<void> _renderNotes(Recording recording, String output) => _renderPiano(
+    output,
+    recording.notes,
+    pianoLength(recording.notes, recording.duration),
+    pianoSampleRate,
+  );
 
   /// Añade al audio de [recording] las [notes] tocadas en el piano mientras
   /// se grababa (o mientras sonaba, al acompañarla), y las guarda con ella
   /// junto a las que ya tuviera. La onda sigue siendo la de antes.
   Future<Recording> addPiano(Recording recording, List<PianoNote> notes) async {
     if (notes.isEmpty) return recording;
+    final all = [...recording.notes, ...notes]
+      ..sort((a, b) => a.start.compareTo(b.start));
     final directory = await _createSessionDirectory();
     try {
+      if (recording.isNotesOnly) {
+        // Sin audio: solo se añaden las notas a su `.mid`.
+        final output = p.join(directory.path, 'notes.mid');
+        await File(output).writeAsBytes(Midi.encode(all), flush: true);
+        final replaced = await repository.replaceAudio(
+          recording,
+          sourcePath: output,
+          duration: pianoLength(all, recording.duration),
+        );
+        return await repository.setNotes(replaced, all);
+      }
       final source = p.join(directory.path, 'voice.wav');
       await _decode(await _audioPath(recording), source);
       final mixed = p.join(directory.path, 'mixed.wav');
@@ -219,11 +346,7 @@ class RecordingEditor {
         waveform: recording.waveform,
         audio: (await probe(output))?.info ?? recording.audio,
       );
-      return await repository.setNotes(
-        replaced,
-        [...recording.notes, ...notes]
-          ..sort((a, b) => a.start.compareTo(b.start)),
-      );
+      return await repository.setNotes(replaced, all);
     } finally {
       await deleteQuietly(directory);
     }
@@ -238,7 +361,7 @@ class RecordingEditor {
     Directory directory,
   ) async {
     switch (format) {
-      case RecordingFormat.wav:
+      case RecordingFormat.wav || RecordingFormat.midi:
         return wav;
       case RecordingFormat.aac:
         final output = p.join(
@@ -267,7 +390,7 @@ class RecordingEditor {
             trimmed,
             AudioEdit(start: start, end: info.duration),
           );
-        case RecordingFormat.aac || null:
+        case RecordingFormat.aac || RecordingFormat.midi || null:
           await codec.trimStart(path, trimmed, start);
       }
       await moveFile(trimmed, path);

@@ -34,8 +34,9 @@ checksum and `.txt` transcripts; the Drive API is tested with a fake HTTP
 client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
 automatic recording names, the piano's notes, the instruments' and the
-synthesizer's sound (in tune, without clipping, with their envelopes) and
-mixing with the voice,
+synthesizer's sound (in tune, without clipping, with their envelopes),
+mixing with the voice, piano-only recordings as `.mid` with no audio (their
+sound generated on playback, trimming, adding piano and syncing),
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search

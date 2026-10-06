@@ -12,7 +12,8 @@ import 'recorder_controller.dart';
 
 /// Qué se graba desde el piano.
 enum PianoRecordingMode {
-  /// Solo las notas: el audio se genera con ellas al terminar.
+  /// Solo las notas: se guardan en un `.mid`, sin audio (su sonido se
+  /// genera al escucharlas).
   piano,
 
   /// La voz con el micrófono y, encima, las notas.
@@ -24,9 +25,10 @@ enum PianoRecordingMode {
 }
 
 /// Graba lo que se toca en el piano, con el momento en que se pulsa y se
-/// suelta cada tecla, y si se elige, también la voz. Al terminar, el sonido
-/// de las notas se añade al audio (ver [RecordingEditor.savePiano] y
-/// [RecordingEditor.addPiano]) y se guardan con la grabación para
+/// suelta cada tecla, y si se elige, también la voz. Al terminar, con voz o
+/// al acompañar una grabación, el sonido de las notas se añade a su audio
+/// ([RecordingEditor.addPiano]); solo con el piano, se guardan las notas sin
+/// audio ([RecordingEditor.savePiano]). Se guardan con la grabación para
 /// dibujarlas.
 class PianoRecorder extends ChangeNotifier {
   PianoRecorder({required this.voice, required this.editor});
@@ -48,7 +50,6 @@ class PianoRecorder extends ChangeNotifier {
 
   /// La grabación que se acompaña, con [PianoRecordingMode.accompaniment].
   Recording? _target;
-  RecordingOptions _options = const RecordingOptions();
   String _folder = '';
   bool _saving = false;
   Timer? _ticker;
@@ -70,9 +71,9 @@ class PianoRecorder extends ChangeNotifier {
       ? voice.elapsed
       : _stopwatch.elapsed;
 
-  /// Empieza a grabar [mode] con el formato y la calidad de [options], para
-  /// guardarlo en la subcarpeta [folder]. Devuelve `false` si hace falta el
-  /// micrófono y no se concedió el permiso.
+  /// Empieza a grabar [mode] para guardarlo en la subcarpeta [folder] (con
+  /// voz, con el formato y la calidad de [options]). Devuelve `false` si hace
+  /// falta el micrófono y no se concedió el permiso.
   Future<bool> start(
     PianoRecordingMode mode, {
     required RecordingOptions options,
@@ -87,7 +88,6 @@ class PianoRecorder extends ChangeNotifier {
         ..start();
     }
     _mode = mode;
-    _options = options;
     _folder = folder;
     _notes.clear();
     _held.clear();
@@ -169,7 +169,6 @@ class PianoRecorder extends ChangeNotifier {
           return await editor.savePiano(
             notes: notes,
             duration: duration,
-            options: _options,
             folder: _folder,
           );
         case PianoRecordingMode.accompaniment:

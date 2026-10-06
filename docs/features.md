@@ -195,9 +195,11 @@ The recording goes to the open folder, like any other.
 - The app keeps when each key was pressed and released, and with which
   instrument, so the recording keeps the rhythm you played. You can change
   the instrument while recording.
-- **Piano only**: no microphone. When you stop, the audio is generated from
-  the notes (in the format and quality of the settings) and lasts until the
-  last note fades out. If no key was played, nothing is saved.
+- **Piano only**: no microphone and **no audio file**: the recording is just
+  the notes, saved as a `.mid` (`Idea.mid`), and lasts until the last note
+  fades out. Its sound is generated from the notes when you play, share
+  (as WAV) or edit it, and isn't stored. Its format shows as *MIDI*. If no
+  key was played, nothing is saved.
 - **Piano and voice**: the microphone records as usual and, when you stop,
   the notes are mixed on top, timed with the recorder so they match the
   voice. With headphones the piano isn't picked up by the microphone; with
@@ -207,13 +209,15 @@ The recording goes to the open folder, like any other.
   released, over the voice's waveform (or alone, for piano only), on the
   same timeline. They work as the progress bar too.
 - Trimming in the editor keeps the notes in place. Piano-only recordings
-  aren't transcribed.
+  aren't transcribed, and in the editor they can only be trimmed (there is
+  no audio to change the volume of or fade).
 - **Adding piano to a recording**: *Add piano* in a recording's menu opens
   the piano over it (the top shows which one). *Record* plays it from the
   beginning and records what you play in time with it; it stops when the
   recording ends, with the stop button or when closing the piano. The notes
-  are mixed into its audio and added to the ones it already had, so you can
-  add several layers. While accompanying, *Play one after another* and
+  are mixed into its audio (on a piano-only recording, only added to its
+  `.mid`) and added to the ones it already had, so you can add several
+  layers. While accompanying, *Play one after another* and
   *Repeat* don't move on.
 - The notes are also saved as a standard **MIDI file** (`.mid`) next to the
   audio (each instrument on its own channel, with its General MIDI program;
@@ -221,7 +225,8 @@ The recording goes to the open folder, like any other.
   in Drive. It is renamed and deleted with the recording. A `.mid` found next
   to an audio file (for example after reinstalling the app, or edited in
   another app) is read; if it is deleted outside the app, the notes are
-  removed.
+  removed. A `.mid` with no audio file of the same name next to it is a
+  piano-only recording: it shows up in the list like any other.
 
 ## Search
 

@@ -7,12 +7,23 @@ enum RecordingFormat {
   aac('.m4a', 'audio/mp4'),
 
   /// PCM de 16 bits sin comprimir: la máxima fidelidad, pero ocupa mucho.
-  wav('.wav', 'audio/wav');
+  wav('.wav', 'audio/wav'),
+
+  /// MIDI estándar: solo las notas, sin audio. Es el archivo de las
+  /// grabaciones hechas solo con el piano (ver `Recording.isNotesOnly`); su
+  /// sonido se genera al escucharlas. No se graba en este formato.
+  midi('.mid', 'audio/midi');
 
   const RecordingFormat(this.extension, this.mimeType);
 
   final String extension;
   final String mimeType;
+
+  /// Los formatos de audio, en los que se puede grabar.
+  static const audio = [aac, wav];
+
+  /// Indica si es de audio (no [midi]).
+  bool get isAudio => this != midi;
 
   /// Formato de un archivo según su extensión, o `null` si no es de los que
   /// usa la app.
@@ -62,6 +73,7 @@ class RecordingOptions {
       RecordingQuality.maximum => 256000,
     },
     RecordingFormat.wav => sampleRate * channels * 16,
+    RecordingFormat.midi => 0,
   };
 
   /// Bytes que ocupa, aproximadamente, un minuto de grabación.
@@ -84,10 +96,9 @@ class RecordingOptions {
   /// valor por defecto.
   factory RecordingOptions.fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return const RecordingOptions();
+    final format = RecordingFormat.values.asNameMap()[json['format']];
     return RecordingOptions(
-      format:
-          RecordingFormat.values.asNameMap()[json['format']] ??
-          RecordingFormat.aac,
+      format: format != null && format.isAudio ? format : RecordingFormat.aac,
       quality:
           RecordingQuality.values.asNameMap()[json['quality']] ??
           RecordingQuality.high,
