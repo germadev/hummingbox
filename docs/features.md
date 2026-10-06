@@ -149,12 +149,15 @@ out in **landscape**, and the screen rotates as usual while it is open:
   it slides in. The button next to the close button turns it around if it
   shows upside down (it is remembered).
 - With the phone in **landscape**, it is drawn normally.
-- Each key has its own player with its sound already loaded, so it sounds as
-  soon as it is touched. When several notes sound together (chords, fast
-  notes), the volume of all of them is lowered just enough for their sum not
-  to clip, and comes back smoothly as they fade, so it sounds clean; a single
-  note keeps its full volume. Changing the instrument doesn't make any key
-  sound by itself.
+- The keys' sounds are loaded when the piano opens, so a key sounds as soon
+  as it is touched. All the notes are mixed by the app's own native code and
+  come out as a single audio stream, so there are no clicks: playing a key
+  again fades its previous note out in 10 ms instead of cutting it, the
+  organ and the synthesizer fade out sample by sample when the key is
+  released, and when several notes sound together (chords, fast notes) the
+  volume of all of them is lowered smoothly, just enough for their sum not
+  to clip, and comes back as they fade. A single note keeps its full volume.
+  Changing the instrument doesn't make any key sound by itself.
 
 The keyboard:
 

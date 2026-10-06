@@ -53,6 +53,51 @@ class NativeScreen {
       _channel.invokeMethod<void>('keepOn', {'on': on});
 }
 
+/// Sonido del piano: las notas se mezclan en el código nativo y salen por un
+/// solo flujo de audio (AudioTrack en Android y AVAudioEngine en iOS), sin
+/// chasquidos al empezar, apagarse o sonar varias a la vez.
+///
+/// El sonido de cada tecla es un WAV mono de 16 bits a la frecuencia de la
+/// salida ([open]), que se carga una vez ([load]) y se toca por su ruta.
+class NativePiano {
+  const NativePiano();
+
+  static const _channel = MethodChannel('es.germade.voicerecorder/piano');
+
+  /// Pone en marcha la salida, si no lo está ya, y devuelve su frecuencia de
+  /// muestreo. Sin notas durante un rato, se para sola hasta la siguiente.
+  Future<int> open() async {
+    final result = await _channel.invokeMapMethod<String, Object?>('open');
+    return (result?['sampleRate'] as num?)?.toInt() ?? 44100;
+  }
+
+  /// Lee el sonido de [path] para poder tocarlo.
+  Future<void> load(String path) =>
+      _channel.invokeMethod<void>('load', {'path': path});
+
+  /// Olvida los sonidos de [paths] (las notas que suenan con ellos terminan).
+  Future<void> unload(Iterable<String> paths) =>
+      _channel.invokeMethod<void>('unload', {'paths': paths.toList()});
+
+  /// Toca la tecla [key] con el sonido de [path], ya cargado. Si la tecla ya
+  /// sonaba, la nota anterior se apaga enseguida.
+  Future<void> play(int key, String path) =>
+      _channel.invokeMethod<void>('play', {'key': key, 'path': path});
+
+  /// La tecla [key] se apaga a lo largo de [fade].
+  Future<void> release(int key, Duration fade) => _channel.invokeMethod<void>(
+    'release',
+    {'key': key, 'fadeMs': fade.inMilliseconds},
+  );
+
+  /// La tecla [key] se apaga ya (en unos milisegundos, sin chasquido).
+  Future<void> stop(int key) =>
+      _channel.invokeMethod<void>('stop', {'key': key});
+
+  /// Para la salida y olvida los sonidos.
+  Future<void> close() => _channel.invokeMethod<void>('close');
+}
+
 /// Si el reconocimiento de voz del sistema puede transcribir un idioma.
 class NativeSpeechSupport {
   const NativeSpeechSupport({required this.status, this.language});
