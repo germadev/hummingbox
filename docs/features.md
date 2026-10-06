@@ -149,7 +149,11 @@ it removes the focus from the search field (with the keyboard showing, a
 single Back hides it and removes the focus) and then the selection of a
 recording; it clears the search; and it opens the folders menu (in a
 subfolder too, without going to the main folder). With that menu open,
-Back leaves the app. While recording it doesn't leave.
+Back leaves the app, also with the gesture from the right edge: touches
+starting next to that edge, where the gesture is, don't reach the app (they
+would close the menu, and the Back that follows would open it again).
+Tapping outside the menu, away from that edge, still closes it. While
+recording it doesn't leave.
 
 ## Piano
 

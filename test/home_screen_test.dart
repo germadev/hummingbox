@@ -2913,6 +2913,65 @@ void main() {
       expect(store.settings.openFolder, 'Clases');
     });
 
+    testWidgets('con el menú abierto, el gesto de «atrás» desde el borde '
+        'derecho no lo cierra y sale de la app', (tester) async {
+      final calls = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          calls.add(call.method);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      final width =
+          tester.view.physicalSize.width / tester.view.devicePixelRatio;
+      final list = tester.getCenter(find.byType(ListView));
+      final dock = tester.getCenter(find.byType(RecordPanel));
+      await openDrawer(tester);
+
+      for (final start in [
+        Offset(width - 2, list.dy),
+        Offset(width - 10, dock.dy),
+        Offset(width - 30, 40),
+      ]) {
+        // El sistema reconoce el gesto y cancela el toque que había
+        // empezado en la app, tras moverse rápido hacia la izquierda.
+        final gesture = await tester.startGesture(start);
+        var time = Duration.zero;
+        for (var i = 0; i < 4; i++) {
+          time += const Duration(milliseconds: 16);
+          await gesture.moveBy(const Offset(-20, 0), timeStamp: time);
+          await tester.pump();
+        }
+        await gesture.cancel();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-folder')), findsOneWidget);
+
+        // Ni un toque junto al borde lo cierra.
+        await tester.tapAt(start);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-folder')), findsOneWidget);
+      }
+
+      // Después llega «atrás», con el menú aún abierto.
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(calls, contains('SystemNavigator.pop'));
+
+      // Un toque fuera del menú, lejos del borde, sí lo cierra.
+      await tester.tapAt(Offset(width - 60, list.dy));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsNothing);
+    });
+
     testWidgets('«atrás» quita la selección de la grabación, después abre el '
         'menú de las carpetas y con él abierto sale de la app', (tester) async {
       final calls = <String>[];
