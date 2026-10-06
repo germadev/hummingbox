@@ -106,7 +106,11 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   it after the new transcript.
 - **Built-in player**: the waveform is the progress bar; tap or drag it to
   seek. On a recording that isn't selected, it selects it at that point
-  without playing it.
+  without playing it. While it plays, the line that marks where it is moves
+  at a steady pace every frame: the player's positions arrive late and in
+  steps (on Android, sometimes slightly backwards), so the line follows the
+  clock and is nudged towards them, and it never goes back except when you
+  seek.
 - **Loop and playlist**: while a recording is selected, the bottom panel
   shows, in place of the record button, a button to stop it while it plays
   or to play it (or resume it) otherwise, *Play one after another* on

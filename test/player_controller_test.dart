@@ -94,6 +94,39 @@ void main() {
     expect(controller.duration, const Duration(milliseconds: 10500));
   });
 
+  test('mientras salta, no hace caso de las posiciones de antes', () async {
+    await controller.toggle(first);
+    player.positionController.add(const Duration(seconds: 3));
+    await flush();
+
+    player.seekGate = Completer();
+    final seeking = controller.seek(const Duration(seconds: 8));
+    expect(controller.position, const Duration(seconds: 8));
+    // El reproductor aún no ha saltado.
+    player.positionController.add(const Duration(milliseconds: 3020));
+    await flush();
+    expect(controller.position, const Duration(seconds: 8));
+
+    player.seekGate!.complete();
+    await seeking;
+    player.positionController.add(const Duration(milliseconds: 8020));
+    await flush();
+    expect(controller.position, const Duration(milliseconds: 8020));
+  });
+
+  test('al pausar, sigue la posición en la que se ha quedado', () async {
+    await controller.toggle(first);
+    player.positionController.add(const Duration(seconds: 3));
+    await flush();
+
+    await controller.toggle(first);
+    await flush();
+    expect(controller.status, PlaybackStatus.paused);
+    player.positionController.add(const Duration(milliseconds: 3016));
+    await flush();
+    expect(controller.position, const Duration(milliseconds: 3016));
+  });
+
   test('al terminar vuelve al principio y se puede repetir', () async {
     await controller.toggle(first);
     player.statusController.add(PlaybackStatus.completed);

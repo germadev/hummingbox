@@ -297,6 +297,56 @@ void main() {
     expect(playhead()?.progress, closeTo(0.25, 0.01));
   });
 
+  testWidgets('la línea avanza con el reloj y no retrocede', (tester) async {
+    repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+    await pumpApp(tester);
+    double progress() =>
+        (tester
+                    .widget<CustomPaint>(
+                      find.descendant(
+                        of: find.byKey(const Key('waveform-a')),
+                        matching: find.byKey(const Key('playhead')),
+                      ),
+                    )
+                    .foregroundPainter!
+                as PlayheadPainter)
+            .progress;
+    Duration at(double progress) =>
+        tester
+            .widget<WaveformSeekBar>(find.byKey(const Key('waveform-a')))
+            .duration *
+        progress;
+
+    await tester.tap(find.byTooltip('Reproducir'));
+    await tester.pumpAndSettle();
+    // La posición llega en un fotograma y se dibuja en el siguiente.
+    Future<void> report(Duration position) async {
+      player.positionController.add(position);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await report(const Duration(seconds: 10));
+    expect(at(progress()), const Duration(seconds: 10));
+
+    // Sin que el reproductor diga nada, avanza lo que pasa.
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(at(progress()).inMilliseconds, closeTo(10100, 2));
+
+    // Una posición un poco anterior no la hace retroceder.
+    await report(const Duration(milliseconds: 10050));
+    expect(at(progress()).inMilliseconds, greaterThanOrEqualTo(10099));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(at(progress()).inMilliseconds, greaterThan(10100));
+
+    // Al pausar, se queda donde estaba.
+    await tester.tap(tileButton('a', 'Pausar'));
+    await tester.pumpAndSettle();
+    final paused = at(progress());
+    await tester.pump(const Duration(seconds: 1));
+    expect(at(progress()), paused);
+  });
+
   testWidgets('en la vista compacta, las grabaciones con notas del piano '
       'llevan un piano a la izquierda del botón de reproducir', (tester) async {
     store.settings = const AppSettings(

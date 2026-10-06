@@ -193,8 +193,18 @@ class PlayerController extends ChangeNotifier {
     if (_currentId == null) return;
     _position = position;
     _notify();
-    await _player.seek(position);
+    // Mientras salta, el reproductor aún puede dar posiciones de antes: la
+    // línea volvería atrás un momento.
+    _seeking++;
+    try {
+      await _player.seek(position);
+    } finally {
+      _seeking--;
+    }
   }
+
+  /// Saltos en curso (ver [seek]).
+  var _seeking = 0;
 
   /// Detiene la reproducción sin quitar la selección: la grabación sigue
   /// seleccionada y, con su botón, vuelve a sonar desde el principio.
@@ -257,7 +267,11 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _onPosition(Duration position) {
-    if (_status != PlaybackStatus.playing) return;
+    // En pausa también: al pausar, da por dónde se ha quedado de verdad.
+    if (_status != PlaybackStatus.playing && _status != PlaybackStatus.paused) {
+      return;
+    }
+    if (_seeking > 0) return;
     _position = position;
     _notify();
   }

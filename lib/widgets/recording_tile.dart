@@ -365,6 +365,7 @@ class RecordingTile extends StatelessWidget {
                             ? player.duration
                             : recording.duration,
                         position: isCurrent ? player.position : null,
+                        playing: isPlaying,
                         notes: recording.notes,
                         showWaveform: showWaveform,
                         onSeek: onSeek,

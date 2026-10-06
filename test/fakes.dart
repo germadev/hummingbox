@@ -130,9 +130,14 @@ class FakeAudioPlayerService implements AudioPlayerService {
     statusController.add(PlaybackStatus.stopped);
   }
 
+  /// Si se pone, los saltos no terminan hasta que se complete.
+  Completer<void>? seekGate;
+
   @override
-  Future<void> seek(Duration position) async =>
-      calls.add('seek ${position.inMilliseconds}');
+  Future<void> seek(Duration position) async {
+    calls.add('seek ${position.inMilliseconds}');
+    await seekGate?.future;
+  }
 
   @override
   Future<void> dispose() async => disposed = true;

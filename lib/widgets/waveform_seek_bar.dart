@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../audio/levels.dart';
+import '../audio/playback_clock.dart';
 import '../l10n/l10n.dart';
 import '../models/piano_note.dart';
 import '../utils/formatters.dart';
@@ -21,6 +23,7 @@ class WaveformSeekBar extends StatefulWidget {
     required this.duration,
     required this.onSeek,
     this.position,
+    this.playing = false,
     this.notes = const [],
     this.showWaveform = true,
     this.height = 36,
@@ -44,6 +47,10 @@ class WaveformSeekBar extends StatefulWidget {
   /// en el reproductor. Si se indica, se muestran también los tiempos.
   final Duration? position;
 
+  /// Si está sonando: la línea avanza en cada fotograma, al ritmo del reloj
+  /// y sin los tirones de [position] (ver [PlaybackClock]).
+  final bool playing;
+
   final ValueChanged<Duration> onSeek;
   final double height;
 
@@ -51,20 +58,67 @@ class WaveformSeekBar extends StatefulWidget {
   State<WaveformSeekBar> createState() => _WaveformSeekBarState();
 }
 
-class _WaveformSeekBarState extends State<WaveformSeekBar> {
+class _WaveformSeekBarState extends State<WaveformSeekBar>
+    with SingleTickerProviderStateMixin {
   /// Posición (0–1) mientras el usuario arrastra.
   double? _dragFraction;
 
   /// Salto de los gestos de accesibilidad: un 5 % de la grabación.
   static const _semanticsStep = 0.05;
 
+  /// Por dónde va la línea, a partir de las posiciones del reproductor.
+  final _clock = PlaybackClock();
+
+  /// Mientras avanza, vuelve a dibujarla en cada fotograma.
+  late final Ticker _ticker = createTicker((_) {
+    if (!_clock.isAdvancingAt(_now)) _ticker.stop();
+    setState(() {});
+  });
+
+  /// La hora del fotograma: la misma para todo lo que se dibuja en él.
+  Duration get _now => SchedulerBinding.instance.currentFrameTimeStamp;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock.reset(widget.position ?? Duration.zero);
+  }
+
+  @override
+  void didUpdateWidget(WaveformSeekBar old) {
+    super.didUpdateWidget(old);
+    final position = widget.position;
+    if (position == null || old.position == null) {
+      _clock.reset(position ?? Duration.zero);
+    } else if (!widget.playing) {
+      if (old.playing) {
+        _clock.pause(position);
+      } else if (position != old.position) {
+        _clock.reset(position);
+      }
+    } else if (position != old.position) {
+      _clock.report(position, _now);
+    }
+    if (widget.playing && _clock.isAdvancingAt(_now)) {
+      if (!_ticker.isActive) _ticker.start();
+    } else if (_ticker.isActive) {
+      _ticker.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
   bool get _enabled => widget.duration > Duration.zero;
 
   double get _fraction {
     if (_dragFraction case final drag?) return drag;
-    final position = widget.position;
     final total = widget.duration.inMicroseconds;
-    if (position == null || total <= 0) return 0;
+    if (widget.position == null || total <= 0) return 0;
+    final position = _clock.positionAt(_now);
     return (position.inMicroseconds / total).clamp(0.0, 1.0);
   }
 
