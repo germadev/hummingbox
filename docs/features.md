@@ -113,7 +113,8 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
 
 ## Folders
 
-The folder button (top left), or swiping right anywhere on the list, opens a
+The folder button (top left), or swiping right anywhere on the list (not
+from the left or right edge, where the system's Back gesture is), opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
 In a subfolder its name is shown in the top bar, next to the folder button
@@ -131,18 +132,16 @@ leave.
 ## Piano
 
 The piano button (at the bottom of the folders menu), or swiping left
-anywhere on the list (not from the right edge, where the system's Back
-gesture is), opens a piano across the whole screen to find the notes of what
-you hummed. It is always laid out in **landscape**, and the screen rotates as
-usual while it is open:
+anywhere on the list (not from the left or right edge, where the system's
+Back gesture is), opens a piano across the whole screen to find the notes of what
+you hummed. Swiping on it doesn't close it, so you can slide your finger
+across all the keys: close it with its button (or Back). It is always laid
+out in **landscape**, and the screen rotates as usual while it is open:
 
 - With the phone in **portrait**, the piano is drawn sideways, already while
   it slides in. The button next to the close button turns it around if it
-  shows upside down (it is remembered). Swiping sideways closes it; the key
-  touched when the swipe starts stops sounding and isn't recorded.
-- With the phone in **landscape**, it is drawn normally, and horizontal
-  swipes don't close it (it's easy to swipe while playing): close it with its
-  button or Back.
+  shows upside down (it is remembered).
+- With the phone in **landscape**, it is drawn normally.
 - Each key has its own player with its sound already loaded, so it sounds as
   soon as it is touched.
 

@@ -1404,7 +1404,8 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 4),
         ],
       ),
-      // Se abre deslizando desde la izquierda. Al abrirlo se buscan
+      // Se abre deslizando hacia la derecha en la lista (ver
+      // [_SwipeToOpenDrawers]) o con su botón. Al abrirlo se buscan
       // subcarpetas nuevas.
       drawer: FolderDrawer(
         rootName:
@@ -1427,9 +1428,9 @@ class _HomeScreenState extends State<HomeScreen> {
       onDrawerChanged: (opened) {
         if (opened) _syncStorage();
       },
-      // Mientras se graba no se cambia de carpeta.
-      drawerEnableOpenDragGesture: !_recorder.isBusy,
-      // El piano, que se abre deslizando desde la derecha y ocupa todo el
+      // No desde el borde, donde se va atrás con los gestos del sistema.
+      drawerEnableOpenDragGesture: false,
+      // El piano, que se abre deslizando hacia la izquierda y ocupa todo el
       // ancho.
       endDrawer: Drawer(
         key: const Key('piano-drawer'),
@@ -1457,9 +1458,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // abre deslizando en la lista (ver [_SwipeToOpenDrawers]).
       endDrawerEnableOpenDragGesture: false,
       onEndDrawerChanged: _onPianoChanged,
-      // También se abren deslizando en cualquier punto de la lista, no solo
-      // desde el borde: hacia la derecha las carpetas y hacia la izquierda
-      // el piano.
+      // Se abren deslizando en cualquier punto de la lista salvo junto a los
+      // bordes: hacia la derecha las carpetas y hacia la izquierda el piano.
+      // Mientras se graba, ninguno.
       body: _SwipeToOpenDrawers(
         enabled: !_recorder.isBusy,
         onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
@@ -1678,16 +1679,16 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Velocidad a partir de la cual basta con un gesto rápido.
   static const _flingVelocity = 300.0;
 
-  /// Margen junto al borde del piano (el derecho, o el izquierdo de derecha
-  /// a izquierda) en el que deslizar no lo abre: desde el borde se va
-  /// atrás con los gestos del sistema. Si el sistema reserva más, lo suyo.
+  /// Margen junto a los bordes izquierdo y derecho en el que deslizar no
+  /// abre nada: desde el borde se va atrás con los gestos del sistema. Si
+  /// el sistema reserva más, lo suyo.
   static const edgeMargin = 32.0;
 
   double _dragged = 0;
   bool _opened = false;
 
-  /// Si el gesto empezó junto al borde del piano: no lo abre.
-  bool _fromEndEdge = false;
+  /// Si el gesto empezó junto a un borde: no abre nada.
+  bool _fromEdge = false;
 
   double get _direction =>
       Directionality.of(context) == TextDirection.rtl ? -1 : 1;
@@ -1695,7 +1696,7 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
   /// Abre el menú de las carpetas si [forward] (hacia la derecha) o, si no,
   /// el piano.
   void _open({required bool forward}) {
-    if (_opened || (!forward && _fromEndEdge)) return;
+    if (_opened || _fromEdge) return;
     _opened = true;
     (forward ? widget.onOpenDrawer : widget.onOpenEndDrawer)();
   }
@@ -1709,9 +1710,9 @@ class _SwipeToOpenDrawersState extends State<_SwipeToOpenDrawers> {
         final width = MediaQuery.sizeOf(context).width;
         final insets = MediaQuery.systemGestureInsetsOf(context);
         final x = details.globalPosition.dx;
-        _fromEndEdge = _direction > 0
-            ? x >= width - math.max(edgeMargin, insets.right)
-            : x <= math.max(edgeMargin, insets.left);
+        _fromEdge =
+            x <= math.max(edgeMargin, insets.left) ||
+            x >= width - math.max(edgeMargin, insets.right);
       },
       onHorizontalDragStart: (_) {
         _dragged = 0;

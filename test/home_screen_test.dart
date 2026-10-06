@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2295,8 +2296,8 @@ void main() {
 
   group('carpetas', () {
     Future<void> openDrawer(WidgetTester tester) async {
-      // Deslizando desde el borde izquierdo.
-      await tester.dragFrom(const Offset(2, 300), const Offset(300, 0));
+      // Deslizando hacia la derecha en la lista, lejos del borde.
+      await tester.dragFrom(const Offset(100, 300), const Offset(300, 0));
       await tester.pumpAndSettle();
     }
 
@@ -2396,10 +2397,30 @@ void main() {
       await tester.dragFrom(Offset(width - 10, 300), const Offset(-300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-keyboard')), findsNothing);
+      // Ni hacia el otro lado abre las carpetas.
+      await tester.dragFrom(Offset(width - 10, 300), const Offset(-30, 0));
+      await tester.dragFrom(Offset(width - 40, 300), const Offset(30, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsNothing);
 
       await tester.dragFrom(Offset(width - 60, 300), const Offset(-300, 0));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('piano-keyboard')), findsOneWidget);
+    });
+
+    testWidgets('deslizar desde el borde izquierdo (para ir atrás) no abre '
+        'las carpetas', (tester) async {
+      await pumpApp(tester);
+
+      for (final x in [2.0, 10.0, 30.0]) {
+        await tester.dragFrom(Offset(x, 300), const Offset(300, 0));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('new-folder')), findsNothing);
+      }
+
+      await tester.dragFrom(const Offset(60, 300), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('new-folder')), findsOneWidget);
     });
 
     testWidgets('crea una carpeta y la abre', (tester) async {
@@ -2703,6 +2724,15 @@ void main() {
       return orientations;
     }
 
+    /// El umbral de los arrastres de Android (8 puntos), menor que el de
+    /// por defecto en los tests.
+    void androidTouchSlop(WidgetTester tester) {
+      tester.view.gestureSettings = ui.GestureSettings(
+        physicalTouchSlop: 8 * tester.view.devicePixelRatio,
+      );
+      addTearDown(tester.view.resetGestureSettings);
+    }
+
     /// Pantalla de un móvil en vertical.
     void portraitScreen(WidgetTester tester) {
       tester.view
@@ -2797,35 +2827,41 @@ void main() {
       expect(orientations, isEmpty);
     });
 
-    testWidgets('en vertical, deslizar de lado lo cierra sin que suene', (
-      tester,
-    ) async {
+    testWidgets('en vertical, deslizar de lado no lo cierra', (tester) async {
       portraitScreen(tester);
+      androidTouchSlop(tester);
       await pumpApp(tester);
       await openPiano(tester);
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('piano-record')));
-      await tester.pump();
 
+      // Por las teclas y por la cabecera, poco a poco y deprisa.
       final rect = tester.getRect(keyboard());
       final gesture = await tester.startGesture(
         Offset(rect.left + 20, rect.top + 30),
       );
       await tester.pump();
       expect(piano.played, [48]);
-      for (var i = 0; i < 10; i++) {
-        await gesture.moveBy(const Offset(40, 0));
+      for (var i = 0; i < 60; i++) {
+        await gesture.moveBy(const Offset(4, 0));
         await tester.pump();
       }
       await gesture.up();
       await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(piano.stopped, isEmpty);
 
+      await tester.flingFrom(
+        Offset(rect.left - 10, rect.center.dy),
+        const Offset(300, 0),
+        2000,
+      );
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+
+      // Se cierra con su botón.
+      await tester.tap(find.byTooltip('Cerrar'));
+      await tester.pumpAndSettle();
       expect(keyboard(), findsNothing);
-      // La tecla del principio se calla y no suena ninguna otra.
-      expect(piano.stopped, [48]);
-      expect(piano.played, [48]);
-      // Ni se graba.
-      expect(editor.pianoSaves, isEmpty);
     });
 
     testWidgets(
@@ -2859,9 +2895,24 @@ void main() {
     testWidgets('arrastrar de izquierda a derecha no lo cierra', (
       tester,
     ) async {
+      androidTouchSlop(tester);
       await pumpApp(tester);
       await openPiano(tester);
       await tester.pumpAndSettle();
+
+      // Por todas las teclas, poco a poco: suenan todas.
+      final from = whiteKey(tester, 0);
+      final to = whiteKey(tester, 4);
+      final gesture = await tester.startGesture(from);
+      for (var x = from.dx; x < to.dx; x += 4) {
+        await gesture.moveTo(Offset(x, from.dy));
+        await tester.pump();
+      }
+      await gesture.moveTo(to);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(keyboard(), findsOneWidget);
+      expect(piano.played, [48, 50, 52, 53, 55]);
 
       // En la cabecera, fuera de las teclas.
       await tester.dragFrom(
