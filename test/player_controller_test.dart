@@ -121,6 +121,43 @@ void main() {
     expect(player.calls.last, 'stop');
   });
 
+  test('parar la reproducción la deja seleccionada, al principio', () async {
+    await controller.toggle(first);
+    player.statusController.add(PlaybackStatus.playing);
+    player.positionController.add(const Duration(seconds: 3));
+    await flush();
+
+    await controller.stopPlayback();
+    await flush();
+    expect(controller.currentId, 'a');
+    expect(controller.status, PlaybackStatus.stopped);
+    expect(controller.position, Duration.zero);
+    expect(controller.isPlayingOrPaused, isFalse);
+    expect(player.calls.last, 'stop');
+
+    // Vuelve a sonar desde el principio.
+    await controller.toggle(first);
+    expect(player.calls.last, 'play /a.m4a @0');
+  });
+
+  test('parar mientras se lee el audio no la deja sonar', () async {
+    final gate = Completer<String>();
+    controller.dispose();
+    controller = PlayerController(
+      player: player,
+      audioPath: (_) => gate.future,
+    );
+
+    final loading = controller.toggle(first);
+    await controller.stopPlayback();
+    gate.complete('/cache/a.m4a');
+    await loading;
+
+    expect(player.calls, ['stop']);
+    expect(controller.currentId, 'a');
+    expect(controller.isLoading(first), isFalse);
+  });
+
   test('libera el reproductor al desecharse', () {
     final service = FakeAudioPlayerService();
     PlayerController(player: service).dispose();

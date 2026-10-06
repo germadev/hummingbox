@@ -113,8 +113,9 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   the left (when it ends, the next one in the list plays) and *Repeat* on the
   right (it starts again; with *Play one after another*, the whole list
   repeats). Both stay on until you turn them off, while the app is open.
-  Stopping it, or tapping outside the recordings, deselects it and brings
-  back the record button.
+  Stopping it keeps it selected, ready to play again from the beginning;
+  tapping outside the recordings deselects it and brings back the record
+  button.
 - **Rename**, **share** (with the name you gave it) and **delete**.
 
 ## Folders
@@ -149,7 +150,11 @@ out in **landscape**, and the screen rotates as usual while it is open:
   shows upside down (it is remembered).
 - With the phone in **landscape**, it is drawn normally.
 - Each key has its own player with its sound already loaded, so it sounds as
-  soon as it is touched.
+  soon as it is touched. When several notes sound together (chords, fast
+  notes), the volume of all of them is lowered just enough for their sum not
+  to clip, and comes back smoothly as they fade, so it sounds clean; a single
+  note keeps its full volume. Changing the instrument doesn't make any key
+  sound by itself.
 
 The keyboard:
 
@@ -255,6 +260,8 @@ the recordings) takes the focus away from the field and hides the keyboard
 (with nothing typed, the buttons come back), and deselects the recording unless
 it is playing. Touching the bottom panel also takes the focus away from the
 field, and tapping it outside its buttons works like the list's background.
+Tapping anywhere else, such as on a recording to select it, takes the focus
+away from the field too.
 
 It searches **names and transcripts** in every folder, ignoring case and
 accents ("reunion" finds "Reunión"), and each word can match either of them.

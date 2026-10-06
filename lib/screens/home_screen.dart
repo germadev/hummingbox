@@ -1493,7 +1493,9 @@ class _HomeScreenState extends State<HomeScreen> {
         controller: _recorder,
         countdownSeconds: widget.sync.settings.countdownSeconds,
         player: _player,
-        onStopPlayback: () => unawaited(_player.stop()),
+        // Para sin quitar la selección: la grabación sigue a la vista, lista
+        // para volver a sonar.
+        onStopPlayback: () => unawaited(_player.stopPlayback()),
         onPlaySelected: () {
           final id = _player.currentId;
           final selected = _recordings.where((r) => r.id == id).firstOrNull;
@@ -1872,6 +1874,9 @@ class _SearchField extends StatelessWidget {
       key: const Key('search-field'),
       controller: controller,
       focusNode: focusNode,
+      // Pierde el foco (y se oculta el teclado) al tocar en cualquier otro
+      // sitio, también en una grabación, que no avisa al fondo de la lista.
+      onTapOutside: (_) => focusNode.unfocus(),
       textInputAction: TextInputAction.search,
       textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
