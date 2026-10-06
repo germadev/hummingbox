@@ -88,11 +88,7 @@
   },
   "search": "Search",
   "@search": {
-    "description": "Botón de la lupa, para buscar grabaciones"
-  },
-  "searchHint": "Name or transcript",
-  "@searchHint": {
-    "description": "Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)"
+    "description": "Texto de ayuda del campo de búsqueda, siempre en la barra (corto, para que quepa)"
   },
   "clearSearch": "Clear search",
   "pullToSearch": "Pull to search",

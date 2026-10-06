@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../audio/levels.dart';
@@ -144,6 +146,9 @@ class RecordingActionsBar extends StatelessWidget {
 ///
 /// En la vista compacta ([compact]) solo tiene una línea de datos (sin el
 /// formato) y la onda solo se ve mientras está seleccionada.
+///
+/// Al seleccionarla, si no se ve entera (p. ej. al crecer con la onda), la
+/// lista se desplaza lo justo para que se vea.
 class RecordingTile extends StatelessWidget {
   const RecordingTile({
     super.key,
@@ -228,189 +233,274 @@ class RecordingTile extends StatelessWidget {
 
         // Los toques en los huecos de la tarjeta no llegan a la lista (que
         // deseleccionaría la grabación).
-        return GestureDetector(
-          onTap: () {},
-          excludeFromSemantics: true,
-          child: Card.filled(
-            color: cardColor,
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                ListTile(
-                  contentPadding: const EdgeInsets.only(left: 12, right: 4),
-                  isThreeLine: !compact,
-                  onTap: onSelect,
-                  // En la vista compacta no se ven las notas del piano hasta
-                  // seleccionarla: un piano pequeño, a la izquierda del
-                  // botón, indica que las tiene.
-                  leading: _WithNotesIcon(
-                    show: compact && recording.notes.isNotEmpty,
-                    ringColor: cardColor,
-                    key: Key('notes-icon-${recording.id}'),
-                    child: IconButton.filled(
-                      // ListTile tiñe los iconos de `leading`; se fija el color
-                      // para que contraste con el fondo del botón.
-                      color: theme.colorScheme.onPrimary,
-                      tooltip: isPlaying ? l10n.pause : l10n.play,
-                      // Mientras se lee el audio (p. ej. de Google Drive).
-                      icon: player.isLoading(recording)
-                          ? SizedBox.square(
-                              dimension: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: theme.colorScheme.onPrimary,
-                              ),
-                            )
-                          : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
-                      onPressed: onTogglePlay,
-                    ),
-                  ),
-                  // Tocar el nombre lo edita (el resto de la tarjeta la
-                  // selecciona).
-                  title: Builder(
-                    builder: (titleContext) => Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Semantics(
-                        button: true,
-                        hint: l10n.rename,
-                        child: InkWell(
-                          key: Key('name-${recording.id}'),
-                          borderRadius: BorderRadius.circular(4),
-                          onTap: () =>
-                              onAction(RecordingAction.rename, titleContext),
-                          // Sin la fecha del principio: ya está debajo.
-                          child: Text.rich(
-                            _highlighted(
-                              RecordingNames.withoutDate(recording.name),
-                              search,
-                              highlightStyle,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
+        return _RevealWhenSelected(
+          selected: isCurrent,
+          child: GestureDetector(
+            onTap: () {},
+            excludeFromSemantics: true,
+            child: Card.filled(
+              color: cardColor,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  ListTile(
+                    contentPadding: const EdgeInsets.only(left: 12, right: 4),
+                    isThreeLine: !compact,
+                    onTap: onSelect,
+                    // En la vista compacta no se ven las notas del piano hasta
+                    // seleccionarla: un piano pequeño, a la izquierda del
+                    // botón, indica que las tiene.
+                    leading: _WithNotesIcon(
+                      show: compact && recording.notes.isNotEmpty,
+                      ringColor: cardColor,
+                      key: Key('notes-icon-${recording.id}'),
+                      child: IconButton.filled(
+                        // ListTile tiñe los iconos de `leading`; se fija el color
+                        // para que contraste con el fondo del botón.
+                        color: theme.colorScheme.onPrimary,
+                        tooltip: isPlaying ? l10n.pause : l10n.play,
+                        // Mientras se lee el audio (p. ej. de Google Drive).
+                        icon: player.isLoading(recording)
+                            ? SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: theme.colorScheme.onPrimary,
+                                ),
+                              )
+                            : Icon(isPlaying ? Icons.pause : Icons.play_arrow),
+                        onPressed: onTogglePlay,
                       ),
                     ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        [
-                          if (showFolder && recording.folder.isNotEmpty)
-                            recording.folder,
-                          formatRecordingDate(recording.createdAt, l10n),
-                          duration,
-                        ].join(' · '),
-                        maxLines: compact ? 1 : null,
-                        overflow: compact ? TextOverflow.ellipsis : null,
-                      ),
-                      if (!compact)
-                        Text(
-                          audio == null
-                              ? formatName(recording.format)
-                              : formatAudioInfo(audio, l10n),
-                          key: Key('audio-info-${recording.id}'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: mutedStyle,
-                        ),
-                    ],
-                  ),
-                  trailing: Builder(
-                    builder: (tileContext) => PopupMenuButton<RecordingAction>(
-                      tooltip: l10n.moreOptions,
-                      onSelected: (action) => onAction(action, tileContext),
-                      itemBuilder: (context) => [
-                        for (final entry in recordingActions(
-                          recording,
-                          transcriptions,
-                          l10n,
-                        ))
-                          PopupMenuItem(
-                            value: entry.action,
-                            enabled: entry.enabled,
-                            child: ListTile(
-                              leading: Icon(entry.icon),
-                              title: Text(entry.label),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                // En la vista compacta, solo la seleccionada. Sin voz que se
-                // oiga ni notas, no hay nada que dibujar: solo se ve
-                // seleccionada, para saltar y ver por dónde va.
-                if (isCurrent ||
-                    (!compact && (showWaveform || recording.notes.isNotEmpty)))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: WaveformSeekBar(
-                      key: Key('waveform-${recording.id}'),
-                      levels: recording.waveform,
-                      duration: isCurrent && player.duration > Duration.zero
-                          ? player.duration
-                          : recording.duration,
-                      position: isCurrent ? player.position : null,
-                      notes: recording.notes,
-                      showWaveform: showWaveform,
-                      onSeek: onSeek,
-                    ),
-                  ),
-                if (showProgress)
-                  _TranscriptionProgress(
-                    progress: transcriptions.progressOf(recording),
-                    running: transcriptions.isRunning(recording),
-                    onCancel: onCancelTranscription,
-                  )
-                else if (transcript != null && showTranscript)
-                  InkWell(
-                    key: Key('transcript-${recording.id}'),
-                    onTap: () =>
-                        onAction(RecordingAction.viewTranscript, context),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsetsDirectional.only(
-                              end: 8,
-                              top: 2,
-                            ),
-                            child: Icon(
-                              Icons.subject,
-                              size: 16,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          Expanded(
+                    // Tocar el nombre lo edita (el resto de la tarjeta la
+                    // selecciona).
+                    title: Builder(
+                      builder: (titleContext) => Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Semantics(
+                          button: true,
+                          hint: l10n.rename,
+                          child: InkWell(
+                            key: Key('name-${recording.id}'),
+                            borderRadius: BorderRadius.circular(4),
+                            onTap: () =>
+                                onAction(RecordingAction.rename, titleContext),
+                            // Sin la fecha del principio: ya está debajo.
                             child: Text.rich(
                               _highlighted(
-                                search?.excerpt(transcript.text) ??
-                                    transcript.text,
+                                RecordingNames.withoutDate(recording.name),
                                 search,
                                 highlightStyle,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: mutedStyle,
                             ),
                           ),
-                        ],
+                        ),
                       ),
                     ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          [
+                            if (showFolder && recording.folder.isNotEmpty)
+                              recording.folder,
+                            formatRecordingDate(recording.createdAt, l10n),
+                            duration,
+                          ].join(' · '),
+                          maxLines: compact ? 1 : null,
+                          overflow: compact ? TextOverflow.ellipsis : null,
+                        ),
+                        if (!compact)
+                          Text(
+                            audio == null
+                                ? formatName(recording.format)
+                                : formatAudioInfo(audio, l10n),
+                            key: Key('audio-info-${recording.id}'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: mutedStyle,
+                          ),
+                      ],
+                    ),
+                    trailing: Builder(
+                      builder: (tileContext) =>
+                          PopupMenuButton<RecordingAction>(
+                            tooltip: l10n.moreOptions,
+                            onSelected: (action) =>
+                                onAction(action, tileContext),
+                            itemBuilder: (context) => [
+                              for (final entry in recordingActions(
+                                recording,
+                                transcriptions,
+                                l10n,
+                              ))
+                                PopupMenuItem(
+                                  value: entry.action,
+                                  enabled: entry.enabled,
+                                  child: ListTile(
+                                    leading: Icon(entry.icon),
+                                    title: Text(entry.label),
+                                  ),
+                                ),
+                            ],
+                          ),
+                    ),
                   ),
-              ],
+                  // En la vista compacta, solo la seleccionada. Sin voz que se
+                  // oiga ni notas, no hay nada que dibujar: solo se ve
+                  // seleccionada, para saltar y ver por dónde va.
+                  if (isCurrent ||
+                      (!compact &&
+                          (showWaveform || recording.notes.isNotEmpty)))
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: WaveformSeekBar(
+                        key: Key('waveform-${recording.id}'),
+                        levels: recording.waveform,
+                        duration: isCurrent && player.duration > Duration.zero
+                            ? player.duration
+                            : recording.duration,
+                        position: isCurrent ? player.position : null,
+                        notes: recording.notes,
+                        showWaveform: showWaveform,
+                        onSeek: onSeek,
+                      ),
+                    ),
+                  if (showProgress)
+                    _TranscriptionProgress(
+                      progress: transcriptions.progressOf(recording),
+                      running: transcriptions.isRunning(recording),
+                      onCancel: onCancelTranscription,
+                    )
+                  else if (transcript != null && showTranscript)
+                    InkWell(
+                      key: Key('transcript-${recording.id}'),
+                      onTap: () =>
+                          onAction(RecordingAction.viewTranscript, context),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsetsDirectional.only(
+                                end: 8,
+                                top: 2,
+                              ),
+                              child: Icon(
+                                Icons.subject,
+                                size: 16,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text.rich(
+                                _highlighted(
+                                  search?.excerpt(transcript.text) ??
+                                      transcript.text,
+                                  search,
+                                  highlightStyle,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: mutedStyle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
   }
+}
+
+/// [child] (una grabación de la lista) que, al pasar a estar [selected], se
+/// desplaza en la lista lo justo para verse entero, si queda cortado por
+/// abajo o por arriba (si no cabe, se ve desde arriba). Mientras acaba de
+/// crecer (la onda, sus tiempos, la transcripción…), se vuelve a mirar.
+class _RevealWhenSelected extends StatefulWidget {
+  const _RevealWhenSelected({required this.selected, required this.child});
+
+  final bool selected;
+  final Widget child;
+
+  @override
+  State<_RevealWhenSelected> createState() => _RevealWhenSelectedState();
+}
+
+class _RevealWhenSelectedState extends State<_RevealWhenSelected> {
+  /// Lo que tarda en desplazarse la lista.
+  static const _scrollDuration = Duration(milliseconds: 200);
+
+  /// Lo que se sigue mirando si crece después de seleccionarla. Después ya
+  /// no, para no mover la lista si se ha desplazado a otro sitio.
+  static const _followDuration = Duration(seconds: 1);
+
+  /// Mientras se sigue mirando si crece.
+  Timer? _following;
+
+  @override
+  void didUpdateWidget(_RevealWhenSelected oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected && !oldWidget.selected) {
+      _following?.cancel();
+      _following = Timer(_followDuration, () => _following = null);
+      _revealAfterLayout();
+    } else if (!widget.selected) {
+      _following?.cancel();
+      _following = null;
+    }
+  }
+
+  /// Cuando ya tiene su nuevo tamaño.
+  void _revealAfterLayout() =>
+      WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_reveal()));
+
+  Future<void> _reveal() async {
+    if (!mounted || !widget.selected) return;
+    if (Scrollable.maybeOf(context) == null) return;
+    // Primero el final y después el principio, que manda si no cabe. Cada
+    // uno solo desplaza la lista si hace falta.
+    for (final policy in const [
+      ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+    ]) {
+      if (!mounted) return;
+      await Scrollable.ensureVisible(
+        context,
+        duration: _scrollDuration,
+        curve: Curves.easeOutCubic,
+        alignmentPolicy: policy,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _following?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (_) {
+          if (_following != null) _revealAfterLayout();
+          // No le importa a nadie más.
+          return true;
+        },
+        child: SizeChangedLayoutNotifier(child: widget.child),
+      );
 }
 
 /// [text] con lo que encuentra [search] en el estilo [style].

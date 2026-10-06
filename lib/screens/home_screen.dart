@@ -118,9 +118,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
   final _searchFocus = FocusNode();
 
-  /// Si se muestra el campo de búsqueda (al pulsar la lupa o tirar de la
-  /// lista hacia abajo; se cierra al perder el foco sin nada escrito).
-  bool _searchOpen = false;
+  /// Si se está buscando: el campo de búsqueda, que siempre está en la
+  /// barra, tiene el foco o algo escrito. Entonces ocupa la barra hasta las
+  /// opciones.
+  bool get _searching => _searchFocus.hasFocus || _search.text.isNotEmpty;
 
   /// Cuánto se ha tirado de la lista hacia abajo: la lupa de la barra lo
   /// indica.
@@ -442,23 +443,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --- Búsqueda ---
 
-  /// Abre el campo de búsqueda con el foco (o le da el foco, si ya está).
-  /// Si ya lo tiene, vuelve a mostrar el teclado, que se puede haber ocultado
-  /// (p. ej. con «atrás» en Android).
+  /// Da el foco al campo de búsqueda. Si ya lo tiene, vuelve a mostrar el
+  /// teclado, que se puede haber ocultado (p. ej. con «atrás» en Android).
   void _startSearch() {
-    if (!_searchOpen) {
-      setState(() => _searchOpen = true);
-    } else if (_searchFocus.hasFocus) {
+    if (_searchFocus.hasFocus) {
       unawaited(SystemChannels.textInput.invokeMethod<void>('TextInput.show'));
     } else {
       _searchFocus.requestFocus();
     }
   }
 
+  /// Borra lo buscado y quita el foco del campo.
   void _closeSearch() {
     _search.clear();
     _searchFocus.unfocus();
-    setState(() => _searchOpen = false);
   }
 
   void _onSearchChanged() => setState(() {});
@@ -478,7 +476,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   /// Al tocar el fondo de la lista (fuera de las grabaciones): se quita el
-  /// foco del campo de búsqueda (y el teclado; sin nada escrito, se cierra) y
+  /// foco del campo de búsqueda (y el teclado) y
   /// se deselecciona la grabación, salvo que esté sonando (para no cortarla
   /// por un toque sin querer).
   void _onBackgroundTapped() {
@@ -486,12 +484,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_player.status != PlaybackStatus.playing) unawaited(_player.stop());
   }
 
-  /// Sin nada escrito, el campo se cierra al perder el foco.
-  void _onSearchFocusChanged() {
-    if (!_searchFocus.hasFocus && _search.text.trim().isEmpty && _searchOpen) {
-      setState(() => _searchOpen = false);
-    }
-  }
+  /// Con el foco, el campo ocupa la barra; sin él (y sin nada escrito),
+  /// vuelven los botones.
+  void _onSearchFocusChanged() => setState(() {});
 
   // --- Carpetas ---
 
@@ -1365,7 +1360,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final folder = _folder;
     final folderNames = _folderNames;
-    final searching = _searchOpen;
+    final searching = _searching;
     final scaffold = Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
@@ -1382,36 +1377,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 : () => _scaffoldKey.currentState?.openDrawer(),
           ),
         ),
-        // La lupa, siempre a la izquierda, junto a las carpetas, y en una
-        // subcarpeta su nombre. Al buscar, el campo ocupa desde ahí hasta las
-        // opciones, con la lupa en el mismo sitio.
+        // El campo de búsqueda, siempre a la vista, con la lupa a la
+        // izquierda, junto a las carpetas, y en una subcarpeta su nombre a la
+        // derecha. Al buscar ocupa desde ahí hasta las opciones.
         centerTitle: false,
         titleSpacing: 0,
-        title: searching
-            ? _SearchField(
-                controller: _search,
-                focusNode: _searchFocus,
-                pull: _pull,
-                onClear: _closeSearch,
-              )
-            : Row(
-                children: [
-                  _SearchButton(pull: _pull, onPressed: _startSearch),
-                  if (folder.isNotEmpty)
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsetsDirectional.only(start: 4),
-                        child: Text(
-                          folder,
-                          key: const Key('folder-title'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+        title: _SearchField(
+          controller: _search,
+          focusNode: _searchFocus,
+          pull: _pull,
+          searching: searching,
+          folder: folder,
+          onClear: _closeSearch,
+        ),
         actions: [
           if (!searching)
             _SyncIndicator(sync: widget.sync, onPressed: _openSettings),
@@ -1556,7 +1534,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// «Atrás» del sistema, de lo más concreto a lo más general: cierra el
   /// piano; quita el foco del campo de búsqueda y después la selección de la
-  /// grabación; cierra la búsqueda; en una subcarpeta vuelve a la principal
+  /// grabación; borra lo buscado; en una subcarpeta vuelve a la principal
   /// y en la principal abre el menú de las carpetas. Con ese menú abierto en
   /// la principal, se sale de la app. En mitad de una grabación no se sale.
   Future<void> _onBack() async {
@@ -1574,7 +1552,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _searchFocus.unfocus();
     } else if (_player.currentId != null) {
       await _player.stop();
-    } else if (_searchOpen) {
+    } else if (_search.text.isNotEmpty) {
       _closeSearch();
     } else if (_recorder.pending != null) {
       await _recorder.cancel();
@@ -1861,42 +1839,75 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Campo de búsqueda de la barra superior: la lupa a la izquierda (la que
-/// baja al tirar de la lista), el texto y la X para borrar y cerrar, todo
-/// centrado en vertical como los botones de la barra.
+/// Campo de búsqueda de la barra superior, siempre a la vista: la lupa a la
+/// izquierda (la que baja al tirar de la lista), el texto («Buscar») y, al
+/// buscar ([searching]), la X para borrar y quitar el foco; si no, en una
+/// subcarpeta, su nombre ([folder]). Todo centrado en vertical como los
+/// botones de la barra.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
     required this.focusNode,
     required this.pull,
+    required this.searching,
+    required this.folder,
     required this.onClear,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
   final ValueNotifier<_Pull> pull;
+  final bool searching;
+  final String folder;
   final VoidCallback onClear;
+
+  /// Lo que ocupa como mucho el nombre de la subcarpeta.
+  static const _folderMaxWidth = 160.0;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final theme = Theme.of(context);
     return TextField(
       key: const Key('search-field'),
       controller: controller,
       focusNode: focusNode,
-      autofocus: true,
       textInputAction: TextInputAction.search,
       textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
-        hintText: l10n.searchHint,
+        hintText: l10n.search,
         border: InputBorder.none,
         contentPadding: EdgeInsets.zero,
         prefixIcon: _SearchButton(pull: pull),
-        suffixIcon: IconButton(
-          tooltip: l10n.clearSearch,
-          icon: const Icon(Icons.close),
-          onPressed: onClear,
-        ),
+        suffixIcon: searching
+            ? IconButton(
+                tooltip: l10n.clearSearch,
+                icon: const Icon(Icons.close),
+                onPressed: onClear,
+              )
+            : folder.isEmpty
+            ? null
+            : Padding(
+                padding: const EdgeInsetsDirectional.only(start: 8, end: 4),
+                child: Align(
+                  widthFactor: 1,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _folderMaxWidth,
+                    ),
+                    child: Text(
+                      folder,
+                      key: const Key('folder-title'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ),
+                ),
+              ),
+        suffixIconConstraints: searching
+            ? null
+            : const BoxConstraints(minHeight: kMinInteractiveDimension),
       ),
     );
   }
@@ -2096,17 +2107,13 @@ class _PullToSearchState extends State<_PullToSearch> {
   }
 }
 
-/// La lupa de la barra superior: en el centro o, mientras se busca, a la
-/// izquierda del campo. Al tirar de la lista hacia abajo ([pull]) aparece
-/// detrás de ella un círculo gris claro, que pasa al color principal al
-/// pasar el punto en que se busca.
+/// La lupa del campo de búsqueda de la barra superior. Al tirar de la lista
+/// hacia abajo ([pull]) aparece detrás de ella un círculo gris claro, que
+/// pasa al color principal al pasar el punto en que se busca.
 class _SearchButton extends StatelessWidget {
-  const _SearchButton({required this.pull, this.onPressed});
+  const _SearchButton({required this.pull});
 
   final ValueNotifier<_Pull> pull;
-
-  /// Al pulsarla; `null` para la del campo de búsqueda, que no es un botón.
-  final VoidCallback? onPressed;
 
   /// Diámetro del círculo.
   static const _size = 40.0;
@@ -2140,15 +2147,11 @@ class _SearchButton extends StatelessWidget {
                   ),
                 ),
               ),
-            if (onPressed case final onPressed?)
-              IconButton(
-                key: const Key('search-button'),
-                tooltip: context.l10n.search,
-                icon: icon,
-                onPressed: onPressed,
-              )
-            else
-              SizedBox.square(dimension: kMinInteractiveDimension, child: icon),
+            SizedBox.square(
+              key: const Key('search-icon'),
+              dimension: kMinInteractiveDimension,
+              child: icon,
+            ),
           ],
         );
       },

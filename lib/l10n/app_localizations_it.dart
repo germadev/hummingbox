@@ -124,9 +124,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get search => 'Cerca';
 
   @override
-  String get searchHint => 'Nome o trascrizione';
-
-  @override
   String get clearSearch => 'Cancella la ricerca';
 
   @override
