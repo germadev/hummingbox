@@ -35,12 +35,14 @@ client), transcription (with fake recognizers), the controllers (including
 the countdown and voice start with its trimming), search, formats and
 automatic recording names, the piano's notes, the instruments' and the
 synthesizer's sound (in tune, without clipping, with their envelopes),
-mixing with the voice, piano-only recordings as `.mid` with no audio (their
+mixing with the voice (without clipping, and a key played again cuts the
+previous note), piano-only recordings as `.mid` with no audio (their
 sound generated on playback, trimming, adding piano and syncing),
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search
-(including pulling the list down), keeping the screen on, transcribing (also
+(always in the bar, including pulling the list down), scrolling to show the
+selected recording whole, keeping the screen on, transcribing (also
 automatically, in the background) and reading the transcript, settings,
 downloading Whisper, theme, renaming (also after transcribing again), the
 piano (playing, sliding across keys, moving smoothly along the keyboard and

@@ -90,7 +90,10 @@ and a WAV file in Dart. If trimming fails, the whole recording is kept.
   right below it.
 - **Tap a recording to select it**, without playing it: it is highlighted,
   with its transcript. It plays only with its **play button** (or the one in
-  the bottom panel). Selecting another one stops the one playing.
+  the bottom panel). Selecting another one stops the one playing. If the
+  selected recording is cut off at the bottom or the top of the list (for
+  example because it grows with its waveform), the list scrolls just enough
+  to show it whole.
 - **Names**: a new recording is called after its date and time
   (`2026-10-05 14.32`) and, when it is transcribed for the first time, after
   its date and the first words of the transcript
@@ -120,14 +123,14 @@ The folder button (top left), or swiping right anywhere on the list (not
 from the left or right edge, where the system's Back gesture is), opens a
 menu with the main folder and its **subfolders**, the number of recordings in
 each one and *New folder*. Dragging on a recording's waveform still seeks.
-In a subfolder its name is shown in the top bar, next to the folder button
-(the main folder has no title), the list shows its recordings and **new recordings go there**.
+In a subfolder its name is shown in the top bar, at the right of the search
+field (the main folder has no title), the list shows its recordings and **new recordings go there**.
 
 ## Back button
 
 Back goes from the most specific to the most general: it closes the piano;
 it removes the focus from the search field and then the selection of a
-recording; it closes the search; in a subfolder it returns to the main
+recording; it clears the search; in a subfolder it returns to the main
 folder, and in the main folder it opens the folders menu. With that menu
 open in the main folder, Back leaves the app. While recording it doesn't
 leave.
@@ -198,7 +201,11 @@ The recording goes to the open folder, like any other.
 - **Piano only**: no microphone and **no audio file**: the recording is just
   the notes, saved as a `.mid` (`Idea.mid`), and lasts until the last note
   fades out. Its sound is generated from the notes when you play, share
-  (as WAV) or edit it, and isn't stored. Its format shows as *MIDI*. If no
+  (as WAV) or edit it, and isn't stored. As when playing the piano, a key
+  sounds once at a time (playing it again cuts the previous note), and when
+  many notes sound together the volume is lowered smoothly instead of
+  clipping, so it sounds clean (the same when the notes are mixed with the
+  voice). Its format shows as *MIDI*. If no
   key was played, nothing is saved.
 - **Piano and voice**: the microphone records as usual and, when you stop,
   the notes are mixed on top, timed with the recorder so they match the
@@ -230,20 +237,22 @@ The recording goes to the open folder, like any other.
 
 ## Search
 
-The magnifier (at the left of the top bar, next to the folders button), or **pulling the list down**
+The **search field is always in the top bar**, next to the folders button,
+with a magnifier at its left and "Search" as placeholder (in a subfolder, its
+name at the right). Tapping it, or **pulling the list down**
 when it is already at the top (a drag that scrolls up to the top and keeps
-pulling doesn't count), opens a search field that spans the top bar,
-from the folder button to ⚙, with the magnifier in the same place and an X
-where the view button was. While pulling, the list moves down, a light grey circle appears behind
+pulling doesn't count), gives it the focus: it then spans the top bar,
+from the folder button to ⚙, with an X where the view button was (and the
+folder name). While pulling, the list moves down, a light grey circle appears behind
 the bar's magnifier and "Pull to search" shows in the gap above the list;
 past a certain point the circle turns purple, the text changes to "Release
 to search" and the phone gives a short vibration, and **releasing** there
-opens the search: the circle disappears at once, without following the list
+focuses the search: the circle disappears at once, without following the list
 back up (going back up before releasing cancels it). If the search
 field already has the focus, pulling shows the keyboard again (for example
 after hiding it with Back on Android). Tapping the list's background (outside
 the recordings) takes the focus away from the field and hides the keyboard
-(with nothing typed, the search closes), and deselects the recording unless
+(with nothing typed, the buttons come back), and deselects the recording unless
 it is playing. Touching the bottom panel also takes the focus away from the
 field, and tapping it outside its buttons works like the list's background.
 
@@ -257,8 +266,8 @@ end. Words of 3 letters or less, words with digits and Chinese or Japanese
 text are only searched as typed. Recordings that have the words as typed come
 first. Results highlight what was found (similar words too), show the part
 of the transcript where it appears and each recording's subfolder. The X
-closes the search; Back first removes the focus from the field and then
-closes it.
+clears the search and removes the focus; Back first removes the focus from
+the field and then clears it.
 
 ## Editing
 

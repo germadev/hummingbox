@@ -124,6 +124,12 @@ void main() {
 
   Finder record() => find.byKey(const Key('record-button'));
 
+  /// El campo de texto del diálogo abierto (no el de búsqueda de la barra).
+  Finder dialogField() => find.descendant(
+    of: find.byType(AlertDialog),
+    matching: find.byType(TextField),
+  );
+
   /// Toca la tarjeta de la grabación de [duration] fuera del nombre, del
   /// botón y de la onda.
   Future<void> tapCard(WidgetTester tester, String duration) async {
@@ -359,7 +365,7 @@ void main() {
     await tester.tap(find.text('Renombrar'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'Clase de historia');
+    await tester.enterText(dialogField(), 'Clase de historia');
     await tester.tap(find.text('Guardar'));
     await tester.pumpAndSettle();
 
@@ -375,7 +381,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Renombrar grabación'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), 'Idea');
+    await tester.enterText(dialogField(), 'Idea');
     await tester.pump();
     await tester.tap(find.text('Guardar'));
     await tester.pumpAndSettle();
@@ -448,7 +454,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Renombrar'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '   ');
+    await tester.enterText(dialogField(), '   ');
     await tester.pump();
 
     final save = tester.widget<FilledButton>(
@@ -1712,6 +1718,15 @@ void main() {
     bool searchFocused(WidgetTester tester) =>
         tester.widget<TextField>(searchField()).focusNode!.hasFocus;
 
+    /// Si no se está buscando: el campo, sin foco ni nada escrito, y a su
+    /// derecha los botones.
+    void expectNotSearching(WidgetTester tester) {
+      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isFalse);
+      expect(tester.widget<TextField>(searchField()).controller!.text, '');
+      expect(find.byKey(const Key('view-mode-button')), findsOneWidget);
+    }
+
     testWidgets('el botón de carpetas abre el menú y no hay título', (
       tester,
     ) async {
@@ -1724,34 +1739,49 @@ void main() {
       expect(find.byKey(const Key('new-folder')), findsOneWidget);
     });
 
-    testWidgets('la lupa está a la izquierda, junto a las carpetas, y no se '
-        'mueve al buscar', (tester) async {
+    testWidgets('el campo de búsqueda está siempre a la vista, con «Buscar», '
+        'la lupa a la izquierda, junto a las carpetas, y en una subcarpeta su '
+        'nombre a la derecha', (tester) async {
       store.settings = const AppSettings(
         folder: testFolder,
         openFolder: 'Clases',
         transcription: manual,
       );
       await pumpApp(tester);
+      expectNotSearching(tester);
+      expect(
+        tester.widget<TextField>(searchField()).decoration!.hintText,
+        'Buscar',
+      );
       final folders = tester.getRect(find.byKey(const Key('folders-button')));
-      final search = tester.getCenter(find.byKey(const Key('search-button')));
+      final search = tester.getCenter(find.byKey(const Key('search-icon')));
+      final text = tester.getRect(find.byType(EditableText));
       final title = tester.getRect(find.byKey(const Key('folder-title')));
+      final view = tester.getRect(find.byKey(const Key('view-mode-button')));
 
       expect(search.dx, greaterThan(folders.right));
-      expect(search.dx, lessThan(title.left));
+      expect(search.dx, lessThan(text.left));
+      expect(title.left, greaterThanOrEqualTo(text.right));
+      expect(title.right, lessThanOrEqualTo(view.left));
       expect(search.dy, moreOrLessEquals(folders.center.dy, epsilon: 0.5));
+      expect(title.center.dy, moreOrLessEquals(folders.center.dy, epsilon: 1));
+      // Sin la búsqueda abierta, no hay teclado.
+      expect(tester.testTextInput.isVisible, isFalse);
 
-      await tester.tap(find.byKey(const Key('search-button')));
+      // Al tocarlo se busca: la lupa sigue en su sitio y, en lugar del
+      // nombre de la carpeta, la X.
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
-      final magnifier = tester.getCenter(
-        find.descendant(of: searchField(), matching: find.byIcon(Icons.search)),
-      );
-      expect(magnifier, search);
+      expect(searchFocused(tester), isTrue);
+      expect(tester.getCenter(find.byKey(const Key('search-icon'))), search);
+      expect(find.byKey(const Key('folder-title')), findsNothing);
+      expect(find.byTooltip('Borrar la búsqueda'), findsOneWidget);
     });
 
     testWidgets('el campo tiene la lupa a la izquierda y la X a la derecha, '
         'alineados con los botones', (tester) async {
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'reunión');
       await tester.pump();
@@ -1776,6 +1806,59 @@ void main() {
         tester.widget<TextField>(searchField()).textAlign,
         TextAlign.start,
       );
+    });
+
+    testWidgets('al seleccionar una grabación cortada por abajo, la lista se '
+        'desplaza para que se vea entera', (tester) async {
+      repository = InMemoryRecordingsRepository([
+        for (var i = 0; i < 20; i++)
+          sample(
+            '$i',
+            'Grabación $i',
+            createdAt: DateTime(2026, 9, 1).add(Duration(days: i)),
+          ),
+      ]);
+      await pumpApp(tester);
+      final list = tester.getRect(find.byType(ListView));
+      final position = tester
+          .state<ScrollableState>(
+            find.descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            ),
+          )
+          .position;
+      Rect tile() => tester.getRect(find.byKey(const ValueKey('2')));
+      // Cuando ha terminado de bajar hasta el final, arriba del todo: la
+      // tercera asoma por abajo.
+      for (var i = 0; i < 12; i++) {
+        await tester.pump();
+      }
+      position.jumpTo(0);
+      await tester.pump();
+      expect(tile().bottom, greaterThan(list.bottom));
+
+      await tester.tap(tileButton('2', 'Reproducir'));
+      // Al crecer con la onda, y cuando acaba de crecer.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('waveform-2')), findsOneWidget);
+      // Con el panel de abajo, que con una seleccionada puede crecer.
+      final visible = tester.getRect(find.byType(ListView));
+      expect(tile().bottom, lessThanOrEqualTo(visible.bottom + 0.5));
+      expect(tile().top, greaterThanOrEqualTo(visible.top));
+
+      // Si ya se ve entera, la lista no se mueve.
+      final before = position.pixels;
+      await tester.tap(tileButton('2', 'Pausar'));
+      await tester.pumpAndSettle();
+      await tester.tap(tileButton('1', 'Reproducir'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(position.pixels, before);
     });
 
     testWidgets('la vista es compacta por defecto; el botón de la vista, a '
@@ -1812,7 +1895,7 @@ void main() {
       expect(find.byKey(const Key('waveform-a')), findsOneWidget);
 
       // Al buscar, en su sitio está la X del campo.
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       expect(view, findsNothing);
       final clear = tester.getCenter(find.byTooltip('Borrar la búsqueda'));
@@ -1846,12 +1929,11 @@ void main() {
       ]);
       await pumpApp(tester);
 
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
-      // El campo ocupa la barra: sin la lupa ni el título.
-      expect(searchField(), findsOneWidget);
+      // El campo ocupa la barra hasta las opciones.
       expect(searchFocused(tester), isTrue);
-      expect(find.byKey(const Key('search-button')), findsNothing);
+      expect(find.byKey(const Key('view-mode-button')), findsNothing);
 
       await tester.enterText(searchField(), 'reunion');
       await tester.pumpAndSettle();
@@ -1873,10 +1955,10 @@ void main() {
         findsOneWidget,
       );
 
-      // La X borra la búsqueda y la cierra.
+      // La X borra la búsqueda y quita el foco.
       await tester.tap(find.byTooltip('Borrar la búsqueda'));
       await tester.pumpAndSettle();
-      expect(searchField(), findsNothing);
+      expectNotSearching(tester);
       expect(find.byKey(const ValueKey('a')), findsOneWidget);
       expect(find.byKey(const ValueKey('b')), findsNothing);
     });
@@ -1891,7 +1973,7 @@ void main() {
       Finder transcript() => find.byKey(const Key('transcript-a'));
       expect(transcript(), findsNothing);
 
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       // Solo en el nombre: no.
       await tester.enterText(searchField(), 'entrevista');
@@ -1919,7 +2001,7 @@ void main() {
         sample('c', 'Idea para el viaje'),
       ]);
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
 
       await tester.enterText(searchField(), 'presupusto');
@@ -1951,7 +2033,7 @@ void main() {
         withTranscript('b', 'Notas', 'El presupusto no cuadra.'),
       ]);
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'presupusto');
       await tester.pumpAndSettle();
@@ -1971,19 +2053,19 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      // Sin nada escrito, se cierra.
-      await tester.tap(find.byTooltip('Buscar'));
+      // Sin nada escrito, vuelven los botones.
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tapBackground();
-      expect(searchField(), findsNothing);
+      expectNotSearching(tester);
 
       // Con algo escrito, se queda, sin foco ni teclado.
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'entre');
       await tester.pumpAndSettle();
       await tapBackground();
-      expect(searchField(), findsOneWidget);
+      expect(tester.widget<TextField>(searchField()).controller!.text, 'entre');
       expect(searchFocused(tester), isFalse);
       expect(tester.testTextInput.isVisible, isFalse);
     });
@@ -1994,7 +2076,7 @@ void main() {
       (tester) async {
         repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
         await pumpApp(tester);
-        await tester.tap(find.byTooltip('Buscar'));
+        await tester.tap(searchField());
         await tester.pumpAndSettle();
         await tester.enterText(searchField(), 'entre');
         await tester.pumpAndSettle();
@@ -2072,7 +2154,7 @@ void main() {
       ]);
       await pumpApp(tester);
 
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'examen');
       await tester.pumpAndSettle();
@@ -2087,26 +2169,26 @@ void main() {
       expect(snippet.textSpan!.toPlainText(), contains('examen final'));
     });
 
-    testWidgets('sin nada escrito, se cierra al perder el foco', (
+    testWidgets('sin nada escrito, al perder el foco vuelven los botones', (
       tester,
     ) async {
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
+      expect(find.byKey(const Key('view-mode-button')), findsNothing);
 
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
 
-      expect(searchField(), findsNothing);
-      expect(find.byKey(const Key('search-button')), findsOneWidget);
+      expectNotSearching(tester);
     });
 
-    testWidgets('«atrás» quita el foco de la búsqueda y después la cierra', (
+    testWidgets('«atrás» quita el foco de la búsqueda y después la borra', (
       tester,
     ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       await tester.enterText(searchField(), 'nada');
       await tester.pumpAndSettle();
@@ -2114,17 +2196,17 @@ void main() {
       // Primero quita el foco del campo (con algo escrito, sigue abierto).
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(searchField(), findsOneWidget);
+      expect(tester.widget<TextField>(searchField()).controller!.text, 'nada');
       expect(tester.testTextInput.isVisible, isFalse);
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
 
-      expect(searchField(), findsNothing);
+      expectNotSearching(tester);
       expect(find.text('Entrevista'), findsOneWidget);
     });
 
-    testWidgets('tirar de la lista hacia abajo abre la búsqueda', (
+    testWidgets('tirar de la lista hacia abajo da el foco a la búsqueda', (
       tester,
     ) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
@@ -2133,8 +2215,8 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, 300));
       await tester.pumpAndSettle();
 
-      expect(searchField(), findsOneWidget);
       expect(searchFocused(tester), isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
     });
 
     testWidgets('también sin grabaciones', (tester) async {
@@ -2146,7 +2228,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isTrue);
     });
 
     testWidgets('solo si se empieza a tirar con la lista arriba del todo', (
@@ -2164,7 +2246,10 @@ void main() {
       // Empieza abajo del todo: subiendo y tirando con el mismo arrastre,
       // no se busca.
       final scrollable = tester.state<ScrollableState>(
-        find.byType(Scrollable).last,
+        find.descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        ),
       );
       expect(scrollable.position.pixels, greaterThan(0));
       final gesture = await tester.startGesture(
@@ -2177,12 +2262,12 @@ void main() {
       expect(scrollable.position.pixels, lessThan(0));
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(searchField(), findsNothing);
+      expect(searchFocused(tester), isFalse);
 
       // Ya arriba, sí.
       await tester.drag(find.byType(ListView), const Offset(0, 300));
       await tester.pumpAndSettle();
-      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isTrue);
     });
 
     testWidgets('un tirón corto no la abre', (tester) async {
@@ -2192,7 +2277,7 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, 40));
       await tester.pumpAndSettle();
 
-      expect(searchField(), findsNothing);
+      expect(searchFocused(tester), isFalse);
     });
 
     testWidgets('al tirar aparece un fondo tras la lupa y un texto; al '
@@ -2225,7 +2310,7 @@ void main() {
                   as BoxDecoration)
               .color;
       String hintText() => tester.widget<Text>(hint).data!;
-      final button = find.byKey(const Key('search-button'));
+      final button = find.byKey(const Key('search-icon'));
       final atRest = tester.getCenter(button);
       final barBottom = tester.getBottomLeft(find.byType(AppBar)).dy;
       expect(background, findsNothing);
@@ -2263,7 +2348,7 @@ void main() {
       expect(color(), colors.primary);
       expect(hintText(), 'Suelta para buscar');
       // Hasta soltar, no se busca.
-      expect(searchField(), findsNothing);
+      expect(searchFocused(tester), isFalse);
 
       // Volviendo a subir antes del punto se cancela.
       while (color() == colors.primary) {
@@ -2274,7 +2359,7 @@ void main() {
       expect(hintText(), 'Tira para buscar');
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(searchField(), findsNothing);
+      expect(searchFocused(tester), isFalse);
       expect(background, findsNothing);
       expect(hint, findsNothing);
 
@@ -2296,7 +2381,7 @@ void main() {
         expect(hint, findsNothing);
       }
       await tester.pumpAndSettle();
-      expect(searchField(), findsOneWidget);
+      expect(searchFocused(tester), isTrue);
       expect(haptics, hasLength(2));
     });
 
@@ -2304,7 +2389,7 @@ void main() {
         'teclado', (tester) async {
       repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
       await pumpApp(tester);
-      await tester.tap(find.byTooltip('Buscar'));
+      await tester.tap(searchField());
       await tester.pumpAndSettle();
       expect(tester.testTextInput.isVisible, isTrue);
 
@@ -2330,7 +2415,7 @@ void main() {
     /// principal, nada.
     String title(WidgetTester tester) {
       final texts = tester.widgetList<Text>(
-        find.descendant(of: find.byType(AppBar), matching: find.byType(Text)),
+        find.byKey(const Key('folder-title')),
       );
       return texts.isEmpty ? '' : texts.single.data!;
     }
@@ -2454,7 +2539,7 @@ void main() {
 
       await tester.tap(find.byKey(const Key('new-folder')));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), '  Reuniones ');
+      await tester.enterText(dialogField(), '  Reuniones ');
       await tester.pump();
       await tester.tap(find.text('Crear'));
       await tester.pumpAndSettle();

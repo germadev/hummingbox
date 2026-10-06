@@ -124,9 +124,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get search => 'Pesquisar';
 
   @override
-  String get searchHint => 'Nome ou transcrição';
-
-  @override
   String get clearSearch => 'Limpar a pesquisa';
 
   @override

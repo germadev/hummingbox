@@ -314,17 +314,11 @@ abstract class AppLocalizations {
   /// **'Folders'**
   String get folders;
 
-  /// Botón de la lupa, para buscar grabaciones
+  /// Texto de ayuda del campo de búsqueda, siempre en la barra (corto, para que quepa)
   ///
   /// In en, this message translates to:
   /// **'Search'**
   String get search;
-
-  /// Texto de ayuda del campo de búsqueda: dónde se busca (corto, para que quepa en la barra)
-  ///
-  /// In en, this message translates to:
-  /// **'Name or transcript'**
-  String get searchHint;
 
   /// No description provided for @clearSearch.
   ///

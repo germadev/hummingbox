@@ -123,9 +123,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get search => 'Buscar';
 
   @override
-  String get searchHint => 'Nombre o transcripción';
-
-  @override
   String get clearSearch => 'Borrar la búsqueda';
 
   @override

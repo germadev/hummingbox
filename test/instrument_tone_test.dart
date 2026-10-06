@@ -119,6 +119,69 @@ void main() {
     expect(organ.sublist(44100 * 400 ~/ 1000).every((s) => s == 0), isTrue);
   });
 
+  group('al mezclar', () {
+    const format = PcmFormat(sampleRate: 44100, channels: 1);
+
+    /// Las [notes] mezcladas durante [seconds], en bloques como al escribir
+    /// el archivo.
+    Int16List mix(List<PianoNote> notes, double seconds) {
+      final mixer = PianoMixer(format, notes, gain: pianoOnlyGain);
+      final samples = Int16List((44100 * seconds).round());
+      for (var frame = 0; frame < samples.length; frame += 32768) {
+        final block = Int16List(math.min(32768, samples.length - frame));
+        mixer.addTo(block, frame);
+        samples.setRange(frame, frame + block.length, block);
+      }
+      return samples;
+    }
+
+    PianoNote note(int key, int startMs) => PianoNote(
+      key: key,
+      start: Duration(milliseconds: startMs),
+      duration: const Duration(milliseconds: 100),
+    );
+
+    test('muchas notas a la vez no saturan (no suenan con ruido)', () {
+      final samples = mix([
+        // Notas rápidas, que se solapan mientras se apagan.
+        for (var i = 0; i < 24; i++) note(60 + i % 12, i * 100),
+        // Y acordes.
+        for (var i = 0; i < 4; i++)
+          for (final key in [48, 52, 55, 60]) note(key, 2500 + i * 300),
+      ], 5);
+      final peak = samples.map((s) => s.abs()).reduce(math.max);
+      expect(peak, lessThanOrEqualTo(PianoMixer.ceiling * 32767 + 1));
+      expect(peak, greaterThan(0.8 * 32767));
+      // Sin saltos bruscos de volumen: como mucho los de la propia onda.
+      var jump = 0;
+      for (var i = 1; i < samples.length; i++) {
+        jump = math.max(jump, (samples[i] - samples[i - 1]).abs());
+      }
+      expect(jump, lessThan(8000));
+    });
+
+    test('una nota sola suena igual que antes, sin limitar', () {
+      final samples = mix([note(69, 0)], 1);
+      final tone = instrumentTone(Instrument.piano, 69);
+      for (final i in [100, 4410, 22050]) {
+        expect(samples[i], closeTo(tone[i] * pianoOnlyGain * 32767, 1));
+      }
+    });
+
+    test('al volver a tocar una tecla, la nota anterior se apaga', () {
+      // Sola, la primera sigue sonando a los 0,5 s; con la tecla tocada de
+      // nuevo a los 0,3 s, solo suena la segunda (que va 0,3 s por detrás).
+      final once = mix([note(60, 0)], 1);
+      final twice = mix([note(60, 0), note(60, 300)], 1);
+      final second = mix([note(60, 300)], 1);
+      final at = 44100 * 500 ~/ 1000;
+      expect(once[at], isNot(0));
+      for (var i = at; i < at + 100; i++) {
+        expect(twice[i], closeTo(second[i], 1));
+      }
+    });
+  });
+
   group('sintetizador', () {
     test('todas las ondas suenan afinadas y sin saturar', () {
       for (final wave in SynthWave.values) {

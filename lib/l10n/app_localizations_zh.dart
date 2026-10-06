@@ -121,9 +121,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get search => '搜索';
 
   @override
-  String get searchHint => '名称或转写内容';
-
-  @override
   String get clearSearch => '清除搜索';
 
   @override

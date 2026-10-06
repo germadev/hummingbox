@@ -129,9 +129,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get search => 'Suchen';
 
   @override
-  String get searchHint => 'Name oder Transkript';
-
-  @override
   String get clearSearch => 'Suche löschen';
 
   @override

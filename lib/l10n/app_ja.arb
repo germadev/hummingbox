@@ -35,7 +35,6 @@
   "noRecordingsHint": "赤いボタンをタップして録音を開始します。",
   "folders": "フォルダ",
   "search": "検索",
-  "searchHint": "名前または文字起こし",
   "clearSearch": "検索をクリア",
   "pullToSearch": "引っ張って検索",
   "releaseToSearch": "指を離して検索",

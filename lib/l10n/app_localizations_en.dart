@@ -123,9 +123,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get search => 'Search';
 
   @override
-  String get searchHint => 'Name or transcript';
-
-  @override
   String get clearSearch => 'Clear search';
 
   @override

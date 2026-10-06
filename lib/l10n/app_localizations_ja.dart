@@ -121,9 +121,6 @@ class AppLocalizationsJa extends AppLocalizations {
   String get search => '検索';
 
   @override
-  String get searchHint => '名前または文字起こし';
-
-  @override
   String get clearSearch => '検索をクリア';
 
   @override
