@@ -36,12 +36,15 @@ the countdown and voice start with its trimming), search, formats and
 automatic recording names, the piano's notes, the instruments' and the
 synthesizer's sound (in tune, without clipping, with their envelopes),
 mixing with the voice (without clipping, and a key played again cuts the
-previous note), piano-only recordings as `.mid` with no audio (their
+previous note), the limiter for the live piano (chords and fast notes, with
+every instrument, stay below full scale while a single note keeps its
+volume), piano-only recordings as `.mid` with no audio (their
 sound generated on playback, trimming, adding piano and syncing),
 translations, and widget tests of the main flows (first run, recording,
 opening the panel without recording, countdown, voice start, seeking on the
 waveform, editing and previewing with the volume, the folders menu, search
-(always in the bar, including pulling the list down), scrolling to show the
+(always in the bar, including pulling the list down, and losing focus when
+tapping elsewhere, also on a recording), scrolling to show the
 selected recording whole, keeping the screen on, transcribing (also
 automatically, in the background) and reading the transcript, settings,
 downloading Whisper, theme, renaming (also after transcribing again), the

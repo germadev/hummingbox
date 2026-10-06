@@ -162,6 +162,7 @@ class PlayerController extends ChangeNotifier {
   /// se puede leer, la descarga y lanza el error.
   Future<void> _play(Recording recording, {Duration? position}) async {
     final String path;
+    final request = ++_playRequest;
     _loading = true;
     _notify();
     try {
@@ -177,9 +178,14 @@ class PlayerController extends ChangeNotifier {
       if (isCurrent(recording) || _currentId == null) _loading = false;
       _notify();
     }
-    if (!isCurrent(recording)) return;
+    // Si entretanto se ha elegido otra o se ha parado, ya no suena.
+    if (!isCurrent(recording) || request != _playRequest) return;
     await _player.play(path, position: position);
   }
+
+  /// Cuenta las veces que se ha pedido reproducir (o parar con
+  /// [stopPlayback]): mientras se lee el audio, si cambia, ya no suena.
+  var _playRequest = 0;
 
   static Future<String> _localPath(Recording recording) async => recording.path;
 
@@ -188,6 +194,19 @@ class PlayerController extends ChangeNotifier {
     _position = position;
     _notify();
     await _player.seek(position);
+  }
+
+  /// Detiene la reproducción sin quitar la selección: la grabación sigue
+  /// seleccionada y, con su botón, vuelve a sonar desde el principio.
+  Future<void> stopPlayback() async {
+    if (_currentId == null) return;
+    final wasLoaded = isPlayingOrPaused || _loading;
+    _playRequest++;
+    _loading = false;
+    _status = PlaybackStatus.stopped;
+    _position = Duration.zero;
+    _notify();
+    if (wasLoaded) await _player.stop();
   }
 
   /// Detiene la reproducción y descarga la grabación actual.

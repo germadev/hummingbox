@@ -2070,6 +2070,27 @@ void main() {
       expect(tester.testTextInput.isVisible, isFalse);
     });
 
+    testWidgets('seleccionar una grabación quita el foco del campo', (
+      tester,
+    ) async {
+      repository = InMemoryRecordingsRepository([sample('a', 'Entrevista')]);
+      await pumpApp(tester);
+      await tester.tap(searchField());
+      await tester.pumpAndSettle();
+      await tester.enterText(searchField(), 'entre');
+      await tester.pumpAndSettle();
+      expect(searchFocused(tester), isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('a')));
+      await tester.pumpAndSettle();
+      // Seleccionada: con sus tiempos.
+      expect(find.text('00:00'), findsOneWidget);
+      expect(searchFocused(tester), isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      // Lo buscado se queda.
+      expect(tester.widget<TextField>(searchField()).controller!.text, 'entre');
+    });
+
     testWidgets(
       'tocar el dock quita el foco del campo y, fuera de los botones, '
       'la selección',
@@ -2687,10 +2708,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.calls.last, 'play /fake/b.m4a @0');
 
+      // Parar no quita la selección: la que sonaba sigue seleccionada.
       await tester.tap(find.byKey(const Key('stop-playback-button')));
       await tester.pumpAndSettle();
       expect(player.calls.last, 'stop');
-      expect(record(), findsOneWidget);
+      expect(find.byKey(const Key('play-selected-button')), findsOneWidget);
+      expect(record(), findsNothing);
     });
 
     testWidgets('con una seleccionada, sin sonar: reproducir en el centro, '
@@ -2729,8 +2752,21 @@ void main() {
       await tester.pumpAndSettle();
       expect(player.calls.last, 'resume');
 
-      // Parar la quita, y vuelve el botón de grabar.
+      // Parar la deja seleccionada: el centro vuelve a reproducir, desde el
+      // principio.
       await tester.tap(find.byKey(const Key('stop-playback-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'stop');
+      expect(record(), findsNothing);
+      expect(find.byKey(const Key('stop-playback-button')), findsNothing);
+      await tester.tap(find.byKey(const Key('play-selected-button')));
+      await tester.pumpAndSettle();
+      expect(player.calls.last, 'play /fake/a.m4a @0');
+
+      // Al tocar el fondo, ya parada, se quita y vuelve el botón de grabar.
+      await tester.tap(find.byKey(const Key('stop-playback-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('list-background')));
       await tester.pumpAndSettle();
       expect(record(), findsOneWidget);
       expect(find.byKey(const Key('playlist-button')), findsNothing);
